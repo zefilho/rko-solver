@@ -1,0 +1,48 @@
+BRKGA:
+  - [987]   # p (Parâmetro 0)
+  - [0.20]  # pe (Parâmetro 1)
+  - [0.15]  # pm (Parâmetro 2)
+  - [0.65]  # rhoe (Parâmetro 3)
+
+SA:
+  - [1000]     # SAmax
+  - [0.99]     # alphaSA
+  - [0.01]     # betaMin
+  - [0.05]     # betaMax
+  - [1000000]  # T0
+
+GRASP:
+  - [0.10]     # alphaGrasp
+  - [0.125]    # hs
+  - [0.00098]  # he
+
+ILS:
+  - [0.10]  # betaMin
+  - [0.20]  # betaMax
+
+VNS:
+  - [5]     # kMax
+  - [0.05]  # betaMin
+
+PSO:
+  - [200]   # PSize
+  - [2.05]  # c1
+  - [2.05]  # c2
+  - [0.73]  # w
+
+GA:
+  - [400]    # sizePop
+  - [0.98]   # probCros
+  - [0.005]  # probMut
+
+LNS:
+  - [0.10]   # betaMin
+  - [0.30]   # betaMax
+  - [10000]  # TO
+  - [0.95]   # alphaLNS
+
+BRKGA-CS:
+  - [610]    # p
+  - [0.20]   # pe
+  - [0.001]  # pm
+  - [0.65]   # Rhoe
