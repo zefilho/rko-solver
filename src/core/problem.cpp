@@ -1,62 +1,53 @@
+
+
 #include "rkolib/core/data.hpp"
 #include "rkolib/core/problem.hpp"
 
 //-------------------------- IMPLEMENTATION --------------------------
 namespace rkolib::core {
 
-    void ReadData(const char* name, TProblemData &data)
+    void ReadData(const std::string& name, TProblemData &data)
     { 
-        FILE *arq;
-        arq = fopen(name, "r");
+        // Correção 1 & 4: Usando std::ifstream em vez de fopen/fscanf (Seguro e Moderno)
+        // Isso elimina os avisos de depreciação do _CRT_SECURE_NO_WARNINGS
+        std::ifstream file(name);
 
-        if (arq == NULL)
+        // Correção 2: nullptr literal (embora ifstream use checks booleanos)
+        if (!file.is_open())
         {
-            printf("\nERROR: File (%s) not found!\n", name);
+            std::cout << "\nERROR: File (" << name << ") not found!" << std::endl ;
             std::cin.get();
             exit(1);
         }
 
-        // => read data
-        fscanf(arq, "%d", &data.nItems);
-        fscanf(arq, "%d", &data.cap);
+        // Leitura formatada segura
+        if (!(file >> data.nItems >> data.cap)) {
+            std::cout << "ERROR: Failed to read header data." << std::endl;
+            exit(1);
+        }
         
-        // weigth of items
-        data.w.clear();
-        data.w.resize(data.nItems);
-
-        // prize of items
-        data.b.clear();
-        data.b.resize(data.nItems);
+        data.w.assign(data.nItems, 0);
+        data.b.assign(data.nItems, 0);
 
         for (int k = 0; k < data.nItems; k++)
         {
-            fscanf(arq, "%d", &data.b[k]);
-            fscanf(arq, "%d", &data.w[k]);
+            if (!(file >> data.b[k] >> data.w[k])) {
+                break; 
+            }
         }
         
-        fclose(arq); // Fechando arquivo após abrir
-
-        // define the random-key vector size
+        // O arquivo fecha automaticamente ao sair do escopo
         data.n = data.nItems;
     }
 
     double Decoder(const TSol &s, const TProblemData &data)
     {   
-        // create a solution of the KP
-        std::vector<int> sol(data.n, 0);                         
-        for (int i = 0; i < data.n; i++)
-        {
-            // Nota: Assumindo que s.rk é acessível.
-            if (s.rk[i] > 0.5)
-                sol[i] = 1;
-        }
-
         // calculate the objective function value
         int cost = 0;
         int totalW = 0;
         for (int i = 0; i < data.n; i++)
         {
-            if (sol[i] == 1)
+            if (s.rk[i] > 0.5)
             {
                 cost += data.b[i];
                 totalW += data.w[i];
@@ -68,7 +59,7 @@ namespace rkolib::core {
         int infeasible = std::max(0, totalW - data.cap);
         
         // Convertendo para double para cálculo preciso antes de retornar
-        double finalCost = (double)cost - (100000.0 * infeasible);
+        double finalCost = static_cast<double>(cost) - (100000.0 * infeasible);
 
         // change to minimization problem
         return finalCost * -1.0;
@@ -77,8 +68,12 @@ namespace rkolib::core {
     void FreeMemoryProblem(TProblemData &data){
         // Em C++ moderno, vectors se limpam sozinhos quando saem de escopo.
         // Mas se quiser forçar a limpeza para reutilizar o objeto data:
+        // data.b.clear();
+        // data.w.clear();
         data.b.clear();
+        data.b.shrink_to_fit();
         data.w.clear();
+        data.w.shrink_to_fit();
     }
 
 }

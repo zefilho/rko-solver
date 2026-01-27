@@ -17,7 +17,8 @@ namespace rkolib::core {
      * Method: ReadData
      * Description: read the input data from a file
      */ 
-    void ReadData(const char* name, TProblemData &data);
+    //void ReadData(const char* name, TProblemData &data);
+    void ReadData(const std::string& name, TProblemData &data);
 
     /**
      * Method: Decoder 

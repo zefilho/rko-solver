@@ -162,36 +162,53 @@ namespace rkolib::core {
 
         for(int j = 0; j < n; j++)
         {
-            if (randomico(0, 1) < 0.02){ // mutation
-                s.rk[j] = randomico(0, 1);
+            double value;
+            if (randomico(0, 1) < 0.02)
+            { // mutation
+                value = randomico(0, 1);
+            } else if (randomico(0, 1) < 0.5) {
+                value = s1.rk[j];
+                continue;
+            } else if (factor == -1) { // Nelder-Mead reflection logic implicitly
+                value = std::clamp(1.0 - s2.rk[j], 0.0, 0.9999999);
             }
-            else{
-                if (randomico(0, 1) < 0.5){
-                    s.rk[j] = s1.rk[j];
-                }
-                else{
-                    if (factor == -1){ // Nelder-Mead reflection logic implicitly
-                        s.rk[j] = std::clamp(1.0 - s2.rk[j], 0.0, 0.9999999);
-                    }
-                    else{
-                        s.rk[j] = s2.rk[j];
-                    }
-                }
+            else {
+                value = s2.rk[j];
             }
+            s.rk[j] = value;
         }
         return s;
     }
 
     void NelderMeadSearch(TSol &x1, const TProblemData &data)
     {
-        int improved = 0;
-        int improvedX1 = 0;
-        TSol x1Origem = x1;
-
-        int k1, k2;
         int poolSize = (int)pool.size();
         if (poolSize < 2) return; // Segurança
 
+        TSol x1Origem = x1;
+        TSol xBest = x1;
+
+        bool improved = 0;
+        bool improvedX1 = 0; //Rastreia se x1 foi melhorado
+        
+        // Helper: Avalia uma solução candidata e atualiza o xBest se necessário
+        auto evaluateAndUpdate = [&](TSol& candidate) {
+            candidate.ofv = Decoder(candidate, data);
+            if (candidate.ofv < xBest.ofv) {
+                xBest = candidate;
+                improved = true;
+                improvedX1 = true;
+            }
+        };
+
+        auto sortSimplex = [](TSol& a, TSol& b, TSol& c) {
+            if (a.ofv > b.ofv) std::swap(a, b);
+            if (a.ofv > c.ofv) std::swap(a, c);
+            if (b.ofv > c.ofv) std::swap(b, c);
+        };
+        
+        //Selecao de x2 e x3 aleatório
+        int k1, k2;
         do {
             k1 = irandomico(0, poolSize - 1);
             k2 = irandomico(0, poolSize - 1);
@@ -200,92 +217,58 @@ namespace rkolib::core {
         TSol x2 = pool[k1];
         TSol x3 = pool[k2];
 
-        TSol x_r, x_e, x_c, x0;
-        TSol xBest = x1;
-
-        int iter_count = 0;
-        int eval_count = 0; // Mantido mas não usado logicamente no loop
-
         // Sort x1, x2, x3
-        if (x1.ofv > x2.ofv) std::swap(x1, x2);
-        if (x1.ofv > x3.ofv) std::swap(x1, x3);
-        if (x2.ofv > x3.ofv) std::swap(x2, x3);
+        sortSimplex(x1, x2, x3);
         
         // Centroid
-        x0 = Blending(x1, x2, 1, data.n);
-        x0.ofv = Decoder(x0, data);
-        if (x0.ofv < xBest.ofv) { xBest = x0; improved = 1; }
+        TSol x0 = Blending(x1, x2, 1, data.n);
+        evaluateAndUpdate(x0);
 
-        iter_count++; 
-
-        int maxIter = (int)(data.n * exp(-2));
-        if (maxIter < 10) maxIter = 10; // Mínimo de iterações
+        int iter_count = 1; 
+        int maxIter = std::max(10, static_cast<int>(data.n * std::exp(-2)));
 
         while (iter_count <= maxIter) 
         {
-            int shrink = 0;
+            bool shrink = false;
 
             // Reflection
-            x_r = Blending(x0, x3, -1, data.n);
-            x_r.ofv = Decoder(x_r, data);
-            if (x_r.ofv < xBest.ofv) { xBest = x_r; improved = 1; improvedX1 = 1; }
-            eval_count++;
+            TSol x_r = Blending(x0, x3, -1, data.n);
+            evaluateAndUpdate(x_r);
 
             if (x_r.ofv < x1.ofv) 
             {
                 // Expansion
-                x_e = Blending(x_r, x0, -1, data.n);
-                x_e.ofv = Decoder(x_e, data);
-                if (x_e.ofv < xBest.ofv) { xBest = x_e; improved = 1; improvedX1 = 1; }
-                eval_count++;
-
+                TSol x_e = Blending(x_r, x0, -1, data.n);
+                evaluateAndUpdate(x_e);
                 x3 = (x_e.ofv < x_r.ofv) ? x_e : x_r;
             } 
-            else 
-            {    
-                if (x_r.ofv < x2.ofv) {
-                    x3 = x_r;
-                } 
-                else {
-                    if (x_r.ofv < x3.ofv) {
-                        // Contraction Outside
-                        x_c = Blending(x_r, x0, 1, data.n);
-                        x_c.ofv = Decoder(x_c, data);
-                        if (x_c.ofv < xBest.ofv) { xBest = x_c; improved = 1; improvedX1 = 1; }
-                        eval_count++;
-
-                        if (x_c.ofv < x_r.ofv) x3 = x_c;
-                        else shrink = 1;
-                    } 
-                    else {
-                        // Contraction Inside
-                        x_c = Blending(x0, x3, 1, data.n);
-                        x_c.ofv = Decoder(x_c, data);
-                        if (x_c.ofv < xBest.ofv) { xBest = x_c; improved = 1; improvedX1 = 1; }
-                        eval_count++;
-
-                        if (x_c.ofv < x3.ofv) x3 = x_c;
-                        else shrink = 1;
-                    }
+            else if (x_r.ofv < x2.ofv) {
+                x3 = x_r;
+            } 
+            else {
+                bool outsite = x_r.ofv < x3.ofv;
+                TSol x_c = outsite ? Blending(x_r, x0, 1, data.n) : Blending(x0, x3, 1, data.n);
+                evaluateAndUpdate(x_c);
+                if (x_c.ofv < (outsite ? x_r.ofv : x3.ofv)) {
+                    x3 = x_c;
+                } else {
+                    shrink = true;
                 }
             }
-
+            
             if (shrink) {
-                x2 = Blending(x1, x2, 1, data.n); x2.ofv = Decoder(x2, data);
-                if (x2.ofv < xBest.ofv) { xBest = x2; improved = 1; improvedX1 = 1; }
+                x2 = Blending(x1, x2, 1, data.n);
+                evaluateAndUpdate(x2);
                 
-                x3 = Blending(x1, x3, 1, data.n); x3.ofv = Decoder(x3, data);
-                if (x3.ofv < xBest.ofv) { xBest = x3; improved = 1; improvedX1 = 1; }
+                x3 = Blending(x1, x3, 1, data.n);
+                evaluateAndUpdate(x3);
             }
 
             // Sort again
-            if (x1.ofv > x2.ofv) std::swap(x1, x2);
-            if (x1.ofv > x3.ofv) std::swap(x1, x3);
-            if (x2.ofv > x3.ofv) std::swap(x2, x3);
+            sortSimplex(x1, x2, x3);
 
             x0 = Blending(x1, x2, 1, data.n);
-            x0.ofv = Decoder(x0, data);
-            if (x0.ofv < xBest.ofv) { xBest = x0; improved = 1; improvedX1 = 1; }
+            evaluateAndUpdate(x0);
 
             if (improved) {
                 improved = 0;
@@ -297,8 +280,7 @@ namespace rkolib::core {
             if (stop_execution.load()) return; 
         }
 
-        if (improvedX1) x1 = xBest;
-        else x1 = x1Origem;
+        x1 = improvedX1 ? xBest : x1Origem;
     }
 
     void SwapLS(TSol &s, const TProblemData &data, const int &strategy, std::vector<int> &RKorder)
