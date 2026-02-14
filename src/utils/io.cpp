@@ -1,12 +1,12 @@
 #include "rkolib/utils/io.hpp"
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
 
 namespace rkolib::utils {
 
     void WriteSolutionScreen(const char *algorithms[], int numMH, rkolib::core::TSol s, 
                              float timeBest, float timeTotal, char instance[], 
-                             const rkolib::core::TProblemData &data, std::vector<rkolib::core::TSol> pool)
+                             const rkolib::core::IProblem &problem, std::vector<rkolib::core::TSol> pool)
     {
         printf("\n\n\nRKO: ");
         for (int i=0; i<numMH; i++)
@@ -15,7 +15,7 @@ namespace rkolib::utils {
         // s.nameMH agora é std::string (do passo anterior), usamos .c_str() para printf
         printf("\nBest MH: %s \nInstance: %s \nsol: ", s.nameMH.c_str(), instance);
         
-        for (int i=0; i<data.n; i++)
+        for (int i=0; i<problem.getDimension(); i++)
             printf("%.3lf ", s.rk[i]);
 
         printf("\nofv: %.5lf", s.ofv); 
@@ -30,7 +30,7 @@ namespace rkolib::utils {
 
     void WriteSolution(const char *algorithms[], int numMH, rkolib::core::TSol s, 
                        float timeBest, float timeTotal, char instance[], 
-                       const rkolib::core::TProblemData &data)
+                       const rkolib::core::IProblem &problem)
     {
         char name[256]="../Results/Solutions_RKO";
         strcat(name,".txt");
@@ -53,7 +53,7 @@ namespace rkolib::utils {
             fprintf(solFile,"%s | ", algorithms[i]);
 
         fprintf(solFile,"\nSol: ");
-        for (int i=0; i<data.n; i++)
+        for (int i=0; i<problem.getDimension(); i++)
             fprintf(solFile,"%.3lf ", s.rk[i]);
 
         fprintf(solFile,"\nofv: %lf", s.ofv);

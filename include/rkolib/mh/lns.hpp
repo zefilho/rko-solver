@@ -1,10 +1,11 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/context.hpp"
 
 // Forward declaration
-//struct TProblemData; 
+//struct IProblem; 
 
 namespace rkolib::mh {
 
@@ -14,6 +15,6 @@ namespace rkolib::mh {
      * Uses a specific Destruction/Repair mechanism based on Farey Sequences.
      * Enhanced with Q-Learning.
      */
-    void LNS(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data);
+    void LNS(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem);
 
 } // namespace rkolib::mh

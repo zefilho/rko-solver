@@ -1,10 +1,11 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/context.hpp"
 
 // Forward declaration
-//struct TProblemData; 
+//struct IProblem; 
 
 namespace rkolib::mh {
 
@@ -13,6 +14,6 @@ namespace rkolib::mh {
      * Description: A simple metaheuristic that iteratively generates random solutions 
      * and keeps the best one found.
      */
-    void MultiStart(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data);
+    void MultiStart(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem);
 
 } // namespace rkolib::mh

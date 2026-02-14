@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/problem.hpp" // Para data.n
+#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
 
 namespace rkolib::mh {
 
@@ -38,7 +38,7 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Main Algorithm: LNS
     // -------------------------------------------------------------------------
-    void LNS(const TRunData &runData, const TProblemData &data)
+    void LNS(const TRunData &runData, const IProblem &problem)
     {
         const char* method = "LNS";
         double T0 = 0;                       // initial temperature
@@ -59,7 +59,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(data.n);    // define a order for the neighors
+        std::vector<int> RKorder(problem.getDimension());    // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -127,8 +127,8 @@ namespace rkolib::mh {
         }   
 
         // Create the initial solution with random keys
-        CreateInitialSolutions(s, data.n); 
-        s.ofv = Decoder(s, data);    
+        CreateInitialSolutions(s, problem.getDimension()); 
+        s.ofv = problem.evaluate(s);    
         sBest = s;
 
         // run the search process until stop criterion
@@ -163,12 +163,12 @@ namespace rkolib::mh {
                 // LNS DESTRUCTION PHASE (Ruina)
                 // -------------------------------------------------------------
                 sLine = s;
-                int intensity = irandomico((int)(betaMin * data.n), (int)(betaMax * data.n));
+                int intensity = irandomico((int)(betaMin * problem.getDimension()), (int)(betaMax * problem.getDimension()));
                 if (intensity < 1) intensity = 1; // Segurança mínima
                 
                 // define which rk will be deleted - Random Removal
-                // 'rng' vem de Methods.hpp (extern)
-                std::shuffle(RKorder.begin(), RKorder.end(), rng); 
+                // 'SOLVER_RNG' vem de Methods.hpp (extern)
+                std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG); 
 
                 // -------------------------------------------------------------
                 // LNS REPAIR PHASE (Reconstrução)
@@ -183,11 +183,11 @@ namespace rkolib::mh {
                     // Testa valores baseados na sequência de Farey
                     for (int j = 0; j < (int)F.size() - 1; j++)
                     {
-                        if (stop_execution.load()) return;      
+                        if (SOLVER_SHOULD_STOP) return;      
                 
                         // generate a random value between two intervals of the Farey sequence
                         sLine.rk[pos] = randomico(F[j], F[j+1]);
-                        sLine.ofv = Decoder(sLine, data);
+                        sLine.ofv = problem.evaluate(sLine);
 
                         if (sLine.ofv < OFVbest)
                         {
@@ -203,7 +203,7 @@ namespace rkolib::mh {
 
                 // local search to improve the repaired solution
                 sLineBest = sLine;
-                NelderMeadSearch(sLineBest, data);
+                NelderMeadSearch(sLineBest, problem);
                 
                 // calculate delta
                 double delta = sLineBest.ofv - s.ofv;
@@ -217,7 +217,7 @@ namespace rkolib::mh {
                         sBest = s;
                         improv = 1;
 
-                        // update the pool of solutions
+                        // update the SOLVER_POOL of solutions
                         UpdatePoolSolutions(s, method, runData.debug);
                     }
                 }

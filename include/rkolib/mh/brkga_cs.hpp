@@ -1,10 +1,11 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/context.hpp"
 
 //Forward declaration
-//struct TProblemData; 
+//struct IProblem; 
 
 namespace rkolib::mh {
 
@@ -13,6 +14,6 @@ namespace rkolib::mh {
      * Description: The evolutionary process of the BRKGA-CS (Biased Random-Key Genetic Algorithm with Community Structure).
      * Uses Label Propagation to maintain population diversity.
      */
-    void BRKGA_CS(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data);
+    void BRKGA_CS(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem);
 
 } // namespace rkolib::mh

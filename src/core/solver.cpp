@@ -1,16 +1,12 @@
-#include "rkolib/core/solver.hpp"
-#include "rkolib/core/method.hpp" 
+/**
+ * RKO Library - Elegant Solver Implementation
+ */
 
-// CLI11 e OpenMP
-#include <CLI/CLI.hpp>
-#include <omp.h>
-#include <iostream>
-#include <fstream>
-#include <chrono>
-#include <vector>
-#include <atomic>
-#include <mutex>
-// Includes das Metaheurísticas
+#include "rkolib/core/solver.hpp"
+#include "rkolib/core/context.hpp"
+
+// Includes das Meta-heurísticas
+// Certifique-se de que estas funções agora aceitam (TRunData, const IProblem&)
 #include "rkolib/mh/brkga.hpp"
 #include "rkolib/mh/sa.hpp"
 #include "rkolib/mh/grasp.hpp"
@@ -23,205 +19,358 @@
 #include "rkolib/mh/ipr.hpp"
 #include "rkolib/mh/multistart.hpp"
 
-// RNG thread-local: cada thread tem sua própria instância isolada
-extern std::mt19937 rng;
-
-// Pool compartilhado com proteção via mutex
-extern std::vector<rkolib::core::TSol> pool;
-
-// Flag atômica para controle de parada
-extern std::atomic<bool> stop_execution;
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <cmath>
+#include <omp.h>
+#include <yaml-cpp/yaml.h>
 
 namespace rkolib {
 
-    RKOSolver::RKOSolver() {
-        registerAlgorithms();
-        stop_execution.store(false);
+    // -------------------------------------------------------------------------
+    // CONSTRUCTOR & DESTRUCTOR
+    // -------------------------------------------------------------------------
+    RkoSolver::RkoSolver() 
+        : instancePath_("")
+        , configPath_("config/yaml/config.yaml")
+        , problemInstance_(nullptr)
+        , numActiveMethods_(0)
+        , bestObjective_(std::numeric_limits<double>::infinity())
+        , averageObjective_(0.0)
+        , bestTime_(0.0)
+        , totalTime_(0.0)
+    {
+        initializeRegistry();
     }
 
-    RKOSolver::~RKOSolver() {
-        FreeMemoryProblem(problemData);
+    RkoSolver::~RkoSolver() {
+        cleanup();
     }
 
-    void RKOSolver::registerAlgorithms() {
-        algo_registry["BRKGA"]      = rkolib::mh::BRKGA;
-        algo_registry["SA"]         = rkolib::mh::SA;
-        algo_registry["GRASP"]      = rkolib::mh::GRASP;
-        algo_registry["ILS"]        = rkolib::mh::ILS;
-        algo_registry["VNS"]        = rkolib::mh::VNS;
-        algo_registry["PSO"]        = rkolib::mh::PSO;
-        algo_registry["GA"]         = rkolib::mh::GA;
-        algo_registry["LNS"]        = rkolib::mh::LNS;
-        algo_registry["BRKGA-CS"]   = rkolib::mh::BRKGA_CS;
-        algo_registry["MultiStart"] = rkolib::mh::MultiStart;
-        algo_registry["IPR"]        = rkolib::mh::IPR;
+    // -------------------------------------------------------------------------
+    // INITIALIZATION
+    // -------------------------------------------------------------------------
+    void RkoSolver::initializeRegistry() {
+        // Mapeia nomes (strings) para as funções das meta-heurísticas.
+        // As funções devem ter a assinatura: void func(const TRunData&, const IProblem&)
+        algorithmRegistry_ = {
+            {"BRKGA",      mh::BRKGA},
+            {"SA",         mh::SA},
+            {"GRASP",      mh::GRASP},
+            {"ILS",        mh::ILS},
+            {"VNS",        mh::VNS},
+            {"PSO",        mh::PSO},
+            {"GA",         mh::GA},
+            {"LNS",        mh::LNS},
+            {"BRKGA-CS",   mh::BRKGA_CS},
+            {"MultiStart", mh::MultiStart},
+            {"IPR",        mh::IPR}
+        };
     }
 
-    int RKOSolver::init(int argc, char* argv[]) {
+    // -------------------------------------------------------------------------
+    // ARGUMENT PARSING
+    // -------------------------------------------------------------------------
+    void RkoSolver::parseArguments(int argc, char* argv[]) {
         CLI::App app{"RKO Library - Optimization Solver"};
 
-        app.add_option("-i,--instance", config.instancePath, "Path to instance file")->required()->check(CLI::ExistingFile);
-        app.add_option("-t,--time", config.maxTime, "Max execution time (seconds)")->default_val(60);
-        app.add_option("-c,--config", config.configPath, "Path to configuration file")->default_val("config/config-tests.txt")->check(CLI::ExistingFile);
-        app.add_option("-s,--seed", config.seed, "RNG Seed (default: random)");
+        app.add_option("-i,--instance", instancePath_, "Path to instance file")
+           ->required()
+           ->check(CLI::ExistingFile);
+
+        app.add_option("-t,--time", runData_.MAXTIME, "Max execution time (seconds)")
+           ->required();
+
+        app.add_option("-c,--config", configPath_, "Path to configuration file")
+           ->check(CLI::ExistingFile);
 
         try {
-            CLI11_PARSE(app, argc, argv);
-            parseConfigFile();
-            loadProblemData();
-            config.runData.MAXTIME = config.maxTime; 
-            return 0;
-        } catch (const CLI::ParseError &e) {
-            return app.exit(e);
-        } catch (const std::exception &e) {
-            std::cerr << "Initialization Error: " << e.what() << std::endl;
-            return 1;
+            app.parse(argc, argv);
+        } catch (const CLI::ParseError& e) {
+            app.exit(e);
+            throw; // Relança para interromper a execução no main
         }
     }
 
-    void RKOSolver::parseConfigFile() {
-        std::ifstream file(config.configPath);
-        if (!file.is_open()) throw std::runtime_error("Config file not found.");
-
-        std::string line, key;
-        config.runData.MAXRUNS = 1;
+    // -------------------------------------------------------------------------
+    // CONFIGURATION LOADING
+    // -------------------------------------------------------------------------
+    void RkoSolver::loadConfiguration(const std::string& configFile) {
+        std::string targetConfig = configFile.empty() ? configPath_ : configFile;
         
-        while (std::getline(file, line)) {
-            if (line.empty() || line[0] == '#') continue;
-            std::stringstream ss(line);
-            ss >> key;
+        YAML::Node config;
+        try {
+            config = YAML::LoadFile(targetConfig);
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Erro ao carregar YAML (" + targetConfig + "): " + e.what());
+        }
 
-            if (algo_registry.count(key)) {
-                config.activeAlgorithms.push_back(key);
+        // 1. Limpa seleção anterior
+        activateMethods_.clear();
+        numActiveMethods_ = 0;
+
+        // 2. Lê Meta-heurísticas
+        if (config["metaheuristics"]) {
+            for (const auto& mh_node : config["metaheuristics"]) {
+                std::string name = mh_node.as<std::string>();
+                
+                bool found = false;
+                for (size_t i = 0; i < algorithmRegistry_.size(); ++i) {
+                    if (name == algorithmRegistry_[i].name) {
+                        activateMethods_.push_back(static_cast<int>(i));
+                        numActiveMethods_++;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    std::cerr << "[Warning] Algoritmo desconhecido no YAML: " << name << std::endl;
+                }
             }
-            else if (key == "MAXRUNS")  ss >> config.runData.MAXRUNS;
-            else if (key == "debug")    ss >> config.runData.debug;
-            else if (key == "control")  ss >> config.runData.control;
-            else if (key == "sizePool") ss >> config.runData.sizePool;
+        }
+
+        // 3. Lê Configurações de Execução
+        if (auto settings = config["execution_settings"]) {
+            runData_.MAXRUNS = settings["max_runs"].as<int>(1);
+            runData_.debug   = settings["debug_mode"].as<int>(0);
+            runData_.control = settings["control_mode"].as<int>(0);
+        }
+
+        // 4. Lê Parâmetros de Busca
+        if (auto params = config["search_parameters"]) {
+            runData_.strategy = params["local_search_strategy"].as<int>(1);
+            runData_.restart  = params["restart_threshold"].as<float>(1.0f);
+            runData_.sizePool = params["elite_pool_size"].as<int>(10);
         }
     }
 
-    void RKOSolver::loadProblemData() {
-        ReadData(config.instancePath.c_str(), problemData);
-    }
+    // -------------------------------------------------------------------------
+    // MAIN EXECUTION LOOP
+    // -------------------------------------------------------------------------
+    void RkoSolver::run() {
+        validateConfiguration();
+        
+        // Carrega o problema (Via Factory/Singleton)
+        loadProblemData();
+        
+        initializeStatistics();
+        
+        // Banner Informativo
+        std::cout << "\n╔════════════════════════════════════════════════════════╗\n";
+        std::cout << "║              RKO Solver - Optimization Framework       ║\n";
+        std::cout << "╚════════════════════════════════════════════════════════╝\n";
+        std::cout << "\n[Info] Instance: " << instancePath_
+                  << "\n[Info] Methods:  " << numActiveMethods_
+                  << "\n[Info] Runs:     " << runData_.MAXRUNS
+                  << "\n[Info] Time Limit: " << runData_.MAXTIME << "s"
+                  << "\n\nProgress: " << std::flush;
 
-    void RKOSolver::run() {
-        if (config.activeAlgorithms.empty()) {
-            std::cerr << "Error: No algorithms selected.\n";
-            return;
+        for (int run = 0; run < runData_.MAXRUNS; ++run) {
+            std::cout << "[" << (run + 1) << "] " << std::flush;
+            executeRun(run);
         }
 
-        rkolib::core::TSol bestSolutionGlobal;
-        bestSolutionGlobal.ofv = std::numeric_limits<double>::infinity();
+        computeFinalStatistics();
+        displayResults();
+    }
 
-        std::cout << "Instance: " << config.instancePath << "\nRuns: ";
+    void RkoSolver::validateConfiguration() {
+        if (numActiveMethods_ == 0) {
+            throw std::runtime_error("Nenhum método de otimização selecionado.");
+        }
+        if (instancePath_.empty()) {
+            throw std::runtime_error("Caminho da instância não fornecido.");
+        }
+    }
 
-        // Base seed global
-        unsigned int GLOBAL_SEED = (config.seed == -1) 
-            ? std::chrono::steady_clock::now().time_since_epoch().count() 
-            : (unsigned int)config.seed;
+    // -------------------------------------------------------------------------
+    // PROBLEM LOADING (SINGLETON/FACTORY INTEGRATION)
+    // -------------------------------------------------------------------------
+    void RkoSolver::loadProblemData() {
+        // Chama a fábrica global definida pelo usuário (via problem_interface.hpp)
+        problemInstance_ = core::createProblem();
 
-        for (int run = 0; run < config.runData.MAXRUNS; run++)
+        if (!problemInstance_) {
+            throw std::runtime_error("Falha fatal: createProblem() retornou nulo.");
+        }
+
+        try {
+            problemInstance_->load(instancePath_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Erro ao carregar dados do problema: " + std::string(e.what()));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // RUN EXECUTION
+    // -------------------------------------------------------------------------
+    void RkoSolver::executeRun(int runIndex) {
+        auto& ctx = core::SolverContext::instance();
+        
+        // Define Semente
+        unsigned int seed = (runData_.debug) 
+            ? (1234 + runIndex) 
+            : static_cast<unsigned int>(std::chrono::steady_clock::now().time_since_epoch().count());
+        
+        ctx.setSeed(seed);
+
+        // Inicializa melhor solução local da run
+        core::TSol bestSolutionRun;
+        bestSolutionRun.ofv = std::numeric_limits<double>::infinity();
+        
+        double startTime = omp_get_wtime(); // Usando timer do OpenMP ou utils::get_time
+        
+        ctx.resetStopFlag();
+        
+        // Inicializa Pool de Soluções
+        // IMPORTANTE: Agora passamos *problemInstance_ (interface)
+        // Certifique-se que CreatePoolSolutions aceita (const IProblem&, int)
+        ctx.initializePool(runData_.sizePool);
+        core::CreatePoolSolutions(*problemInstance_, runData_.sizePool); 
+        
+        // Recupera a melhor do pool inicial
+        bestSolutionRun = ctx.getBestSolution();
+
+        // Executa Meta-heurísticas em Paralelo
+        executeParallelMethods(startTime, bestSolutionRun, seed);
+
+        double endTime = omp_get_wtime();
+        updateStatistics(bestSolutionRun, startTime, endTime);
+    }
+
+    void RkoSolver::executeParallelMethods(double startTime, core::TSol& bestSolutionRun, unsigned int baseSeed) {
+        auto& ctx = core::SolverContext::instance();
+        
+        // Configura número de threads
+        omp_set_num_threads(numActiveMethods_);
+
+        #pragma omp parallel
         {
-            std::cout << (run + 1) << " " << std::flush;
-            
-            // Seed base para esta run
-            unsigned int runSeed = GLOBAL_SEED + run;
-            
-            // Stats locais da run
-            rkolib::core::TSol bestSolutionRun;
-            bestSolutionRun.ofv = std::numeric_limits<double>::infinity();
-            
-            double start_time = rkolib::core::get_time_in_seconds();
-            stop_execution.store(false);
+            // Loop principal de tempo
+            while ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
+                
+                #pragma omp single
+                { ctx.resetStopFlag(); }
+                
+                // Barreira implícita no single, ou explícita aqui se necessário
+                #pragma omp barrier
 
-            // Preparação Inicial do Pool (Execução única)
-            ::pool.clear();
-            ::pool.resize(config.runData.sizePool);
-            
-            // Garante seed local para a criação do pool
-            rng.seed(runSeed); 
-            rkolib::core::CreatePoolSolutions(problemData, config.runData.sizePool);
-            
-            if (!::pool.empty()) bestSolutionRun = ::pool[0];
-
-            // Define número de threads igual ao número de algoritmos ativos
-            omp_set_num_threads(config.activeAlgorithms.size());
-            
-            // REMOVIDO: private(rng) -> rng agora é thread_local global
-            // REMOVIDO: shared(stop_execution) -> atomic é shared por padrão
-            #pragma omp parallel private(rng) shared(pool, stop_execution)
-            {
-                // 1. Inicializa RNG Local da Thread
-                // Cada thread (algoritmo) recebe uma seed única e determinística baseada no ID
-                rng.seed(runSeed + omp_get_thread_num() + 1000);
-
-                // Loop de Restart
-                while ((rkolib::core::get_time_in_seconds() - start_time) < config.maxTime)
-                {
-                    // Reset flag apenas pela thread master
-                    #pragma omp single
-                    stop_execution.store(false);
+                // Distribui os métodos entre as threads
+                #pragma omp for
+                for (int i = 0; i < numActiveMethods_; ++i) {
                     
-                    // Barreira implícita garante que todos viram o reset
-                    #pragma omp barrier // Wait for reset
-                    // Distribui os algoritmos entre as threads
-                    // Usamos schedule(static, 1) para garantir que cada thread pegue 1 algoritmo fixo se num_threads == num_algos
-                    #pragma omp for schedule(static, 1)
-                    for (size_t i = 0; i < config.activeAlgorithms.size(); ++i) {
-                        
-                        // Debug seguro
-                        if (config.runData.debug) {
-                            #pragma omp critical
-                            std::cout << "\n[T" << omp_get_thread_num() << "] Start: " << config.activeAlgorithms[i];
-                        }
+                    // Ponto de cancelamento (se suportado pelo compilador/env)
+                    #pragma omp cancellation point for
 
-                        // EXECUTA O ALGORITMO
-                        // Nota: O algoritmo deve checar 'stop_execution' internamente se quiser parar cedo
-                        std::string name = config.activeAlgorithms[i];
-                        algo_registry[name](config.runData, problemData);
-
-                        // Se terminou, sinaliza (opcional, depende se a estratégia é "first to finish stops all")
-                        stop_execution.store(true); 
-                        #pragma omp cancel for
-                    }
-                    // Barreira Implícita aqui: Ninguém sai do 'omp for' até o mais lento terminar
-                    // Isso evita que uma thread reinicie o pool enquanto outra ainda roda.
-
-                    // Atualiza Melhor Solução da Run
-                    #pragma omp critical
-                    {
-                         // Assume-se que o algoritmo atualizou a posição 0 do pool ou retornou algo.
-                         // Como é legado, verificamos se pool[0] mudou.
-                         if (!::pool.empty() && ::pool[0].ofv < bestSolutionRun.ofv) {
-                             bestSolutionRun = ::pool[0];
-                             bestSolutionRun.best_time = rkolib::core::get_time_in_seconds() - start_time;
-                         }
+                    // EXECUÇÃO DO MÉTODO
+                    // Recupera a função do registro e executa passando a Interface
+                    try {
+                        getActiveFunction(i)(runData_, *problemInstance_);
+                    } catch (...) {
+                        // Captura exceções para não derrubar todas as threads
+                        #pragma omp critical
+                        std::cerr << "Erro na thread " << omp_get_thread_num() << std::endl;
                     }
 
-                    // Se o tempo acabou, sai do while
-                    if ((rkolib::core::get_time_in_seconds() - start_time) >= config.maxTime) break;
+                    // Sinaliza para outros pararem (se lógica cooperativa existir)
+                    ctx.signalStop();
+                    
+                    #pragma omp cancel for
+                }
 
-                    // Se ainda tem tempo, REINICIA O POOL (Restart Strategy)
-                    // Feito apenas por uma thread enquanto as outras esperam
-                    #pragma omp single
-                    {
-                        if (config.runData.debug) std::cout << " [Restarting Pool] ";
-                        // Nova semente para o restart não ser idêntico
-                        rng.seed(runSeed + (unsigned int)rkolib::core::get_time_in_seconds());
-                        rkolib::core::CreatePoolSolutions(problemData, config.runData.sizePool);
+                // Zona Crítica/Single para atualizar melhor solução e reiniciar
+                #pragma omp single
+                {
+                    // Atualiza a melhor local da run
+                    core::TSol ctxBest = ctx.getBestSolution();
+                    if (ctxBest.ofv < bestSolutionRun.ofv) {
+                        bestSolutionRun = ctxBest;
                     }
-                } 
-            } // Fim Parallel
 
-            // Atualiza Global Stats
-            if (bestSolutionRun.ofv < bestSolutionGlobal.ofv) {
-                bestSolutionGlobal = bestSolutionRun;
+                    // Se ainda tem tempo, reinicia o pool (Multi-Start behavior)
+                    if ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
+                        core::CreatePoolSolutions(*problemInstance_, runData_.sizePool);
+                    }
+                }
             }
         }
+        ctx.resetStopFlag();
+    }
 
-        std::cout << "\n\n=== FINAL RESULT ===\n";
-        std::cout << "Best OFV: " << bestSolutionGlobal.ofv << "\n";
+    // -------------------------------------------------------------------------
+    // STATISTICS & RESULTS
+    // -------------------------------------------------------------------------
+    void RkoSolver::initializeStatistics() {
+        bestObjective_ = std::numeric_limits<double>::infinity();
+        averageObjective_ = 0.0;
+        totalTime_ = 0.0;
+        bestTime_ = 0.0;
+        bestSolutionGlobal_.ofv = std::numeric_limits<double>::infinity();
+        objectiveValues_.clear();
+        objectiveValues_.reserve(runData_.MAXRUNS);
+    }
+
+    void RkoSolver::updateStatistics(const core::TSol& runSolution, double startTime, double endTime) {
+        double runTime = endTime - startTime;
+
+        if (runSolution.ofv < bestSolutionGlobal_.ofv) {
+            bestSolutionGlobal_ = runSolution;
+        }
+        
+        if (runSolution.ofv < bestObjective_) {
+            bestObjective_ = runSolution.ofv;
+            bestTime_ = runTime; // Tempo em que a melhor global foi encontrada (aprox)
+        }
+
+        averageObjective_ += runSolution.ofv;
+        objectiveValues_.push_back(runSolution.ofv);
+        totalTime_ += runTime;
+    }
+
+    void RkoSolver::computeFinalStatistics() {
+        if (runData_.MAXRUNS > 0) {
+            averageObjective_ /= runData_.MAXRUNS;
+            // totalTime_ aqui representa a soma dos tempos de execução.
+            // Se quiser a média de tempo por run:
+            totalTime_ /= runData_.MAXRUNS; 
+        }
+    }
+
+    void RkoSolver::displayResults() {
+        std::cout << "\n\n╔════════════════════════════════════════════════════════╗\n"
+                  << "║                    RESULTS SUMMARY                     ║\n"
+                  << "╚════════════════════════════════════════════════════════╝\n";
+        
+        std::cout << std::fixed << std::setprecision(5);
+        std::cout << "Best Objective:    " << bestObjective_ << "\n"
+                  << "Average Objective: " << averageObjective_ << "\n"
+                  << "Avg Run Time:      " << totalTime_ << "s\n";
+        
+        // Exibir solução detalhada se desejar
+        // std::cout << "Solution Vector: ";
+        // for(auto v : bestSolutionGlobal_.rk) std::cout << v << " ";
+        // std::cout << "\n";
+    }
+
+    void RkoSolver::cleanup() {
+        // Com shared_ptr, a limpeza do problemInstance_ é automática.
+        problemInstance_.reset();
+    }
+
+    // -------------------------------------------------------------------------
+    // HELPER ACCESSORS
+    // -------------------------------------------------------------------------
+    std::string RkoSolver::getActiveName(int index) const {
+        if (index < 0 || index >= numActiveMethods_) return "Unknown";
+        int registryIndex = activateMethods_[index];
+        return algorithmRegistry_[registryIndex].name;
+    }
+
+    std::function<void(const core::TRunData&, const core::IProblem&)> 
+    RkoSolver::getActiveFunction(int index) const {
+        int registryIndex = activateMethods_[index];
+        return algorithmRegistry_[registryIndex].function;
     }
 
 } // namespace rkolib

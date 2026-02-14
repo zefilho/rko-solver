@@ -1,54 +1,84 @@
+/**
+ * RKO Library - Elegant Solver Interface
+ * Main orchestrator for optimization algorithms
+ */
+
 #pragma once
 
-#include <memory>
-
-// Dependências internas
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/method.hpp"
+#include <CLI/CLI.hpp>
+
 
 namespace rkolib {
 
-    // Estrutura para armazenar configurações da execução
-    struct AppConfig {
-        std::string instancePath;
-        std::string configPath = "config/config-tests.txt";
-        int maxTime = 60;
-        int seed = -1; 
-        
-        // Dados internos
-        std::vector<std::string> activeAlgorithms;
-        rkolib::core::TRunData runData;
-    };
-
-    class RKOSolver {
+    /**
+    * @brief Main solver class - orchestrates optimization process
+    */
+    class RkoSolver {
     public:
-        // Construtor
-        RKOSolver();
-        ~RKOSolver();
+        // -------------------------------------------------------------------------
+        // CONSTRUCTOR & DESTRUCTOR
+        // -------------------------------------------------------------------------
+        RkoSolver();
+        ~RkoSolver();
 
-        // 1. Configura via linha de comando e carrega arquivos
-        int init(int argc, char* argv[]);
-
-        // 2. O Entry-Point principal solicitado
+        // -------------------------------------------------------------------------
+        // PUBLIC INTERFACE
+        // -------------------------------------------------------------------------
+        void parseArguments(int argc, char* argv[]);
+        void loadConfiguration(const std::string& configFile = "");
         void run();
 
+        // -------------------------------------------------------------------------
+        // ACCESSORS
+        // -------------------------------------------------------------------------
+        const core::TSol& getBestSolution() const { return bestSolutionGlobal_; }
+        const core::TRunData& getRunData() const { return runData_; }
+        double getBestObjective() const { return bestObjective_; }
+        double getAverageObjective() const { return averageObjective_; }
+
     private:
-        // Métodos auxiliares
-        void parseConfigFile();
+        struct AlgorithmEntry {
+            std::string name;
+            std::function<void(const core::TRunData&, const core::IProblem&)> function;
+        };
+
+        // Private Initialization & Execution Helpers
+        void initializeRegistry();
+        void validateConfiguration();
         void loadProblemData();
-        void registerAlgorithms();
+        void initializeStatistics();
+        void executeRun(int runIndex);
+        void executeParallelMethods(double startTime, core::TSol& bestSolutionRun, unsigned int baseSeed);
+        void updateStatistics(const core::TSol& runSolution, double startTime, double endTime);
+        void computeFinalStatistics();
+        void displayResults();
+        void cleanup();
 
-        // Membros de Estado
-        AppConfig config;
-        rkolib::core::TProblemData problemData;
-        
-        // Estado compartilhado (Thread-safe logic)
-        std::vector<rkolib::core::TSol> pool;
-        std::atomic<bool> stop_execution;
+        // Helper Accessors
+        std::string getActiveName(int index) const;
+        std::function<void(const core::TRunData&, const core::IProblem&)> getActiveFunction(int index) const;
 
-        // Registro de Algoritmos (Nome -> Função)
-        using MetaheuristicFunc = std::function<void(const rkolib::core::TRunData &, const rkolib::core::TProblemData &)>;
-        std::map<std::string, MetaheuristicFunc> algo_registry;
+        // -------------------------------------------------------------------------
+        // MEMBER VARIABLES
+        // -------------------------------------------------------------------------
+        std::string instancePath_;
+        std::string configPath_;
+        core::TRunData runData_;
+        std::shared_ptr<core::IProblem> problemInstance_;
+
+        std::vector<AlgorithmEntry> algorithmRegistry_;
+        std::vector<int> activateMethods_;
+        int numActiveMethods_;
+
+        core::TSol bestSolutionGlobal_;
+        double bestObjective_;
+        double averageObjective_;
+        double bestTime_;
+        double totalTime_;
+        std::vector<double> objectiveValues_;
     };
 
 } // namespace rkolib

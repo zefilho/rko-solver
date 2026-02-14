@@ -80,7 +80,7 @@ target_compile_options(rkolib PRIVATE
 # 3. Definição do Executável (Main)
 # ------------------------------------------------------------------------------
 # Compila o src/main.cpp
-add_executable(runApp src/run.cpp)
+add_executable(runApp src/main.cpp)
 
 # Linka o executável com sua biblioteca recém-criada
 target_link_libraries(runApp PRIVATE rkolib)

@@ -1,10 +1,11 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/context.hpp"
 
 // Forward declaration
-//struct TProblemData; 
+//struct IProblem; 
 
 namespace rkolib::mh {
 
@@ -13,6 +14,6 @@ namespace rkolib::mh {
      * Description: Search process of the Genetic Algorithm.
      * Enhanced with Q-Learning for adaptive population size and operator rates.
      */
-    void GA(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data);
+    void GA(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem);
 
 } // namespace rkolib::mh

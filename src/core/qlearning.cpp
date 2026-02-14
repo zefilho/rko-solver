@@ -7,98 +7,199 @@ namespace rkolib::core {
 
     void PrintPolicy(const std::vector<TState>& S, int st)
     {
-        // O parâmetro 'st' não estava sendo usado no original, mantive a assinatura
-        (void)st; 
-
-        printf("\n\nPolicy\n");
+        
+        std::cout << std::format("Policy for state {}:", st) << std::endl;
+    
         for (int i = 0; i < (int)S.size(); i++)
         {
-            printf("\n i = %d: \t", i);
+            std::cout << std::format("\n i = {}: \t", i);
             for (int j = 0; j < (int)S[i].Ai.size(); j++)
             {
-                printf("%d (%.2lf) \t", S[i].Ai[j], S[i].Qa[j]);
+                std::cout << std::format("{} ({:.2f}) \t", S[i].Ai[j], S[i].Qa[j]);
             }
         }
     }
 
+    // void CreateStates(const std::vector<std::vector<double>>& parameters, int &numStates, int numPar, std::vector<TState> &S)
+    // {
+    //     #pragma omp critical
+    //     { 
+    //         // generate possible configurations
+    //         if (!parameters.empty()) {
+    //             numStates = parameters[0].size();
+    //             for (int i = 1; i < numPar; i++){
+    //                 numStates = numStates * parameters[i].size();
+    //             }
+    //         }
+            
+    //         // create states
+    //         for (int i = 0; i < numStates; i++)
+    //         {
+    //             TState sAux;
+    //             sAux.label = i; 
+    //             sAux.par.resize(numPar);
+    //             sAux.ci = 0;
+    //             sAux.numN = 0;
+    //             sAux.Ai.clear();
+    //             sAux.Qa.clear();
+    //             sAux.sumQ = 0;
+    //             sAux.maxQ = 0;
+    //             sAux.minA = 0;
+    //             sAux.maxA = 0;
+                
+    //             S.push_back(sAux);
+    //         }
+
+    //         // define the parameter configuration of each state
+    //         int nC = 1;
+    //         for (int j = 0; j < numPar; j++)
+    //         {
+    //             nC = nC * parameters[j].size();
+
+    //             for (int i = 0; i < numStates; i++)
+    //             {
+    //                 int den = (numStates / nC);
+    //                 if (den == 0) den = 1; // Proteção contra divisão por zero
+                    
+    //                 int columnIndex = i / den;
+    //                 columnIndex = columnIndex % parameters[j].size();
+
+    //                 S[i].par[j] = parameters[j][columnIndex];
+    //             }
+    //         }
+
+    //         // set of feasible control actions at each state
+    //         for (int i = 0; i < (int)S.size(); i++)
+    //         {
+    //             for (int j = 0; j < (int)S.size(); j++)
+    //             {
+    //                 // Calculate Hamming distance
+    //                 int distance = 0;
+    //                 for (int k = 0; k < (int)S[i].par.size(); k++) {
+    //                     if (S[i].par[k] != S[j].par[k]) {
+    //                         distance++;
+    //                     }
+    //                 }
+
+    //                 // We have an action from s_i if the new state is different from s_i by a maximmum of one parameter
+    //                 if (distance <= 1){
+    //                     S[i].Ai.push_back(j); // define actions ai (index of the new state) from s_i
+                        
+    //                     // Nota: randomico(0.05, 0.01) parece invertido (min > max). 
+    //                     // Verifique se sua implementação de randomico trata swap automatico.
+    //                     double q0 = randomico(0.05, 0.01); 
+    //                     S[i].Qa.push_back(q0); // initialize Q(si,ai)
+
+    //                     if (q0 > S[i].maxQ)
+    //                     {
+    //                         S[i].maxQ = q0;
+    //                         S[i].maxA = (int)S[i].Ai.size() - 1;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // Helper 1: Calculates the total number of combinations
+    int CalculateTotalStates(const std::vector<std::vector<double>>& parameters, int numPar) {
+        if (parameters.empty()) return 0;
+        
+        int total = parameters[0].size();
+        for (int i = 1; i < numPar; i++) {
+            total *= parameters[i].size();
+        }
+        return total;
+    }
+
+    // Helper 2: Initializes the vector with empty states
+    void InitializeStateVector(std::vector<TState>& S, int numStates, int numPar) {
+        S.clear(); // Good practice to clear before pushing
+        S.reserve(numStates); // Optimization
+        
+        for (int i = 0; i < numStates; i++) {
+            TState sAux;
+            sAux.label = i;
+            sAux.par.resize(numPar);
+            sAux.ci = 0;
+            sAux.numN = 0;
+            sAux.Ai.clear();
+            sAux.Qa.clear();
+            sAux.sumQ = 0;
+            sAux.maxQ = 0;
+            sAux.minA = 0;
+            sAux.maxA = 0;
+            // Vectors Ai and Qa are empty by default, no need to clear explicitly on new object
+            S.push_back(sAux);
+        }
+    }
+
+    // Helper 3: Maps the Cartesian product of parameters to states
+    void MapParametersToStates(std::vector<TState>& S, const std::vector<std::vector<double>>& parameters, int numPar, int numStates) {
+        int nC = 1;
+        for (int j = 0; j < numPar; j++) {
+            nC *= parameters[j].size();
+
+            // Calculate divisor once per column group to reduce inner complexity
+            int den = (numStates / nC);
+            if (den == 0) den = 1; 
+
+            for (int i = 0; i < numStates; i++) {
+                int columnIndex = (i / den) % parameters[j].size();
+                S[i].par[j] = parameters[j][columnIndex];
+            }
+        }
+    }
+
+    // Helper 4: Calculates Hamming distance (removes inner loop nesting)
+    int GetHammingDistance(const TState& s1, const TState& s2) {
+        int distance = 0;
+        size_t size = s1.par.size();
+        for (size_t k = 0; k < size; k++) {
+            if (s1.par[k] != s2.par[k]) {
+                distance++;
+            }
+        }
+        return distance;
+    }
+
+    // Helper 5: Establishes connections between states (Q-Table initialization)
+    void BuildStateConnections(std::vector<TState>& S) {
+        int sSize = (int)S.size();
+        
+        for (int i = 0; i < sSize; i++) {
+            for (int j = 0; j < sSize; j++) {
+                
+                // Reduced nesting by extracting distance logic
+                if (GetHammingDistance(S[i], S[j]) <= 1) {
+                    S[i].Ai.push_back(j);
+                    
+                    double q0 = randomico(0.05, 0.01);
+                    S[i].Qa.push_back(q0);
+
+                    if (q0 > S[i].maxQ) {
+                        S[i].maxQ = q0;
+                        S[i].maxA = (int)S[i].Ai.size() - 1;
+                    }
+                }
+            }
+        }
+    }
     void CreateStates(const std::vector<std::vector<double>>& parameters, int &numStates, int numPar, std::vector<TState> &S)
     {
         #pragma omp critical
         { 
-            // generate possible configurations
-            if (!parameters.empty()) {
-                numStates = parameters[0].size();
-                for (int i = 1; i < numPar; i++){
-                    numStates = numStates * parameters[i].size();
-                }
-            }
+            // 1. Calculate dimensions
+            numStates = CalculateTotalStates(parameters, numPar);
             
-            // create states
-            for (int i = 0; i < numStates; i++)
-            {
-                TState sAux;
-                sAux.label = i; 
-                sAux.par.resize(numPar);
-                sAux.ci = 0;
-                sAux.numN = 0;
-                sAux.Ai.clear();
-                sAux.Qa.clear();
-                sAux.sumQ = 0;
-                sAux.maxQ = 0;
-                sAux.minA = 0;
-                sAux.maxA = 0;
-                
-                S.push_back(sAux);
-            }
+            // 2. Allocate memory and defaults
+            InitializeStateVector(S, numStates, numPar);
 
-            // define the parameter configuration of each state
-            int nC = 1;
-            for (int j = 0; j < numPar; j++)
-            {
-                nC = nC * parameters[j].size();
+            // 3. Fill parameter configurations
+            MapParametersToStates(S, parameters, numPar, numStates);
 
-                for (int i = 0; i < numStates; i++)
-                {
-                    int den = (numStates / nC);
-                    if (den == 0) den = 1; // Proteção contra divisão por zero
-                    
-                    int columnIndex = i / den;
-                    columnIndex = columnIndex % parameters[j].size();
-
-                    S[i].par[j] = parameters[j][columnIndex];
-                }
-            }
-
-            // set of feasible control actions at each state
-            for (int i = 0; i < (int)S.size(); i++)
-            {
-                for (int j = 0; j < (int)S.size(); j++)
-                {
-                    // Calculate Hamming distance
-                    int distance = 0;
-                    for (int k = 0; k < (int)S[i].par.size(); k++) {
-                        if (S[i].par[k] != S[j].par[k]) {
-                            distance++;
-                        }
-                    }
-
-                    // We have an action from s_i if the new state is different from s_i by a maximmum of one parameter
-                    if (distance <= 1){
-                        S[i].Ai.push_back(j); // define actions ai (index of the new state) from s_i
-                        
-                        // Nota: randomico(0.05, 0.01) parece invertido (min > max). 
-                        // Verifique se sua implementação de randomico trata swap automatico.
-                        double q0 = randomico(0.05, 0.01); 
-                        S[i].Qa.push_back(q0); // initialize Q(si,ai)
-
-                        if (q0 > S[i].maxQ)
-                        {
-                            S[i].maxQ = q0;
-                            S[i].maxA = (int)S[i].Ai.size() - 1;
-                        }
-                    }
-                }
-            }
+            // 4. Create topology (Edges and Q-Values)
+            BuildStateConnections(S);
         }
     }
 

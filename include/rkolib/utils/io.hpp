@@ -2,9 +2,9 @@
 
 #include "rkolib/core/data.hpp" // Para TSol e Common
 
-// Forward declaration: Avisa que TProblemData existe, sem precisar do include pesado aqui.
-// (Assumindo que TProblemData foi definido no seu KnapsackProblem.hpp ou similar)
-struct TProblemData;
+// Forward declaration: Avisa que IProblem existe, sem precisar do include pesado aqui.
+// (Assumindo que IProblem foi definido no seu KnapsackProblem.hpp ou similar)
+struct IProblem;
 
 namespace rkolib::utils {
 
@@ -13,7 +13,7 @@ namespace rkolib::utils {
      */
     void WriteSolutionScreen(const char *algorithms[], int numMH, rkolib::core::TSol s, 
                              float timeBest, float timeTotal, char instance[], 
-                             const TProblemData &data, std::vector<rkolib::core::TSol> pool);
+                             const IProblem &problem, std::vector<rkolib::core::TSol> pool);
 
     /**
      * Outputs the solution in a txt file.
@@ -21,7 +21,7 @@ namespace rkolib::utils {
      */
     void WriteSolution(const char *algorithms[], int numMH, rkolib::core::TSol s, 
                        float timeBest, float timeTotal, char instance[], 
-                       const TProblemData &data);
+                       const IProblem &problem);
 
     /**
      * Outputs the results in a csv file.

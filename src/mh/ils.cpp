@@ -3,11 +3,11 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/problem.hpp" // Para data.n
+#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
 
 namespace rkolib::mh {
 
-    void ILS(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data)
+    void ILS(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
     {
         using namespace rkolib::core;
 
@@ -28,7 +28,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(data.n);    // define a order for the neighors
+        std::vector<int> RKorder(problem.getDimension());    // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -91,11 +91,11 @@ namespace rkolib::mh {
         Iter = 0;
 
         // create initial solution
-        CreateInitialSolutions(sBest, data.n); 
-        sBest.ofv = Decoder(sBest, data);
+        CreateInitialSolutions(sBest, problem.getDimension()); 
+        sBest.ofv = problem.evaluate(sBest);
 
         // apply local search
-        RVND(sBest, data, runData.strategy, RKorder);
+        RVND(sBest, problem, runData.strategy, RKorder);
         UpdatePoolSolutions(sBest, method, runData.debug);
 
         // terminate the search process in MAXTIME
@@ -105,7 +105,7 @@ namespace rkolib::mh {
         // run the search process until stop criterion
         while (currentTime < runData.MAXTIME * runData.restart)
         {
-            if (stop_execution.load()) return;      
+            if (SOLVER_SHOULD_STOP) return;      
             
             // increase the number of ILS iterations
             Iter++;
@@ -132,14 +132,14 @@ namespace rkolib::mh {
             sLine = sBest;
 
             // Shake the current solution
-            ShakeSolution(sLine, betaMin, betaMax, data.n);
+            ShakeSolution(sLine, betaMin, betaMax, problem.getDimension());
 
             // calculate the OFV
-            sLine.ofv = Decoder(sLine, data);
+            sLine.ofv = problem.evaluate(sLine);
 
             //s*' <- local search (s')
             sBestLine = sLine;
-            RVND(sBestLine, data, runData.strategy, RKorder);
+            RVND(sBestLine, problem, runData.strategy, RKorder);
 
             //s* <- acceptance criterion (s*, s*', historico)
             if (sBestLine.ofv < sBest.ofv)
@@ -147,7 +147,7 @@ namespace rkolib::mh {
                 sBest = sBestLine;
                 IterImprov = Iter;
                 improv = 1;
-                // update the pool of solutions
+                // update the SOLVER_POOL of solutions
                 UpdatePoolSolutions(sBest, method, runData.debug);
             }
 

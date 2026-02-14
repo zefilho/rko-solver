@@ -1,4 +1,5 @@
-# metaheuristics in the RKO, each line is executed in a separate thread
+# Configuração de Meta-heurísticas para RKO
+# Cada meta-heurística listada será executada em uma thread separada
 metaheuristics:
   - SA
   - ILS
@@ -11,20 +12,14 @@ metaheuristics:
   - GRASP
   - IPR
 
-# defines the maximum number of runs
-MAXRUNS: 1
+# Configurações Gerais de Execução
+execution_settings:
+  max_runs: 1          # Número máximo de execuções
+  debug_mode: 1        # 0: teste, 1: debug
+  control_mode: 1      # 0: offline tuning, 1: Q-Learning (online)
 
-# defines the execution mode (0 for test mode or 1 for debug mode)
-debug: 1
-
-# defines the parameter configuration mode (0 for offline tuning, 1 for online configuration using Q-Learning)
-control: 1
-
-# local search strategy (1 for first improvement, 2 for best improvement)
-strategy: 1
-
-# strategy to restart the search process (percentage of the maximum time at which the restart is triggered)
-restart: 1
-
-# size of the elite pool solution
-sizePool: 10
+# Parâmetros de Algoritmo e Busca
+search_parameters:
+  local_search_strategy: 1  # 1: first improvement, 2: best improvement
+  restart_threshold: 1      # % do tempo máximo para disparar o restart
+  elite_pool_size: 10       # Tamanho do pool de soluções de elite

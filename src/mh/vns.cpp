@@ -3,11 +3,11 @@
 // Dependências internas da Lib
 #include "rkolib/core/method.hpp"   // Utils (randomico, get_time, stop_execution, RVND, Shake)
 #include "rkolib/core/qlearning.hpp" // Lógica de Q-Learning
-#include "rkolib/core/problem.hpp" // Acesso à estrutura TProblemData (data.n)
+#include "rkolib/core/iproblem.hpp" // Acesso à estrutura IProblem (problem.getDimension())
 
 namespace rkolib::mh {
 
-    void VNS(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data)
+    void VNS(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
     {
         using namespace rkolib::core; // Facilita acesso a TSol, TState, etc.
 
@@ -30,7 +30,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(data.n);   // define a order for the neighors
+        std::vector<int> RKorder(problem.getDimension());   // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -60,7 +60,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        // Lê parâmetros do arquivo (Método definido em method.hpp)
+        // read parameters from txt or yaml
         readParameters(method, runData.control, parameters, numPar);
 
         // offline control
@@ -102,8 +102,8 @@ namespace rkolib::mh {
         // Loop de 1 iteração apenas para gerar solução inicial (mantido do original)
         for (int i=0; i<1; i++)
         {
-            CreateInitialSolutions(s, data.n); 
-            s.ofv = Decoder(s, data);
+            CreateInitialSolutions(s, problem.getDimension()); 
+            s.ofv = problem.evaluate(s);
             if (s.ofv < sBest.ofv)
                 sBest = s;
         }
@@ -139,7 +139,7 @@ namespace rkolib::mh {
             int k = 1;
             while (k <= kMax && currentTime < runData.MAXTIME * runData.restart)
             {
-                if (stop_execution.load()) return;      
+                if (SOLVER_SHOULD_STOP) return;      
                 
                 Iter++;
                 
@@ -148,14 +148,14 @@ namespace rkolib::mh {
 
                 // perturb the current solution (s)
                 sLine = s;
-                ShakeSolution(sLine, beta, beta, data.n);
+                ShakeSolution(sLine, beta, beta, problem.getDimension());
 
                 // calculate OFV
-                sLine.ofv = Decoder(sLine, data);
+                sLine.ofv = problem.evaluate(sLine);
 
                 //s*' <- local search (s')
                 sBestLine = sLine; 
-                RVND(sBestLine, data, (int)runData.strategy, RKorder);
+                RVND(sBestLine, problem, (int)runData.strategy, RKorder);
 
                 //s <- acceptance criterion (s,s*', historico)
                 if (sBestLine.ofv < s.ofv)
@@ -171,7 +171,7 @@ namespace rkolib::mh {
                         IterMelhora = Iter;
                         improv = 1;
 
-                        // update the pool of solutions (Global Method)
+                        // update the SOLVER_POOL of solutions (Global Method)
                         UpdatePoolSolutions(sBestLine, method, (int)runData.debug);
                     }
                 }

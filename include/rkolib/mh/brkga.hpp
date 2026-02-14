@@ -1,10 +1,11 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
+#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/context.hpp"
 
 //Forward declaration
-//struct TProblemData; 
+//struct IProblem; 
 
 namespace rkolib::mh {
 
@@ -17,6 +18,6 @@ namespace rkolib::mh {
      * - Parametric Uniform Crossover (Biased towards Elite).
      * - Enhanced with Q-Learning for adaptive parameter control.
      */
-    void BRKGA(const rkolib::core::TRunData &runData, const rkolib::core::TProblemData &data);
+    void BRKGA(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem);
 
 } // namespace rkolib::mh

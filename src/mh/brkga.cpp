@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/problem.hpp" // Para data.n
+#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
 
 namespace rkolib::mh {
 
@@ -46,7 +46,7 @@ namespace rkolib::mh {
     // Method: UpdatePopSize
     // Description: Logic to resize population dynamically
     // -------------------------------------------------------------------------
-    static void UpdatePopSize(int p, double pe, double pm, double rhoe, std::vector<TSol> &Pop, std::vector<TSol> &PopInter, const TProblemData &data)
+    static void UpdatePopSize(int p, double pe, double pm, double rhoe, std::vector<TSol> &Pop, std::vector<TSol> &PopInter, const IProblem &problem)
     {
         // size of the current population
         int oldPsize = (int)Pop.size();
@@ -76,8 +76,8 @@ namespace rkolib::mh {
                     pos++;
                 } else {
                      // Fallback safety
-                     CreateInitialSolutions(Pop[i], data.n);
-                     Pop[i].ofv = Decoder(Pop[i], data);
+                     CreateInitialSolutions(Pop[i], problem.getDimension());
+                     Pop[i].ofv = problem.evaluate(Pop[i]);
                 }
             }
 
@@ -92,13 +92,13 @@ namespace rkolib::mh {
             // define new size of Pop
             Pop.resize(p);
 
-            // generate new chromosomes using PUX from existing pool
+            // generate new chromosomes using PUX from existing SOLVER_POOL
             for (int k = oldPsize; k < p; k++)
             {
-                if (stop_execution.load()) return;      
+                if (SOLVER_SHOULD_STOP) return;      
                 
-                Pop[k] = PUX((int)(oldPsize * pe), oldPsize, rhoe, Pop, data.n);
-                Pop[k].ofv = Decoder(Pop[k], data);
+                Pop[k] = PUX((int)(oldPsize * pe), oldPsize, rhoe, Pop, problem.getDimension());
+                Pop[k].ofv = problem.evaluate(Pop[k]);
             }
 
             // sort new population
@@ -114,7 +114,7 @@ namespace rkolib::mh {
     // MAIN ALGORITHM IMPLEMENTATION
     // =========================================================================
 
-    void BRKGA(const TRunData &runData, const TProblemData &data)
+    void BRKGA(const TRunData &runData, const IProblem &problem)
     {
         const char* method = "BRKGA";
         int p = 0;                            // size of population
@@ -134,7 +134,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(data.n);               // define a order for the neighors
+        std::vector<int> RKorder(problem.getDimension());               // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -206,8 +206,8 @@ namespace rkolib::mh {
         // Create the initial chromosomes with random keys
         for (int i = 0; i < p; i++)
         {
-            CreateInitialSolutions(Pop[i], data.n); 
-            Pop[i].ofv = Decoder(Pop[i], data);
+            CreateInitialSolutions(Pop[i], problem.getDimension()); 
+            Pop[i].ofv = problem.evaluate(Pop[i]);
             PopInter[i] = Pop[i];
         }
         
@@ -244,7 +244,7 @@ namespace rkolib::mh {
                     rhoe = S[iCurr].par[3];
                     
                     // update population size                                                      
-                    UpdatePopSize(p, pe, pm, rhoe, Pop, PopInter, data);                      
+                    UpdatePopSize(p, pe, pm, rhoe, Pop, PopInter, problem);                      
                 }
             }
 
@@ -266,13 +266,13 @@ namespace rkolib::mh {
             bestOff.ofv = std::numeric_limits<double>::infinity();
 
             for (int i = eliteCount; i < crossoverLimit; i++){
-                if (stop_execution.load()) return;      
+                if (SOLVER_SHOULD_STOP) return;      
 
                 // Parametric uniform crossover
-                PopInter[i] = PUX(eliteCount, p, rhoe, Pop, data.n);
+                PopInter[i] = PUX(eliteCount, p, rhoe, Pop, problem.getDimension());
      
                 // Calculate the fitness of new chromosomes
-                PopInter[i].ofv = Decoder(PopInter[i], data); 
+                PopInter[i].ofv = problem.evaluate(PopInter[i]); 
 
                 if (PopInter[i].ofv < bestOff.ofv){
                     bestOff = PopInter[i];
@@ -284,10 +284,10 @@ namespace rkolib::mh {
             // Original code index math was ambiguous/overlapping. 
             // Now we iterate from 'crossoverLimit' to 'p'.
             for (int i = crossoverLimit; i < p; i++){
-                if (stop_execution.load()) return;      
+                if (SOLVER_SHOULD_STOP) return;      
                 
-                CreateInitialSolutions(PopInter[i], data.n);
-                PopInter[i].ofv = Decoder(PopInter[i], data); 
+                CreateInitialSolutions(PopInter[i], problem.getDimension());
+                PopInter[i].ofv = problem.evaluate(PopInter[i]); 
             }  
                     
             // Update the current population
@@ -296,7 +296,7 @@ namespace rkolib::mh {
             // Appy local search in one elite solution (Optional enhancement present in code)
             if (eliteCount > 0) {
                 int pos = irandomico(0, eliteCount - 1);
-                NelderMeadSearch(Pop[pos], data);
+                NelderMeadSearch(Pop[pos], problem);
             }
 
             // Sort population in increase order of fitness
@@ -308,7 +308,7 @@ namespace rkolib::mh {
                 improv = 1;
                 bestInd = Pop[0];
             
-                // Update pool of solutions
+                // Update SOLVER_POOL of solutions
                 UpdatePoolSolutions(Pop[0], method, runData.debug);
             }
 

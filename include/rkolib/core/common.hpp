@@ -19,6 +19,8 @@
 #include <string>
 #include <map>
 #include <utility> // std::pair
+#include <ranges> // C++20 ranges for convenience
+#include <functional> // std::function
 
 // Math & Algorithms
 #include <cmath>
@@ -27,6 +29,7 @@
 #include <limits>  // std::numeric_limits
 
 // IO & Strings
+#include <format>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -41,6 +44,9 @@
 #include <random>
 #include <chrono>
 #include <ctime>
+
+#include <memory> // std::unique_ptr
+
 
 
 // -------------------------------------------------------------------------

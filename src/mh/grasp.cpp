@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"         // Utils (randomico, Decoder, RVND, etc.)
 #include "rkolib/core/qlearning.hpp"       // Lógica de Q-Learning
-#include "rkolib/core/problem.hpp" // Para data.n
+#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
 
 namespace rkolib::mh {
 
@@ -12,7 +12,7 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Helper Function: LineSearch (Internal)
     // -------------------------------------------------------------------------
-    static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF, const TProblemData &data)
+    static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF, const IProblem &problem)
     {
         // find the best solution in line
         bestZ = 0;
@@ -52,19 +52,19 @@ namespace rkolib::mh {
             q = (int)rk.size();
 
         // choose a subset with q rks to calculate the decoder
-        // Nota: Idealmente usaríamos o 'rng' do contexto, mas aqui usamos random_device local 
-        // para manter compatibilidade com a lógica interna da função original sem passar 'rng' por toda cadeia.
-        // Se possível, refatorar para receber 'rng'.
+        // Nota: Idealmente usaríamos o 'SOLVER_RNG' do contexto, mas aqui usamos random_device local 
+        // para manter compatibilidade com a lógica interna da função original sem passar 'SOLVER_RNG' por toda cadeia.
+        // Se possível, refatorar para receber 'SOLVER_RNG'.
         static std::mt19937 local_rng(std::random_device{}());
         std::shuffle(rk.begin(), rk.end(), local_rng);
 
         // calculate the quality of solution s with rk j
         for (int j = 0; j < q; j++)
         {  
-            if (stop_execution.load()) return;      
+            if (SOLVER_SHOULD_STOP) return;      
             
             s.rk[i] = rk[j];   
-            s.ofv = Decoder(s, data);
+            s.ofv = problem.evaluate(s);
 
             if (s.ofv < bestF){
                 bestZ = s.rk[i];
@@ -77,12 +77,12 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Helper Function: ConstrutiveGreedyRandomized (Internal)
     // -------------------------------------------------------------------------
-    static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha, const TProblemData &data)
+    static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha, const IProblem &problem)
     {
-        std::vector<int> UnFixed(data.n);                // store the random-keys not yet fixed
+        std::vector<int> UnFixed(problem.getDimension());                // store the random-keys not yet fixed
         std::vector<int> chosenRK;                       // store the random-keys that will be search in the line search
-        std::vector<double> z(data.n);                   // store the best value of the random-key i
-        std::vector<double> g(data.n, INFINITY);         // store the value of the ofv with a random-key z_i
+        std::vector<double> z(problem.getDimension());                   // store the best value of the random-key i
+        std::vector<double> g(problem.getDimension(), INFINITY);         // store the value of the ofv with a random-key z_i
 
         double min; // Removed unused 'max'
 
@@ -99,10 +99,10 @@ namespace rkolib::mh {
         // index of the random key to be set
         int kBest = 0;  
         
-        int limit = (int)(data.n * intensity);
+        int limit = (int)(problem.getDimension() * intensity);
         for (int j = 0; j < limit; j++)
         {
-            if (stop_execution.load()) return;
+            if (SOLVER_SHOULD_STOP) return;
 
             // create a list of candidate solutions by perturbing a (not yet 'fixed') rk of the current solution
             min = INFINITY;
@@ -116,8 +116,8 @@ namespace rkolib::mh {
                 kMax = (int)UnFixed.size();
 
             chosenRK = UnFixed;
-            // 'rng' vem de Methods.hpp (extern)
-            std::shuffle(chosenRK.begin(), chosenRK.end(), rng);
+            // 'SOLVER_RNG' vem de Methods.hpp (extern)
+            std::shuffle(chosenRK.begin(), chosenRK.end(), SOLVER_RNG);
             if (kMax < (int)chosenRK.size()) {
                 chosenRK.resize(kMax);
             }
@@ -136,7 +136,7 @@ namespace rkolib::mh {
                 // Atualiza z[i] e g[i] por referência/acesso direto se g fosse passado
                 // A função LineSearch original atualizava variaveis passadas por referencia.
                 // Aqui: z[i] e g[i] são passados
-                LineSearch(sAux, h, i, z[i], g[i], data);
+                LineSearch(sAux, h, i, z[i], g[i], problem);
 
                 // store the best g[i] and the rk that found this g
                 if (min > g[i])
@@ -164,13 +164,13 @@ namespace rkolib::mh {
         }
 
         // update the solution found in the constructive phase
-        s.ofv = Decoder(s, data);
+        s.ofv = problem.evaluate(s);
     }
 
     // -------------------------------------------------------------------------
     // Main Algorithm: GRASP
     // -------------------------------------------------------------------------
-    void GRASP(const TRunData &runData, const TProblemData &data)
+    void GRASP(const TRunData &runData, const IProblem &problem)
     {
         const char* method = "GRASP";
         // GRASP parameters
@@ -185,7 +185,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(data.n);               // define a order for the neighors
+        std::vector<int> RKorder(problem.getDimension());               // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         float alphaGrasp = 0.1;                         // greedy rate
@@ -252,8 +252,8 @@ namespace rkolib::mh {
         }
 
         // create an initial solution
-        CreateInitialSolutions(s, data.n);
-        s.ofv = Decoder(s, data);
+        CreateInitialSolutions(s, problem.getDimension());
+        s.ofv = problem.evaluate(s);
         sBest = s;
 
         int iter = 0;
@@ -283,7 +283,7 @@ namespace rkolib::mh {
             // noImprov = 0;
             while (h >= he && currentTime < runData.MAXTIME * runData.restart)
             {
-                if (stop_execution.load()) return; 
+                if (SOLVER_SHOULD_STOP) return; 
 
                 iter++;
 
@@ -294,18 +294,18 @@ namespace rkolib::mh {
 
                 // construct a greedy randomized solution
                 sLine = s;
-                ConstrutiveGreedyRandomized(sLine, h, alphaGrasp, data);
+                ConstrutiveGreedyRandomized(sLine, h, alphaGrasp, problem);
                 
                 // apply local search in current solution
                 sLineBest = sLine;
-                RVND(sLineBest, data, runData.strategy, RKorder);
+                RVND(sLineBest, problem, runData.strategy, RKorder);
 
                 // update the best solution found by GRASP
                 if (sLineBest.ofv < sBest.ofv){
                     sBest = sLineBest;
                     improv = 1;
 
-                    // update the pool of solutions
+                    // update the SOLVER_POOL of solutions
                     UpdatePoolSolutions(sLineBest, method, runData.debug);
                 }
                 // make grid more dense

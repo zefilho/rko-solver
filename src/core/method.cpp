@@ -15,8 +15,8 @@ namespace rkolib::core {
 
     double randomico(double min, double max)
     {
-        // Usa a variável global 'rng' declarada como extern no .hpp
-        return std::uniform_real_distribution<double>(min, max)(rng);
+        // Usa a variável global 'SOLVER_RNG' declarada como extern no .hpp
+        return std::uniform_real_distribution<double>(min, max)(SOLVER_RNG);
     }
 
     int irandomico(int min, int max)
@@ -26,7 +26,8 @@ namespace rkolib::core {
 
     double get_time_in_seconds() {
         #if defined(_WIN32) || defined(_WIN64)
-            LARGE_INTEGER frequency, timeCur;
+            LARGE_INTEGER frequency; 
+            LARGE_INTEGER timeCur;
             QueryPerformanceFrequency(&frequency);
             QueryPerformanceCounter(&timeCur);
             return static_cast<double>(timeCur.QuadPart) / frequency.QuadPart;
@@ -50,38 +51,38 @@ namespace rkolib::core {
         }
     }
 
-    void CreatePoolSolutions(const TProblemData &data, const int sizePool)
+    void CreatePoolSolutions(const IProblem &problem, const int sizePool)
     {
-        // Nota: Acessa a variável global 'pool'
+        // Nota: Acessa a variável global 'SOLVER_POOL'
         #pragma omp critical
         {
             for (int i = 0; i < sizePool; i++){
-                CreateInitialSolutions(pool[i], data.n);
-                pool[i].ofv = Decoder(pool[i], data); // Chama Decoder externo
-                pool[i].best_time = get_time_in_seconds();
+                CreateInitialSolutions(SOLVER_POOL[i], problem.getDimension());
+                SOLVER_POOL[i].ofv = problem.evaluate(SOLVER_POOL[i]); // Chama Decoder externo
+                SOLVER_POOL[i].best_time = get_time_in_seconds();
             }
 
-            // sort pool in increasing order of fitness
-            std::sort(pool.begin(), pool.begin() + sizePool, sortByFitness);
+            // sort SOLVER_POOL in increasing order of fitness
+            std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + sizePool, sortByFitness);
 
-            // verify if similar solutions exist in the pool
+            // verify if similar solutions exist in the SOLVER_POOL
             int clone = 0;
-            // Cuidado: loop reverso original mantido, mas verifique se sizePool <= pool.size()
+            // Cuidado: loop reverso original mantido, mas verifique se sizePool <= SOLVER_POOL.size()
             for (int i = sizePool - 1; i > 0; i--){
-                if (std::abs(pool[i].ofv - pool[i-1].ofv) < 1e-9){ // Comparação double segura
-                    for (int j = 0; j < 0.2 * data.n; j++){
-                        int pos = irandomico(0, data.n - 1);
-                        pool[i].rk[pos] = randomico(0, 1);
+                if (std::abs(SOLVER_POOL[i].ofv - SOLVER_POOL[i-1].ofv) < 1e-9){ // Comparação double segura
+                    for (int j = 0; j < 0.2 * problem.getDimension(); j++){
+                        int pos = irandomico(0, problem.getDimension() - 1);
+                        SOLVER_POOL[i].rk[pos] = randomico(0, 1);
                     }
-                    pool[i].ofv = Decoder(pool[i], data);
+                    SOLVER_POOL[i].ofv = problem.evaluate(SOLVER_POOL[i]);
                     clone = 1;
                 }
             }
 
-            // sort pool again if clones were mutated
+            // sort SOLVER_POOL again if clones were mutated
             if (clone)
             {
-                std::sort(pool.begin(), pool.begin() + sizePool, sortByFitness);
+                std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + sizePool, sortByFitness);
             }
         }
     }
@@ -90,20 +91,16 @@ namespace rkolib::core {
     {
         #pragma omp critical
         {   
-            // Checks if it already exists in the pool
-            bool exists = false;
-            for (int i = 0; i < (int)pool.size(); i++) {
-                if (std::abs(pool[i].ofv - s.ofv) < 1e-9) { // Comparação segura
-                    exists = true;
-                    break;
-                }
-            }
+            // Checks if it already exists in the SOLVER_POOL
+            bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto& entry) {
+                return std::abs(entry.ofv - s.ofv) < 1e-9;
+            });
 
             // print that a new best solution was found
-            if (!pool.empty() && s.ofv < pool[0].ofv && debug) 
+            if (!SOLVER_POOL.empty() && s.ofv < SOLVER_POOL[0].ofv && debug) 
             {
                 int thread_id = omp_get_thread_num();   
-                printf("\nBest solution: %.10lf (Thread: %d - MH: %s)", s.ofv, thread_id, mh);
+                std::cout << std::format("\nBest solution: {:.10f} (Thread: {} - MH: {})", s.ofv, thread_id, mh);
             } 
 
             // Goes from back to front
@@ -114,10 +111,10 @@ namespace rkolib::core {
 
                 // insert the new solution preserving order (Insertion Sort logic)
                 int i;
-                for (i = (int)pool.size() - 1; i > 0 && pool[i - 1].ofv > s.ofv; i--) {
-                    pool[i] = pool[i - 1]; // Push to the right
+                for (i = static_cast<int>(SOLVER_POOL.size()) - 1; i > 0 && SOLVER_POOL[i - 1].ofv > s.ofv; i--) {
+                    SOLVER_POOL[i] = SOLVER_POOL[i - 1]; // Push to the right
                 }
-                pool[i] = s; 
+                SOLVER_POOL[i] = s; 
             }
         }
     }
@@ -180,9 +177,9 @@ namespace rkolib::core {
         return s;
     }
 
-    void NelderMeadSearch(TSol &x1, const TProblemData &data)
+    void NelderMeadSearch(TSol &x1, const IProblem &problem)
     {
-        int poolSize = (int)pool.size();
+        int poolSize = (int)SOLVER_POOL.size();
         if (poolSize < 2) return; // Segurança
 
         TSol x1Origem = x1;
@@ -193,7 +190,7 @@ namespace rkolib::core {
         
         // Helper: Avalia uma solução candidata e atualiza o xBest se necessário
         auto evaluateAndUpdate = [&](TSol& candidate) {
-            candidate.ofv = Decoder(candidate, data);
+            candidate.ofv = problem.evaluate(candidate);
             if (candidate.ofv < xBest.ofv) {
                 xBest = candidate;
                 improved = true;
@@ -214,31 +211,31 @@ namespace rkolib::core {
             k2 = irandomico(0, poolSize - 1);
         } while (k1 == k2);
 
-        TSol x2 = pool[k1];
-        TSol x3 = pool[k2];
+        TSol x2 = SOLVER_POOL[k1];
+        TSol x3 = SOLVER_POOL[k2];
 
         // Sort x1, x2, x3
         sortSimplex(x1, x2, x3);
         
         // Centroid
-        TSol x0 = Blending(x1, x2, 1, data.n);
+        TSol x0 = Blending(x1, x2, 1, problem.getDimension());
         evaluateAndUpdate(x0);
 
         int iter_count = 1; 
-        int maxIter = std::max(10, static_cast<int>(data.n * std::exp(-2)));
+        int maxIter = std::max(10, static_cast<int>(problem.getDimension() * std::exp(-2)));
 
         while (iter_count <= maxIter) 
         {
             bool shrink = false;
 
             // Reflection
-            TSol x_r = Blending(x0, x3, -1, data.n);
+            TSol x_r = Blending(x0, x3, -1, problem.getDimension());
             evaluateAndUpdate(x_r);
 
             if (x_r.ofv < x1.ofv) 
             {
                 // Expansion
-                TSol x_e = Blending(x_r, x0, -1, data.n);
+                TSol x_e = Blending(x_r, x0, -1, problem.getDimension());
                 evaluateAndUpdate(x_e);
                 x3 = (x_e.ofv < x_r.ofv) ? x_e : x_r;
             } 
@@ -247,7 +244,7 @@ namespace rkolib::core {
             } 
             else {
                 bool outsite = x_r.ofv < x3.ofv;
-                TSol x_c = outsite ? Blending(x_r, x0, 1, data.n) : Blending(x0, x3, 1, data.n);
+                TSol x_c = outsite ? Blending(x_r, x0, 1, problem.getDimension()) : Blending(x0, x3, 1, problem.getDimension());
                 evaluateAndUpdate(x_c);
                 if (x_c.ofv < (outsite ? x_r.ofv : x3.ofv)) {
                     x3 = x_c;
@@ -257,17 +254,17 @@ namespace rkolib::core {
             }
             
             if (shrink) {
-                x2 = Blending(x1, x2, 1, data.n);
+                x2 = Blending(x1, x2, 1, problem.getDimension());
                 evaluateAndUpdate(x2);
                 
-                x3 = Blending(x1, x3, 1, data.n);
+                x3 = Blending(x1, x3, 1, problem.getDimension());
                 evaluateAndUpdate(x3);
             }
 
             // Sort again
             sortSimplex(x1, x2, x3);
 
-            x0 = Blending(x1, x2, 1, data.n);
+            x0 = Blending(x1, x2, 1, problem.getDimension());
             evaluateAndUpdate(x0);
 
             if (improved) {
@@ -277,64 +274,76 @@ namespace rkolib::core {
                 iter_count++;
             }
 
-            if (stop_execution.load()) return; 
+            if (SOLVER_SHOULD_STOP) return; 
         }
 
         x1 = improvedX1 ? xBest : x1Origem;
     }
 
-    void SwapLS(TSol &s, const TProblemData &data, const int &strategy, std::vector<int> &RKorder)
-    {                 
-        std::shuffle(RKorder.begin(), RKorder.end(), rng);
-        float rate = 1.0;
-        
-        TSol sBest = s;
-        TSol sCurrent = s; // Usado no strategy 2
-        bool improved = false;
+    void runFirstImprovement(rkolib::core::TSol &s, rkolib::core::TSol &sBest, 
+                             const rkolib::core::IProblem &problem, 
+                             const std::vector<int> &RKorder, int limitI, int limitJ) {
+        for (int i = 0; i < limitI; ++i) {
+            for (int j = i + 1; j < limitJ; ++j) {
+                std::swap(s.rk[RKorder[i]], s.rk[RKorder[j]]);
+                s.ofv = problem.evaluate(s);
 
-        // Limites do loop ajustados para segurança
-        int limitI = (int)((data.n - 1) * rate);
-        int limitJ = (int)(data.n * rate);
-
-        if (strategy == 1) { // First Improvement
-            for(int i = 0; i < limitI; i++) {
-                for(int j = i + 1; j < limitJ; j++) {  
-                    std::swap(s.rk[RKorder[i]], s.rk[RKorder[j]]);
-                    s.ofv = Decoder(s, data);
-
-                    if (s.ofv < sBest.ofv){
-                        sBest = s;
-                        // return; // Se descomentar, vira First Impr real
-                    } else {
-                        s = sBest; // Reverte
-                    }
-                    if (stop_execution.load()) return; 
+                if (s.ofv < sBest.ofv) {
+                    sBest = s;
+                } else {
+                    s = sBest; // Reverte
                 }
+                
+                if (SOLVER_SHOULD_STOP) return;
             }
-        }
-        else if (strategy == 2) { // Best Improvement
-            for(int i = 0; i < limitI; i++) {
-                for(int j = i + 1; j < data.n; j++) {  
-                    std::swap(s.rk[RKorder[i]], s.rk[RKorder[j]]);
-                    s.ofv = Decoder(s, data);
-
-                    if (s.ofv < sBest.ofv){
-                        sBest = s;
-                        improved = true;
-                    }
-                    s = sCurrent; // Sempre reverte para testar o próximo swap a partir da original
-                    if (stop_execution.load()) return; 
-                }
-            }
-            if (improved) s = sBest;
         }
     }
 
-    void InvertLS(TSol &s, const TProblemData &data, const int &strategy, std::vector<int> &RKorder)
+    void runBestImprovement(rkolib::core::TSol &s, rkolib::core::TSol &sBest, 
+                            const rkolib::core::IProblem &problem, 
+                            const std::vector<int> &RKorder, int limitI, int n) {
+        bool improved = false;
+        rkolib::core::TSol sCurrent = s;
+
+        for (int i = 0; i < limitI; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                std::swap(s.rk[RKorder[i]], s.rk[RKorder[j]]);
+                s.ofv = problem.evaluate(s);
+
+                if (s.ofv < sBest.ofv) {
+                    sBest = s;
+                    improved = true;
+                }
+                s = sCurrent; // Always revert to test the next neighbot
+                
+                if (SOLVER_SHOULD_STOP) return;
+            }
+        }
+        if (improved) s = sBest;
+    }
+
+    void SwapLS(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
+    {                 
+        std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
+        rkolib::core::TSol sBest = s;
+        const float rate = 1.0f;
+        const int n = static_cast<int>(problem.getDimension());
+        const int limitI = static_cast<int>((n - 1) * rate);
+        const int limitJ = static_cast<int>(n * rate);
+
+        if (strategy == 1) {
+            runFirstImprovement(s, sBest, problem, RKorder, limitI, limitJ);
+        } 
+        else if (strategy == 2) {
+            runBestImprovement(s, sBest, problem, RKorder, limitI, n);
+        }
+    }
+
+    void InvertLS(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
     {         
-        std::shuffle(RKorder.begin(), RKorder.end(), rng);
+        std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
         float rate = 1.0;
-        int limit = (int)(data.n * rate);
+        int limit = (int)(problem.getDimension() * rate);
         
         TSol sBest = s;
         TSol sCurrent = s;
@@ -345,7 +354,7 @@ namespace rkolib::core {
             if (s.rk[RKorder[i]] > 0.00001) s.rk[RKorder[i]] = 1.0 - s.rk[RKorder[i]];
             else s.rk[RKorder[i]] = 0.99999;
 
-            s.ofv = Decoder(s, data);
+            s.ofv = problem.evaluate(s);
 
             if (s.ofv < sBest.ofv){
                 sBest = s;
@@ -359,15 +368,15 @@ namespace rkolib::core {
             }
 
             if (strategy == 2) s = sCurrent; // Reverte sempre no best impr
-            if (stop_execution.load()) return; 
+            if (SOLVER_SHOULD_STOP) return; 
         }
 
         if (strategy == 2 && improved) s = sBest;
     }
 
-    void FareyLS(TSol &s, const TProblemData &data, const int &strategy, std::vector<int> &RKorder)
+    void FareyLS(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
     {      
-        std::shuffle(RKorder.begin(), RKorder.end(), rng);
+        std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
         
         static const std::vector<double> F = {
             0.00, 0.142857, 0.166667, 0.20, 0.25, 0.285714, 0.333333, 0.40, 
@@ -376,7 +385,7 @@ namespace rkolib::core {
         };
                              
         float rate = 1.0;
-        int limit = (int)(data.n * rate);
+        int limit = static_cast<int>(problem.getDimension() * rate);
         
         TSol sBest = s;
         TSol sCurrent = s;
@@ -385,7 +394,7 @@ namespace rkolib::core {
         for(int i = 0; i < limit; i++) {
             for (size_t j = 0; j < F.size() - 1; j++){
                 s.rk[RKorder[i]] = randomico(F[j], F[j+1]);
-                s.ofv = Decoder(s, data);
+                s.ofv = problem.evaluate(s);
 
                 if (s.ofv < sBest.ofv){
                     sBest = s;
@@ -395,130 +404,250 @@ namespace rkolib::core {
                 }
                 
                 if (strategy == 2) s = sCurrent;
-                if (stop_execution.load()) return; 
+                if (SOLVER_SHOULD_STOP) return; 
             }
         }
         if (strategy == 2 && improved) s = sBest;
     }
 
-    void RVND(TSol &s, const TProblemData &data, const int &strategy, std::vector<int> &RKorder)
+    void RVND(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
     {
-        int numLS = 4;
+        // Define the list of neighborhood structures
+        const int numLS = 4;
+        enum class LS { SWAP = 1, INVERT, NELDERMEAD, FAREY };
+
         std::vector<int> NSL;
-        for (int i = 1; i <= numLS; i++) NSL.push_back(i);
+        std::iota(NSL.begin(), NSL.end(), 1); // Push with values 1 to numLS
 
         while (!NSL.empty())
         {
-            if (stop_execution.load()) return;       
+            if (SOLVER_SHOULD_STOP) return;       
 
             double foCurrent = s.ofv;
             
-            int pos = rand() % NSL.size(); // rand() aqui é C-style, mas mantive do original
-            int k = NSL[pos];
+            std::uniform_int_distribution<size_t> dist(0, numLS - 1);
+            size_t pos = dist(SOLVER_RNG);
+            auto k = (LS) NSL[pos];
 
             switch (k)
             {
-                case 1: SwapLS(s, data, strategy, RKorder); break;
-                case 2: InvertLS(s, data, strategy, RKorder); break;
-                case 3: NelderMeadSearch(s, data); break;
-                case 4: FareyLS(s, data, strategy, RKorder); break;
+                case LS::SWAP: SwapLS(s, problem, strategy, RKorder); break;
+                case LS::INVERT: InvertLS(s, problem, strategy, RKorder); break;
+                case LS::NELDERMEAD: NelderMeadSearch(s, problem); break;
+                default: FareyLS(s, problem, strategy, RKorder); break;
             }
 
             if (s.ofv < foCurrent){
-                NSL.clear();
-                for (int i = 1; i <= numLS; i++) NSL.push_back(i);
+                NSL.resize(numLS);
+                std::iota(NSL.begin(), NSL.end(), 1); //Push com valores 1 a numLS
             } else {
                 NSL.erase(NSL.begin() + pos);
             }
         } 
     }
 
-    void readParameters(const char* method, int control, 
-                        std::vector<std::vector<double>> &parameters, int numPar)
-    {
-        #pragma omp critical
-        {  
-            char paramFile[256];
-            if (control == 0) strncpy(paramFile, "config/param-offline.txt", 255);
-            else strncpy(paramFile, "config/param-online.txt", 255);
-
-            FILE *file = fopen(paramFile, "r");
-            if (file == NULL) {
-                printf("Error in open file %s.\n", paramFile);
-                exit(1); // Mudei getchar() para exit para não travar automação
-            }
-
-            char line[1024]; 
-            while (fgets(line, sizeof(line), file) != NULL) {
-                line[strcspn(line, "\n")] = '\0'; 
-
-                if (strcmp(line, method) == 0) {
-                    for (int i = 0; i < numPar; i++) {
-                        if (fgets(line, sizeof(line), file) != NULL) {
-                            char *token = strtok(line, "{},= "); 
-                            while (token != NULL) {
-                                double aux = 0;
-                                if (sscanf(token, "%lf", &aux) == 1) {
-                                    parameters[i].push_back(aux);
-                                }
-                                token = strtok(NULL, "{},= "); 
-                            }
-                        }
-                    }
-                }
-            }
-            fclose(file);
-        }
-    }
-
-    void readParametersYaml(const char* method, int control, 
-                    std::vector<std::vector<double>> &parameters, int numPar)
+    void readParameters(const std::string& method, int control,
+                    std::vector<std::vector<double>>& parameters, int numPar)
     {
         #pragma omp critical
         {
-            // 1. Definição do arquivo (agora com extensão .yaml)
-            std::string paramFile;
-            if (control == 0) paramFile = "config/yaml/param-offline.yaml";
-            else paramFile = "config/yaml/param-online.yaml";
+            std::string paramFile = (control == 0) ? "config/param-offline.txt"
+                                                : "config/param-online.txt";
 
-            try {
-                // 2. Carrega o arquivo usando yaml-cpp
-                YAML::Node config = YAML::LoadFile(paramFile);
+            std::ifstream file(paramFile);
+            if (!file.is_open()) {
+                std::cerr << "Error in open file " << paramFile << ".\n";
+                std::exit(1);
+            }
 
-                // 3. Verifica se o método existe no YAML
-                if (config[method]) {
-                    const YAML::Node& methodNode = config[method];
+            std::string line;
+            while (std::getline(file, line)) {
+                if (line == method) {
+                    for (int i = 0; i < numPar; i++) {
+                        if (std::getline(file, line)) {
+                            // Remove caracteres: { } , = e espaços
+                            std::string cleaned;
+                            for (char c : line) {
+                                if (c != '{' && c != '}' && c != ',' && c != '=' && c != ' ') {
+                                    cleaned += c;
+                                } else if (!cleaned.empty() && cleaned.back() != ' ') {
+                                    cleaned += ' '; // Separa tokens com espaço
+                                }
+                            }
 
-                    // Verifica se é uma sequência (lista de listas)
-                    if (methodNode.IsSequence()) {
-                        // Itera até o limite de numPar ou o tamanho disponível no YAML
-                        for (int i = 0; i < numPar && i < methodNode.size(); i++) {
-                            
-                            // Verifica se o item interno também é uma sequência (lista de doubles)
-                            if (methodNode[i].IsSequence()) {
-                                for (const auto& val : methodNode[i]) {
-                                    parameters[i].push_back(val.as<double>());
+                            std::istringstream iss(cleaned);
+                            std::string token;
+                            while (iss >> token) {
+                                double aux = 0;
+                                try {
+                                    size_t pos;
+                                    aux = std::stod(token, &pos);
+                                    if (pos == token.size()) { // Conversão completa
+                                        parameters[i].push_back(aux);
+                                    }
+                                } catch (const std::invalid_argument&) {
+                                    // Token não é um número válido, ignora
+                                } catch (const std::out_of_range&) {
+                                    // Valor fora do intervalo de double, ignora
                                 }
                             }
                         }
-                    } else {
-                        std::cerr << "Formato inválido para o método: " << method << " (esperado uma lista de listas)." << std::endl;
                     }
-                } else {
-                    std::cerr << "Método '" << method << "' não encontrado em " << paramFile << std::endl;
                 }
-
-            } catch (const YAML::BadFile& e) {
-                std::cerr << "Erro ao abrir o arquivo YAML: " << paramFile << std::endl;
-                exit(1); 
-            } catch (const YAML::ParserException& e) {
-                std::cerr << "Erro de sintaxe no YAML: " << e.what() << std::endl;
-                exit(1);
-            } catch (const std::exception& e) {
-                std::cerr << "Erro desconhecido: " << e.what() << std::endl;
-                exit(1);
             }
         }
     }
+
+    // void readParameters(const char*  method, int control, 
+    //                 std::vector<std::vector<double>> &parameters, int numPar)
+    // {
+    //     #pragma omp critical
+    //     {  
+    //         char paramFile[256];
+    //         if (control == 0){
+    //             strncpy(paramFile,"config/param-offline.txt",255);
+    //         }
+    //         else{
+    //             strncpy(paramFile,"config/param-online.txt",255);
+    //         }
+
+    //         FILE *file = fopen(paramFile, "r");
+    //         if (file == NULL) {
+    //             printf("Error in open file %s.\n", paramFile);
+    //             getchar();
+    //         }
+
+    //         char line[100];     // Buffer line
+
+    //         // Reading the file line by line
+    //         while (fgets(line, sizeof(line), file) != NULL) {
+    //             line[strcspn(line, "\n")] = '\0';  // remove newline
+
+    //             if (strcmp(line, method) == 0) {
+    //                 // Read the parameter values
+    //                 for (int i = 0; i < numPar; i++) {
+    //                     double aux = 0;
+    //                     if (fgets(line, sizeof(line), file) != NULL) {
+    //                         char *token = strtok(line, "{},= "); // separete line by delimiters
+    //                         while (token != NULL) {
+    //                             if (sscanf(token, "%lf", &aux) == 1) {
+    //                                 parameters[i].push_back(aux);
+    //                             }
+    //                             token = strtok(NULL, "{},= "); // next value
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         fclose(file);
+    //     }
+    // }
+
+    void LoadYamlLogic(const std::string& paramFile, const char* method, int numPar, std::vector<std::vector<double>> &parameters) 
+    {
+        try {
+            
+            YAML::Node config = YAML::LoadFile(paramFile);
+
+            // Guard Clause 1: Método não existe
+            if (!config[method]) {
+                std::cerr << "Método '" << method << "' não encontrado em " << paramFile << std::endl;
+                return; // AGORA PERMITIDO (sai da função auxiliar, não do bloco critical diretamente)
+            }
+
+            const YAML::Node& methodNode = config[method];
+
+            // Guard Clause 2: Formato inválido
+            if (!methodNode.IsSequence()) {
+                std::cerr << "Formato inválido para o método: " << method << " (esperado uma lista de listas)." << std::endl;
+                return;
+            }
+
+            // Lógica de preenchimento
+            int limit = std::min(numPar, static_cast<int>(methodNode.size()));
+            
+            for (int i = 0; i < limit; i++) {
+                if (!methodNode[i].IsSequence()) continue;
+
+                for (const auto& val : methodNode[i]) {
+                    parameters[i].push_back(val.as<double>());
+                }
+            }
+
+        } catch (const YAML::BadFile& e) {
+            std::cerr << "Erro ao abrir o arquivo YAML: " << paramFile << std::endl;
+            exit(1); // Exit é permitido pois mata o processo inteiro
+        } catch (const YAML::ParserException& e) {
+            std::cerr << "Erro de sintaxe no YAML: " << e.what() << std::endl;
+            exit(1);
+        } catch (const std::exception& e) {
+            std::cerr << "Erro desconhecido: " << e.what() << std::endl;
+            exit(1);
+        }
+    }
+
+    void readParametersYaml(const char* method, int control, std::vector<std::vector<double>> &parameters, int numPar)
+    {
+        // Define o nome do arquivo fora da área crítica (operação leve)
+        std::string paramFile = (control == 0) ? "config/yaml/param-offline.yaml" : "config/yaml/param-online.yaml";
+
+        #pragma omp critical
+        {
+            // Chama a lógica. Se ela der return, ela volta para esta linha,
+            // atinge o fechamento da chave '}' e libera o Lock corretamente.
+            LoadYamlLogic(paramFile, method, numPar, parameters);
+        }
+    }
+
+    // void readParametersYaml(const char* method, int control, 
+    //                 std::vector<std::vector<double>> &parameters, int numPar)
+    // {
+    //     #pragma omp critical
+    //     {
+    //         // 1. Define the file (now with .yaml extension)
+    //         std::string paramFile;
+    //         if (control == 0) paramFile = "config/yaml/param-offline.yaml";
+    //         else paramFile = "config/yaml/param-online.yaml";
+
+    //         try {
+                
+    //             // 2. Loads the file using yaml-cpp
+    //             YAML::Node config = YAML::LoadFile(paramFile);
+
+    //             // 3. Verified if the method exists in the YAML
+    //             if (!config[method]) {
+    //                 std::cerr << "Método '" << method << "' não encontrado em " << paramFile << std::endl;
+    //                 return;
+    //             }
+
+    //             const YAML::Node& methodNode = config[method];
+
+    //             if (!methodNode.IsSequence()) {
+    //                 std::cerr << "Formato inválido para o método: " << method << " (esperado uma lista de listas)." << std::endl;
+    //                 return;
+    //             }
+
+    //             int limit = std::min(numPar, static_cast<int>(methodNode.size()));
+    //             for (int i = 0; i < limit; i++) {
+    //                 // Verified if the inner item is also a sequence (list of doubles)
+    //                 if (!methodNode[i].IsSequence()) continue;
+
+    //                 for (const auto& val : methodNode[i]) {
+    //                     parameters[i].push_back(val.as<double>());
+    //                 }
+    //             }
+
+    //         } catch (const YAML::BadFile& e) {
+    //             std::cerr << "Erro ao abrir o arquivo YAML: " << paramFile << std::endl;
+    //             exit(1); 
+    //         } catch (const YAML::ParserException& e) {
+    //             std::cerr << "Erro de sintaxe no YAML: " << e.what() << std::endl;
+    //             exit(1);
+    //         } catch (const std::exception& e) {
+    //             std::cerr << "Erro desconhecido: " << e.what() << std::endl;
+    //             exit(1);
+    //         }
+    //     }
+    // }
 
 } // namespace rkolib::core
