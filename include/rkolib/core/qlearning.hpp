@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rkolib/core/data.hpp" // Necessário para TState
+#include "rkolib/core/data.hpp"
 
 namespace rkolib::core {
 

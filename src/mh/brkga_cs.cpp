@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
 
 namespace rkolib::mh {
 
@@ -101,7 +101,7 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Method: UpdatePopulationSize
     // -------------------------------------------------------------------------
-    static void UpdatePopulationSize(int p, double pe, double pm, double rhoe, std::vector<TSol> &Pop, std::vector<TSol> &PopInter, const IProblem &problem)
+    static void UpdatePopulationSize(int p, double pe, double pm, double rhoe, std::vector<TSol> &Pop, std::vector<TSol> &PopInter, RkoSolver &solver)
     {
         // size of the current population
         int oldPsize = (int)Pop.size();
@@ -131,8 +131,8 @@ namespace rkolib::mh {
                     pos++;
                 } else {
                     // Fallback if calculations imply out of bounds
-                    CreateInitialSolutions(Pop[i], problem.getDimension());
-                    Pop[i].ofv = problem.evaluate(Pop[i]);
+                    CreateInitialSolutions(Pop[i], solver.getProblemDimension());
+                    solver.evaluateSolution(Pop[i]);
                 }
             }
 
@@ -152,8 +152,8 @@ namespace rkolib::mh {
                 if (SOLVER_SHOULD_STOP) return;     
 
                 // Generate new individuals using crossover from existing ones
-                Pop[k] = ParametricUniformCrossover((int)(oldPsize * pe), oldPsize - 1, pm, rhoe, Pop, problem.getDimension());
-                Pop[k].ofv = problem.evaluate(Pop[k]);
+                Pop[k] = ParametricUniformCrossover((int)(oldPsize * pe), oldPsize - 1, pm, rhoe, Pop, solver.getProblemDimension());
+                solver.evaluateSolution(Pop[k]);
             }
 
             // sort new population
@@ -317,7 +317,7 @@ namespace rkolib::mh {
     // MAIN ALGORITHM IMPLEMENTATION
     // =========================================================================
 
-    void BRKGA_CS(const TRunData &runData, const IProblem &problem)
+    void BRKGA_CS(const TRunData &runData, RkoSolver &solver)
     {
         const char* method = "BRKGA-CS";
         // BRKGA parameters
@@ -343,7 +343,7 @@ namespace rkolib::mh {
         int improv = 0;                       // improvement flag
 
         // define a order for the neighors
-        std::vector<int> RKorder(problem.getDimension());
+        std::vector<int> RKorder(solver.getProblemDimension());
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -370,7 +370,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
         // offline control
         if (runData.control == 0)
@@ -420,8 +420,8 @@ namespace rkolib::mh {
 
         for (int i = 0; i < p; i++)
         {
-            CreateInitialSolutions(Pop[i], problem.getDimension()); 
-            Pop[i].ofv = problem.evaluate(Pop[i]);
+            CreateInitialSolutions(Pop[i], solver.getProblemDimension()); 
+            solver.evaluateSolution(Pop[i]);
             PopInter[i] = Pop[i];
 
             if (Pop[i].ofv < bestInd.ofv) {
@@ -463,7 +463,7 @@ namespace rkolib::mh {
                     rhoe    = S[iCurr].par[3]; 
                     
                     // update population size                                                      
-                    UpdatePopulationSize(p, pe, pm, rhoe, Pop, PopInter, problem);     
+                    UpdatePopulationSize(p, pe, pm, rhoe, Pop, PopInter, solver);     
                 }               
             }
 
@@ -485,10 +485,10 @@ namespace rkolib::mh {
                 if (SOLVER_SHOULD_STOP) return;      
 
                 // Parametric uniform crossover with mutation
-                PopInter[i] = ParametricUniformCrossover((int)(p * pe), p, pm, rhoe, Pop, problem.getDimension());
+                PopInter[i] = ParametricUniformCrossover((int)(p * pe), p, pm, rhoe, Pop, solver.getProblemDimension());
      
                 // Calculate the fitness of new chromosomes
-                PopInter[i].ofv = problem.evaluate(PopInter[i]); 
+                solver.evaluateSolution(PopInter[i]); 
 
                 if (PopInter[i].ofv < bestOFV)
                     bestOFV = PopInter[i].ofv;
@@ -562,7 +562,7 @@ namespace rkolib::mh {
                 std::vector<int> promising((int)(p * pe), 0);
 
                 // Identify commuties in the Elite with Label Propagation method
-                IC(p, pe, Pop, promising, problem.getDimension());
+                IC(p, pe, Pop, promising, solver.getProblemDimension());
 
                 std::vector<int> promisingSol; 
                 promisingSol.clear();
@@ -581,8 +581,8 @@ namespace rkolib::mh {
                     // The original logic replaced the elite individual. We replicate that.
                     else {
                         // Cast rhoe to int to match helper signature, though semantically it's double
-                        ChaoticInd(Pop[i], (int)rhoe, problem.getDimension()); 
-                        Pop[i].ofv = problem.evaluate(Pop[i]);
+                        ChaoticInd(Pop[i], (int)rhoe, solver.getProblemDimension()); 
+                        solver.evaluateSolution(Pop[i]);
                     }
                 }
 
@@ -593,9 +593,9 @@ namespace rkolib::mh {
                     int solIndex = promisingSol[i];
                     // local search not influence the evolutionary process
                     if (i < 1)
-                        RVND(Pop[solIndex], problem, runData.strategy, RKorder);
+                        RVND(Pop[solIndex], solver, runData.strategy, RKorder);
                     else
-                        NelderMeadSearch(Pop[solIndex], problem);        
+                        NelderMeadSearch(Pop[solIndex], solver);        
 
                     if (Pop[solIndex].ofv < bestInd.ofv){
                         bestInd = Pop[solIndex];

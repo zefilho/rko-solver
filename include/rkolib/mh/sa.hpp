@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/solver.hpp"
 #include "rkolib/core/context.hpp"
 
 // Forward declaration para evitar include circular se necessário, 
@@ -15,6 +15,6 @@ namespace rkolib::mh {
      * Description: Search process of the Simulated Annealing (SA).
      * Enhanced with Q-Learning for adaptive parameter control.
      */
-    void SA(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem);
+    void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver);
 
 } // namespace rkolib::mh

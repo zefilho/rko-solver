@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
 
 namespace rkolib::mh {
 
@@ -46,7 +46,7 @@ namespace rkolib::mh {
     // Method: UpdatePopSize
     // Description: Logic to resize population dynamically
     // -------------------------------------------------------------------------
-    static void UpdatePopSize(int p, double pe, double pm, double rhoe, std::vector<TSol> &Pop, std::vector<TSol> &PopInter, const IProblem &problem)
+    static void UpdatePopSize(int p, double pe, double pm, double rhoe, std::vector<TSol> &Pop, std::vector<TSol> &PopInter, RkoSolver &solver)
     {
         // size of the current population
         int oldPsize = (int)Pop.size();
@@ -76,8 +76,8 @@ namespace rkolib::mh {
                     pos++;
                 } else {
                      // Fallback safety
-                     CreateInitialSolutions(Pop[i], problem.getDimension());
-                     Pop[i].ofv = problem.evaluate(Pop[i]);
+                     CreateInitialSolutions(Pop[i], solver.getProblemDimension());
+                     solver.evaluateSolution(Pop[i]);
                 }
             }
 
@@ -97,8 +97,8 @@ namespace rkolib::mh {
             {
                 if (SOLVER_SHOULD_STOP) return;      
                 
-                Pop[k] = PUX((int)(oldPsize * pe), oldPsize, rhoe, Pop, problem.getDimension());
-                Pop[k].ofv = problem.evaluate(Pop[k]);
+                Pop[k] = PUX((int)(oldPsize * pe), oldPsize, rhoe, Pop, solver.getProblemDimension());
+                solver.evaluateSolution(Pop[k]);
             }
 
             // sort new population
@@ -114,7 +114,7 @@ namespace rkolib::mh {
     // MAIN ALGORITHM IMPLEMENTATION
     // =========================================================================
 
-    void BRKGA(const TRunData &runData, const IProblem &problem)
+    void BRKGA(const TRunData &runData, RkoSolver &solver)
     {
         const char* method = "BRKGA";
         int p = 0;                            // size of population
@@ -134,7 +134,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());               // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());               // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -161,7 +161,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
         // offline control
         if (runData.control == 0){
@@ -206,8 +206,8 @@ namespace rkolib::mh {
         // Create the initial chromosomes with random keys
         for (int i = 0; i < p; i++)
         {
-            CreateInitialSolutions(Pop[i], problem.getDimension()); 
-            Pop[i].ofv = problem.evaluate(Pop[i]);
+            CreateInitialSolutions(Pop[i], solver.getProblemDimension()); 
+            solver.evaluateSolution(Pop[i]);
             PopInter[i] = Pop[i];
         }
         
@@ -244,7 +244,7 @@ namespace rkolib::mh {
                     rhoe = S[iCurr].par[3];
                     
                     // update population size                                                      
-                    UpdatePopSize(p, pe, pm, rhoe, Pop, PopInter, problem);                      
+                    UpdatePopSize(p, pe, pm, rhoe, Pop, PopInter, solver);                      
                 }
             }
 
@@ -269,10 +269,10 @@ namespace rkolib::mh {
                 if (SOLVER_SHOULD_STOP) return;      
 
                 // Parametric uniform crossover
-                PopInter[i] = PUX(eliteCount, p, rhoe, Pop, problem.getDimension());
+                PopInter[i] = PUX(eliteCount, p, rhoe, Pop, solver.getProblemDimension());
      
                 // Calculate the fitness of new chromosomes
-                PopInter[i].ofv = problem.evaluate(PopInter[i]); 
+                solver.evaluateSolution(PopInter[i]); 
 
                 if (PopInter[i].ofv < bestOff.ofv){
                     bestOff = PopInter[i];
@@ -286,8 +286,8 @@ namespace rkolib::mh {
             for (int i = crossoverLimit; i < p; i++){
                 if (SOLVER_SHOULD_STOP) return;      
                 
-                CreateInitialSolutions(PopInter[i], problem.getDimension());
-                PopInter[i].ofv = problem.evaluate(PopInter[i]); 
+                CreateInitialSolutions(PopInter[i], solver.getProblemDimension());
+                solver.evaluateSolution(PopInter[i]); 
             }  
                     
             // Update the current population
@@ -296,7 +296,7 @@ namespace rkolib::mh {
             // Appy local search in one elite solution (Optional enhancement present in code)
             if (eliteCount > 0) {
                 int pos = irandomico(0, eliteCount - 1);
-                NelderMeadSearch(Pop[pos], problem);
+                NelderMeadSearch(Pop[pos], solver);
             }
 
             // Sort population in increase order of fitness

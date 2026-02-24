@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension() e definição completa de IProblem
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension() e definição completa de IProblem
 
 namespace rkolib::mh {
 
@@ -16,7 +16,7 @@ namespace rkolib::mh {
     static void UpdateParticleSize(std::vector<TSol> &X, std::vector<TSol> &Pbest, 
                                    std::vector<std::vector<float>> &V, 
                                    const TSol &Gbest, int Psize,  
-                                   float c1, float c2, float w, const IProblem &problem)
+                                   float c1, float c2, float w, RkoSolver &solver)
     {
         // size of the current population
         int oldPsize = (int)X.size();
@@ -33,23 +33,23 @@ namespace rkolib::mh {
             X.resize(Psize);
             Pbest.resize(Psize);
             // Resize V and ensure new inner vectors are sized correctly
-            V.resize(Psize, std::vector<float>(problem.getDimension()));
+            V.resize(Psize, std::vector<float>(solver.getProblemDimension()));
 
             // Create the initial particles with random keys 
             for (int i = oldPsize; i < Psize; i++)
             {
                 // initialize X[i]
-                CreateInitialSolutions(X[i], problem.getDimension()); 
+                CreateInitialSolutions(X[i], solver.getProblemDimension()); 
 
                 // initialize Pbest
                 Pbest[i] = X[i];    
 
                 // initialize V[i][j]
                 // V[i] já foi alocado pelo resize acima
-                for (int j = 0; j < problem.getDimension(); j++)
+                for (int j = 0; j < solver.getProblemDimension(); j++)
                     V[i][j] = (float)randomico(0, 1);
 
-                for (int j = 0; j < problem.getDimension(); j++)
+                for (int j = 0; j < solver.getProblemDimension(); j++)
                 {
                     float r1 = (float)randomico(0, 1);
                     float r2 = (float)randomico(0, 1);
@@ -69,7 +69,7 @@ namespace rkolib::mh {
                 }
 
                 // fitness of X[i]
-                X[i].ofv = problem.evaluate(X[i]);
+                solver.evaluateSolution(X[i]);
 
                 // update Pbest (initial)
                 Pbest[i] = X[i];    
@@ -80,7 +80,7 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Main Algorithm: PSO
     // -------------------------------------------------------------------------
-    void PSO(const TRunData &runData, const IProblem &problem)
+    void PSO(const TRunData &runData, RkoSolver &solver)
     {
         const char* method = "PSO";
         int Psize = 0;                           // number of particles
@@ -104,7 +104,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());        // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());        // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -131,7 +131,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
         // offline control
         if (runData.control == 0){
@@ -175,7 +175,7 @@ namespace rkolib::mh {
 
         X.resize(Psize);
         Pbest.resize(Psize);
-        V.resize(Psize, std::vector<float>(problem.getDimension()));
+        V.resize(Psize, std::vector<float>(solver.getProblemDimension()));
 
         // Create the initial particles with random keys 
         Gbest.ofv = INFINITY;
@@ -183,13 +183,13 @@ namespace rkolib::mh {
         for (int i=0; i<Psize; i++)
         {
             // initialize X[i]
-            CreateInitialSolutions(X[i], problem.getDimension()); 
+            CreateInitialSolutions(X[i], solver.getProblemDimension()); 
 
             // fitness of X[i]
-            X[i].ofv = problem.evaluate(X[i]);
+            solver.evaluateSolution(X[i]);
 
             // initialize V[i][j]
-            for (int j=0; j<problem.getDimension(); j++)
+            for (int j=0; j<solver.getProblemDimension(); j++)
                 V[i][j] = (float)randomico(0, 1);
 
             // initialize Gbest
@@ -227,7 +227,7 @@ namespace rkolib::mh {
                     w     = (float)S[iCurr].par[3];          
 
                     // Update population size based on new parameters
-                    UpdateParticleSize(X, Pbest, V, Gbest, Psize, c1, c2, w, problem);
+                    UpdateParticleSize(X, Pbest, V, Gbest, Psize, c1, c2, w, solver);
                 }
             }
 
@@ -247,7 +247,7 @@ namespace rkolib::mh {
                 double probUpdate = 1.0; 
 
                 // update particles X[i]
-                for (int j = 0; j < problem.getDimension(); j++)
+                for (int j = 0; j < solver.getProblemDimension(); j++)
                 {
                     float r1 = (float)randomico(0, 1);
                     float r2 = (float)randomico(0, 1);
@@ -269,7 +269,7 @@ namespace rkolib::mh {
                 }
 
                 // fitness
-                X[i].ofv = problem.evaluate(X[i]);
+                solver.evaluateSolution(X[i]);
 
                 // set the best ofv found in this generation
                 if (X[i].ofv < bestOFcurrent){
@@ -295,7 +295,7 @@ namespace rkolib::mh {
             double oldGbest = Gbest.ofv;
             if (currentPsize > 0) {
                 int chosen = irandomico(0, currentPsize - 1);
-                NelderMeadSearch(Pbest[chosen], problem);
+                NelderMeadSearch(Pbest[chosen], solver);
                 
                 // update global best particle from LS result
                 if (Pbest[chosen].ofv < Gbest.ofv){

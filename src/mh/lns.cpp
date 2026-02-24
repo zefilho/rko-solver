@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
 
 namespace rkolib::mh {
 
@@ -38,7 +38,7 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Main Algorithm: LNS
     // -------------------------------------------------------------------------
-    void LNS(const TRunData &runData, const IProblem &problem)
+    void LNS(const TRunData &runData, RkoSolver &solver)
     {
         const char* method = "LNS";
         double T0 = 0;                       // initial temperature
@@ -59,7 +59,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());    // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());    // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -86,7 +86,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
         // create a Farey sequence for the Repair operator
         std::vector<double> F;
@@ -127,8 +127,8 @@ namespace rkolib::mh {
         }   
 
         // Create the initial solution with random keys
-        CreateInitialSolutions(s, problem.getDimension()); 
-        s.ofv = problem.evaluate(s);    
+        CreateInitialSolutions(s, solver.getProblemDimension()); 
+        solver.evaluateSolution(s);    
         sBest = s;
 
         // run the search process until stop criterion
@@ -163,7 +163,7 @@ namespace rkolib::mh {
                 // LNS DESTRUCTION PHASE (Ruina)
                 // -------------------------------------------------------------
                 sLine = s;
-                int intensity = irandomico((int)(betaMin * problem.getDimension()), (int)(betaMax * problem.getDimension()));
+                int intensity = irandomico((int)(betaMin * solver.getProblemDimension()), (int)(betaMax * solver.getProblemDimension()));
                 if (intensity < 1) intensity = 1; // Segurança mínima
                 
                 // define which rk will be deleted - Random Removal
@@ -187,7 +187,7 @@ namespace rkolib::mh {
                 
                         // generate a random value between two intervals of the Farey sequence
                         sLine.rk[pos] = randomico(F[j], F[j+1]);
-                        sLine.ofv = problem.evaluate(sLine);
+                        solver.evaluateSolution(sLine);
 
                         if (sLine.ofv < OFVbest)
                         {
@@ -203,7 +203,7 @@ namespace rkolib::mh {
 
                 // local search to improve the repaired solution
                 sLineBest = sLine;
-                NelderMeadSearch(sLineBest, problem);
+                NelderMeadSearch(sLineBest, solver);
                 
                 // calculate delta
                 double delta = sLineBest.ofv - s.ofv;

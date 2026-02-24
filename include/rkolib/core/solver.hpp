@@ -5,10 +5,12 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/iproblem.hpp"
+#include "rkolib/core/problem.hpp"
 #include "rkolib/core/method.hpp"
-#include <CLI/CLI.hpp>
+#include "rkolib/core/scalarizer.hpp"
 
 
 namespace rkolib {
@@ -39,10 +41,17 @@ namespace rkolib {
         double getBestObjective() const { return bestObjective_; }
         double getAverageObjective() const { return averageObjective_; }
 
+        void evaluateSolution(core::TSol& sol, const std::vector<double>& lambda = {});
+
+        int getProblemDimension() const;
+        const std::vector<double>& getIdealPoint() const { return idealPoint_; }
+        // Helper para inicializar antes do loop paralelo
+        void initReferencePoints(int nObj);
+
     private:
         struct AlgorithmEntry {
             std::string name;
-            std::function<void(const core::TRunData&, const core::IProblem&)> function;
+            std::function<void(const core::TRunData&, RkoSolver&)> function;
         };
 
         // Private Initialization & Execution Helpers
@@ -59,7 +68,10 @@ namespace rkolib {
 
         // Helper Accessors
         std::string getActiveName(int index) const;
-        std::function<void(const core::TRunData&, const core::IProblem&)> getActiveFunction(int index) const;
+        std::function<void(const core::TRunData&, RkoSolver&)> getActiveFunction(int index) const;
+
+        // Helper para o ponto ideal (estado global da otimização)
+        void updateIdealPoint(const std::vector<double>& objs);
 
         // -------------------------------------------------------------------------
         // MEMBER VARIABLES
@@ -79,6 +91,13 @@ namespace rkolib {
         double bestTime_;
         double totalTime_;
         std::vector<double> objectiveValues_;
+      
+        // A ESTRATÉGIA ATUAL (Polimorfismo aqui!)
+        std::unique_ptr<core::IScalarizer> scalarizer_; 
+
+        std::mutex mtx_; // O guarda de trânsito
+        // Estado global para Tchebycheff e outros métodos que precisam de referência
+        std::vector<double> idealPoint_;
     };
 
 } // namespace rkolib

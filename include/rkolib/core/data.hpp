@@ -1,4 +1,4 @@
-#pragma once // Substitui o #ifndef antigo
+#pragma once
 
 #include "rkolib/core/common.hpp"
 
@@ -14,7 +14,7 @@ namespace rkolib::core {
         double ofv = std::numeric_limits<double>::infinity(); // Objective function value
         double best_time = 0.0;                        // Time to find this specific solution
         std::string nameMH;                            // Name of the metaheuristic/algorithm
-        
+        std::vector<double> objs;                       // Store the raw values of each objective
         // Construtor padrão para garantir inicialização limpa
         TSol() = default;
     };

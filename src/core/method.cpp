@@ -1,5 +1,5 @@
 #include "rkolib/core/method.hpp"
-
+#include "rkolib/core/solver.hpp"
 #include <omp.h>     // OpenMP
 #include <yaml-cpp/yaml.h>
 
@@ -15,14 +15,23 @@ namespace rkolib::core {
 
     double randomico(double min, double max)
     {
-        // Usa a variável global 'SOLVER_RNG' declarada como extern no .hpp
-        return std::uniform_real_distribution<double>(min, max)(SOLVER_RNG);
+        // Thread-Safe agora!
+        // SOLVER_RNG chama getRng(), que usa omp_get_thread_num()
+        std::uniform_real_distribution<double> dist(min, max);
+        return dist(SOLVER_RNG);
     }
 
     int irandomico(int min, int max)
     {
-        return (int)randomico(0, max - min + 1) + min;
+        // Thread-Safe agora!
+        std::uniform_int_distribution<int> dist(min, max);
+        return dist(SOLVER_RNG);
     }
+
+    // int irandomico(int min, int max)
+    // {
+    //     return (int)randomico(0, max - min + 1) + min;
+    // }
 
     double get_time_in_seconds() {
         #if defined(_WIN32) || defined(_WIN64)
@@ -51,14 +60,19 @@ namespace rkolib::core {
         }
     }
 
-    void CreatePoolSolutions(const IProblem &problem, const int sizePool)
+    void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool)
     {
         // Nota: Acessa a variável global 'SOLVER_POOL'
         #pragma omp critical
         {
+            auto& ctx = SolverContext::instance();
+            if (ctx.getPool().size() != (size_t)sizePool) {
+                ctx.initializePool(sizePool);
+            }
+
             for (int i = 0; i < sizePool; i++){
-                CreateInitialSolutions(SOLVER_POOL[i], problem.getDimension());
-                SOLVER_POOL[i].ofv = problem.evaluate(SOLVER_POOL[i]); // Chama Decoder externo
+                CreateInitialSolutions(SOLVER_POOL[i], solver.getProblemDimension());
+                solver.evaluateSolution(SOLVER_POOL[i]); // Chama Decoder externo
                 SOLVER_POOL[i].best_time = get_time_in_seconds();
             }
 
@@ -70,11 +84,11 @@ namespace rkolib::core {
             // Cuidado: loop reverso original mantido, mas verifique se sizePool <= SOLVER_POOL.size()
             for (int i = sizePool - 1; i > 0; i--){
                 if (std::abs(SOLVER_POOL[i].ofv - SOLVER_POOL[i-1].ofv) < 1e-9){ // Comparação double segura
-                    for (int j = 0; j < 0.2 * problem.getDimension(); j++){
-                        int pos = irandomico(0, problem.getDimension() - 1);
+                    for (int j = 0; j < 0.2 * solver.getProblemDimension(); j++){
+                        int pos = irandomico(0, solver.getProblemDimension() - 1);
                         SOLVER_POOL[i].rk[pos] = randomico(0, 1);
                     }
-                    SOLVER_POOL[i].ofv = problem.evaluate(SOLVER_POOL[i]);
+                    solver.evaluateSolution(SOLVER_POOL[i]);
                     clone = 1;
                 }
             }
@@ -177,7 +191,7 @@ namespace rkolib::core {
         return s;
     }
 
-    void NelderMeadSearch(TSol &x1, const IProblem &problem)
+    void NelderMeadSearch(TSol &x1, rkolib::RkoSolver &solver)
     {
         int poolSize = (int)SOLVER_POOL.size();
         if (poolSize < 2) return; // Segurança
@@ -190,7 +204,7 @@ namespace rkolib::core {
         
         // Helper: Avalia uma solução candidata e atualiza o xBest se necessário
         auto evaluateAndUpdate = [&](TSol& candidate) {
-            candidate.ofv = problem.evaluate(candidate);
+            solver.evaluateSolution(candidate);
             if (candidate.ofv < xBest.ofv) {
                 xBest = candidate;
                 improved = true;
@@ -218,24 +232,24 @@ namespace rkolib::core {
         sortSimplex(x1, x2, x3);
         
         // Centroid
-        TSol x0 = Blending(x1, x2, 1, problem.getDimension());
+        TSol x0 = Blending(x1, x2, 1, solver.getProblemDimension());
         evaluateAndUpdate(x0);
 
         int iter_count = 1; 
-        int maxIter = std::max(10, static_cast<int>(problem.getDimension() * std::exp(-2)));
+        int maxIter = std::max(10, static_cast<int>(solver.getProblemDimension() * std::exp(-2)));
 
         while (iter_count <= maxIter) 
         {
             bool shrink = false;
 
             // Reflection
-            TSol x_r = Blending(x0, x3, -1, problem.getDimension());
+            TSol x_r = Blending(x0, x3, -1, solver.getProblemDimension());
             evaluateAndUpdate(x_r);
 
             if (x_r.ofv < x1.ofv) 
             {
                 // Expansion
-                TSol x_e = Blending(x_r, x0, -1, problem.getDimension());
+                TSol x_e = Blending(x_r, x0, -1, solver.getProblemDimension());
                 evaluateAndUpdate(x_e);
                 x3 = (x_e.ofv < x_r.ofv) ? x_e : x_r;
             } 
@@ -244,7 +258,7 @@ namespace rkolib::core {
             } 
             else {
                 bool outsite = x_r.ofv < x3.ofv;
-                TSol x_c = outsite ? Blending(x_r, x0, 1, problem.getDimension()) : Blending(x0, x3, 1, problem.getDimension());
+                TSol x_c = outsite ? Blending(x_r, x0, 1, solver.getProblemDimension()) : Blending(x0, x3, 1, solver.getProblemDimension());
                 evaluateAndUpdate(x_c);
                 if (x_c.ofv < (outsite ? x_r.ofv : x3.ofv)) {
                     x3 = x_c;
@@ -254,17 +268,17 @@ namespace rkolib::core {
             }
             
             if (shrink) {
-                x2 = Blending(x1, x2, 1, problem.getDimension());
+                x2 = Blending(x1, x2, 1, solver.getProblemDimension());
                 evaluateAndUpdate(x2);
                 
-                x3 = Blending(x1, x3, 1, problem.getDimension());
+                x3 = Blending(x1, x3, 1, solver.getProblemDimension());
                 evaluateAndUpdate(x3);
             }
 
             // Sort again
             sortSimplex(x1, x2, x3);
 
-            x0 = Blending(x1, x2, 1, problem.getDimension());
+            x0 = Blending(x1, x2, 1, solver.getProblemDimension());
             evaluateAndUpdate(x0);
 
             if (improved) {
@@ -281,12 +295,12 @@ namespace rkolib::core {
     }
 
     void runFirstImprovement(rkolib::core::TSol &s, rkolib::core::TSol &sBest, 
-                             const rkolib::core::IProblem &problem, 
+                             rkolib::RkoSolver &solver, 
                              const std::vector<int> &RKorder, int limitI, int limitJ) {
         for (int i = 0; i < limitI; ++i) {
             for (int j = i + 1; j < limitJ; ++j) {
                 std::swap(s.rk[RKorder[i]], s.rk[RKorder[j]]);
-                s.ofv = problem.evaluate(s);
+                solver.evaluateSolution(s);
 
                 if (s.ofv < sBest.ofv) {
                     sBest = s;
@@ -300,7 +314,7 @@ namespace rkolib::core {
     }
 
     void runBestImprovement(rkolib::core::TSol &s, rkolib::core::TSol &sBest, 
-                            const rkolib::core::IProblem &problem, 
+                            rkolib::RkoSolver &solver, 
                             const std::vector<int> &RKorder, int limitI, int n) {
         bool improved = false;
         rkolib::core::TSol sCurrent = s;
@@ -308,7 +322,7 @@ namespace rkolib::core {
         for (int i = 0; i < limitI; ++i) {
             for (int j = i + 1; j < n; ++j) {
                 std::swap(s.rk[RKorder[i]], s.rk[RKorder[j]]);
-                s.ofv = problem.evaluate(s);
+                solver.evaluateSolution(s);
 
                 if (s.ofv < sBest.ofv) {
                     sBest = s;
@@ -322,28 +336,28 @@ namespace rkolib::core {
         if (improved) s = sBest;
     }
 
-    void SwapLS(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
+    void SwapLS(TSol &s, rkolib::RkoSolver &solver, const int &strategy, std::vector<int> &RKorder)
     {                 
         std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
         rkolib::core::TSol sBest = s;
         const float rate = 1.0f;
-        const int n = static_cast<int>(problem.getDimension());
+        const int n = static_cast<int>(solver.getProblemDimension());
         const int limitI = static_cast<int>((n - 1) * rate);
         const int limitJ = static_cast<int>(n * rate);
 
         if (strategy == 1) {
-            runFirstImprovement(s, sBest, problem, RKorder, limitI, limitJ);
+            runFirstImprovement(s, sBest, solver, RKorder, limitI, limitJ);
         } 
         else if (strategy == 2) {
-            runBestImprovement(s, sBest, problem, RKorder, limitI, n);
+            runBestImprovement(s, sBest, solver, RKorder, limitI, n);
         }
     }
 
-    void InvertLS(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
+    void InvertLS(TSol &s, rkolib::RkoSolver &solver, const int &strategy, std::vector<int> &RKorder)
     {         
         std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
         float rate = 1.0;
-        int limit = (int)(problem.getDimension() * rate);
+        int limit = (int)(solver.getProblemDimension() * rate);
         
         TSol sBest = s;
         TSol sCurrent = s;
@@ -354,7 +368,7 @@ namespace rkolib::core {
             if (s.rk[RKorder[i]] > 0.00001) s.rk[RKorder[i]] = 1.0 - s.rk[RKorder[i]];
             else s.rk[RKorder[i]] = 0.99999;
 
-            s.ofv = problem.evaluate(s);
+            solver.evaluateSolution(s);
 
             if (s.ofv < sBest.ofv){
                 sBest = s;
@@ -374,7 +388,7 @@ namespace rkolib::core {
         if (strategy == 2 && improved) s = sBest;
     }
 
-    void FareyLS(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
+    void FareyLS(TSol &s, rkolib::RkoSolver &solver, const int &strategy, std::vector<int> &RKorder)
     {      
         std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
         
@@ -385,7 +399,7 @@ namespace rkolib::core {
         };
                              
         float rate = 1.0;
-        int limit = static_cast<int>(problem.getDimension() * rate);
+        int limit = static_cast<int>(solver.getProblemDimension() * rate);
         
         TSol sBest = s;
         TSol sCurrent = s;
@@ -394,7 +408,7 @@ namespace rkolib::core {
         for(int i = 0; i < limit; i++) {
             for (size_t j = 0; j < F.size() - 1; j++){
                 s.rk[RKorder[i]] = randomico(F[j], F[j+1]);
-                s.ofv = problem.evaluate(s);
+                solver.evaluateSolution(s);
 
                 if (s.ofv < sBest.ofv){
                     sBest = s;
@@ -410,7 +424,7 @@ namespace rkolib::core {
         if (strategy == 2 && improved) s = sBest;
     }
 
-    void RVND(TSol &s, const IProblem &problem, const int &strategy, std::vector<int> &RKorder)
+    void RVND(TSol &s, rkolib::RkoSolver &solver, const int &strategy, std::vector<int> &RKorder)
     {
         // Define the list of neighborhood structures
         const int numLS = 4;
@@ -431,10 +445,10 @@ namespace rkolib::core {
 
             switch (k)
             {
-                case LS::SWAP: SwapLS(s, problem, strategy, RKorder); break;
-                case LS::INVERT: InvertLS(s, problem, strategy, RKorder); break;
-                case LS::NELDERMEAD: NelderMeadSearch(s, problem); break;
-                default: FareyLS(s, problem, strategy, RKorder); break;
+                case LS::SWAP: SwapLS(s, solver, strategy, RKorder); break;
+                case LS::INVERT: InvertLS(s, solver, strategy, RKorder); break;
+                case LS::NELDERMEAD: NelderMeadSearch(s, solver); break;
+                default: FareyLS(s, solver, strategy, RKorder); break;
             }
 
             if (s.ofv < foCurrent){

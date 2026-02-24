@@ -2,11 +2,11 @@
 
 // Dependências internas
 #include "rkolib/core/method.hpp"         // irandomico, SOLVER_POOL, get_time, UpdatePoolSolutions
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
 
 namespace rkolib::mh {
 
-    void IPR(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
+    void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver)
     {
         using namespace rkolib::core;
 
@@ -22,7 +22,7 @@ namespace rkolib::mh {
         // run the search process until stop criterion
         while (currentTime < runData.MAXTIME * runData.restart)
         {
-            // Verifica se o SOLVER_POOL tem soluções suficientes
+            // Check if the SOLVER_POOL has enough solutions
             if (SOLVER_POOL.size() < 2) break;
 
             // randomly choose two elite solutions
@@ -33,7 +33,7 @@ namespace rkolib::mh {
             }
             while (k1 == k2);
 
-            // Escopo do loop: variáveis reinicializadas a cada iteração do while
+            // Loop scope: variables are reset at each iteration of the while loop
             TSol atual = SOLVER_POOL[k1];                       
             TSol guia = SOLVER_POOL[k2];                        
 
@@ -44,23 +44,22 @@ namespace rkolib::mh {
 
             int direction = 1;                          // internal (1) or external (-1) IPR
 
-            // Correção de Senior: Garantir que blockSize nunca seja 0
-            int blockSize = std::max(1, (int)(problem.getDimension() * 0.10)); 
-            int numBlock = problem.getDimension() / blockSize;             
+            // Ensure that blocksize is never 0
+            int blockSize = std::max(1, (int)(solver.getProblemDimension() * 0.10)); 
+            int numBlock = solver.getProblemDimension() / blockSize;             
             
             std::vector<int> fixedBlock(numBlock, 1);   // binary vector: 1 = not swapped, 0 = swap candidate
             int dist = 0;                               // number of different rk blocks
 
             // calculates the difference between the solutions (measured by the number of different blocks)
-            for (int i = 0; i < problem.getDimension(); i++)
+            for (int i = 0; i < solver.getProblemDimension(); i++)
             {
-                // Comparação segura de double
                 if (std::abs(atual.rk[i] - guia.rk[i]) > 1e-9){
-                    // Proteção de índice do bloco
+                    // Block index protection
                     int blockIdx = i % numBlock;
                     if (fixedBlock[blockIdx] != 0) {
-                        fixedBlock[blockIdx] = 0; // Marca o bloco como diferente
-                        dist++; // Incrementa contagem de blocos diferentes (simplificado)
+                        fixedBlock[blockIdx] = 0; // Marks the block as different
+                        dist++;
                     }
                 }
             }
@@ -93,7 +92,7 @@ namespace rkolib::mh {
 
                             // generate a neighbor of the current solution
                             sViz = sCurrent;
-                            for (int k = initialBlock; k < finalBlock && k < problem.getDimension(); k++)
+                            for (int k = initialBlock; k < finalBlock && k < solver.getProblemDimension(); k++)
                             {
                                 // internal PR
                                 if (direction == 1){
@@ -106,7 +105,7 @@ namespace rkolib::mh {
                                 }
                             }
                             
-                            sViz.ofv = problem.evaluate(sViz);
+                            solver.evaluateSolution(sViz);
 
                             // check if it is the best solution of the iteration
                             if(sViz.ofv < bestIteration.ofv){

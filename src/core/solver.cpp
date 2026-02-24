@@ -19,11 +19,9 @@
 #include "rkolib/mh/ipr.hpp"
 #include "rkolib/mh/multistart.hpp"
 
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <cmath>
+
 #include <omp.h>
+#include <CLI/CLI.hpp>
 #include <yaml-cpp/yaml.h>
 
 namespace rkolib {
@@ -40,6 +38,7 @@ namespace rkolib {
         , averageObjective_(0.0)
         , bestTime_(0.0)
         , totalTime_(0.0)
+        , scalarizer_(std::make_unique<core::TchebycheffScalarizer>())
     {
         initializeRegistry();
     }
@@ -53,7 +52,7 @@ namespace rkolib {
     // -------------------------------------------------------------------------
     void RkoSolver::initializeRegistry() {
         // Mapeia nomes (strings) para as funções das meta-heurísticas.
-        // As funções devem ter a assinatura: void func(const TRunData&, const IProblem&)
+        // As funções devem ter a assinatura: void func(const TRunData&, RkoSolver&)
         algorithmRegistry_ = {
             {"BRKGA",      mh::BRKGA},
             {"SA",         mh::SA},
@@ -143,6 +142,20 @@ namespace rkolib {
             runData_.restart  = params["restart_threshold"].as<float>(1.0f);
             runData_.sizePool = params["elite_pool_size"].as<int>(10);
         }
+
+        // Exemplo: Lendo do YAML qual método usar
+        std::string scalarizationMethod = "Tchebycheff"; // Default
+        if (config["scalarization"]) {
+             scalarizationMethod = config["scalarization"].as<std::string>();
+        }
+
+        if (scalarizationMethod == "WeightedSum") {
+            scalarizer_ = std::make_unique<core::WeightedSumScalarizer>();
+        } else {
+            scalarizer_ = std::make_unique<core::TchebycheffScalarizer>();
+        }
+        
+        std::cout << "Scalarization Strategy: " << scalarizer_->getName() << std::endl;
     }
 
     // -------------------------------------------------------------------------
@@ -215,6 +228,16 @@ namespace rkolib {
         
         ctx.setSeed(seed);
 
+        // 1. CARREGA DADOS DO PROBLEMA
+        int nObj = problemInstance_->getNumObjectives();
+
+        // 2. INICIALIZAÇÃO CRÍTICA (Tamanho fixo antes das threads nascerem)
+        if (nObj > 1) {
+            std::cout << "MultiObjetivo" << std::endl;
+            // Inicializa com valores seguros para evitar lixo de memória
+            idealPoint_.assign(nObj, -1.0e15); // Maximização: começa muito baixo
+        }
+
         // Inicializa melhor solução local da run
         core::TSol bestSolutionRun;
         bestSolutionRun.ofv = std::numeric_limits<double>::infinity();
@@ -227,7 +250,7 @@ namespace rkolib {
         // IMPORTANTE: Agora passamos *problemInstance_ (interface)
         // Certifique-se que CreatePoolSolutions aceita (const IProblem&, int)
         ctx.initializePool(runData_.sizePool);
-        core::CreatePoolSolutions(*problemInstance_, runData_.sizePool); 
+        core::CreatePoolSolutions(*this, runData_.sizePool); 
         
         // Recupera a melhor do pool inicial
         bestSolutionRun = ctx.getBestSolution();
@@ -266,7 +289,7 @@ namespace rkolib {
                     // EXECUÇÃO DO MÉTODO
                     // Recupera a função do registro e executa passando a Interface
                     try {
-                        getActiveFunction(i)(runData_, *problemInstance_);
+                        getActiveFunction(i)(runData_, *this);
                     } catch (...) {
                         // Captura exceções para não derrubar todas as threads
                         #pragma omp critical
@@ -290,7 +313,7 @@ namespace rkolib {
 
                     // Se ainda tem tempo, reinicia o pool (Multi-Start behavior)
                     if ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
-                        core::CreatePoolSolutions(*problemInstance_, runData_.sizePool);
+                        core::CreatePoolSolutions(*this, runData_.sizePool);
                     }
                 }
             }
@@ -341,11 +364,36 @@ namespace rkolib {
         std::cout << "\n\n╔════════════════════════════════════════════════════════╗\n"
                   << "║                    RESULTS SUMMARY                     ║\n"
                   << "╚════════════════════════════════════════════════════════╝\n";
-        
         std::cout << std::fixed << std::setprecision(5);
-        std::cout << "Best Objective:    " << bestObjective_ << "\n"
+
+        if (problemInstance_->getNumObjectives() <= 1){
+            std::cout << "Best Objective:    " << bestObjective_ << "\n"
                   << "Average Objective: " << averageObjective_ << "\n"
                   << "Avg Run Time:      " << totalTime_ << "s\n";
+            return;
+        }
+    
+        // Mostra a distância (fitness matemático)
+        std::cout << "Scalarized Fitness (Dist): " << bestObjective_ << " (Minimization)\n";
+        
+        // --- CORREÇÃO: MOSTRAR OS OBJETIVOS REAIS ---
+        std::cout << "Real Objectives Values:    [ ";
+        for (double val : bestSolutionGlobal_.objs) {
+            std::cout << val << " ";
+        }
+        std::cout << "]\n";
+        // --------------------------------------------
+
+        std::cout << "Avg Run Time:              " << totalTime_ << "s\n";
+        
+        // Debug Extra: Mostrar Ponto Ideal encontrado
+        std::cout << "Ideal Point Found:         [ ";
+        for(double v : idealPoint_) std::cout << v << " ";
+        std::cout << "]\n";
+        // std::cout << std::fixed << std::setprecision(5);
+        // std::cout << "Best Objective:    " << bestObjective_ << "\n"
+        //           << "Average Objective: " << averageObjective_ << "\n"
+        //           << "Avg Run Time:      " << totalTime_ << "s\n";
         
         // Exibir solução detalhada se desejar
         // std::cout << "Solution Vector: ";
@@ -357,6 +405,54 @@ namespace rkolib {
         // Com shared_ptr, a limpeza do problemInstance_ é automática.
         problemInstance_.reset();
     }
+    void RkoSolver::evaluateSolution(core::TSol& sol, const std::vector<double>& lambda) {
+        
+        // 1. Avaliação Física (Thread-Safe pois cada thread tem sua cópia de 'sol')
+        problemInstance_->evaluate(sol);
+
+        // Se mono-objetivo, sai e evita o crash
+        if (problemInstance_->getNumObjectives() <= 1) return;
+    
+        // TRAVA O ACESSO: Só uma thread passa daqui por vez
+        std::lock_guard<std::mutex> lock(mtx_); 
+
+        // Agora é seguro ler e escrever nos vetores compartilhados
+        bool updatedIdeal = false;
+
+        for (size_t k = 0; k < sol.objs.size(); ++k) {
+            // Atualiza Ideal (Maximização)
+            if (sol.objs[k] > idealPoint_[k]) {
+                idealPoint_[k] = sol.objs[k] + 1e-7;
+                updatedIdeal = true;
+            }
+        }
+
+        // Calcula o Fitness usando os pontos seguros
+        // Nota: Passamos referências, mas como estamos travados, ninguém vai mudar os valores enquanto lemos.
+        sol.ofv = scalarizer_->scalarize(sol, lambda, idealPoint_);
+    }
+
+    void RkoSolver::updateIdealPoint(const std::vector<double>& objs) {
+        if (idealPoint_.empty()) {
+            idealPoint_ = objs;
+            return;
+        }
+        for (size_t k = 0; k < objs.size(); ++k) {
+            // Assumindo Maximização (Ideal é o maior)
+            if (objs[k] > idealPoint_[k]) idealPoint_[k] = objs[k];
+        }
+    }
+
+    int RkoSolver::getProblemDimension() const {
+        return problemInstance_->getDimension();
+    }
+
+    void RkoSolver::initReferencePoints(int nObj) {
+        if (nObj <= 1) return;
+
+        // Inicializa Z* com o "pior" valor possível para Maximização (-infinito)
+        idealPoint_.assign(nObj, -1.0 * std::numeric_limits<double>::infinity());
+    }
 
     // -------------------------------------------------------------------------
     // HELPER ACCESSORS
@@ -367,7 +463,7 @@ namespace rkolib {
         return algorithmRegistry_[registryIndex].name;
     }
 
-    std::function<void(const core::TRunData&, const core::IProblem&)> 
+    std::function<void(const core::TRunData&, RkoSolver&)> 
     RkoSolver::getActiveFunction(int index) const {
         int registryIndex = activateMethods_[index];
         return algorithmRegistry_[registryIndex].function;

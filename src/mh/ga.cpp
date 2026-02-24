@@ -3,7 +3,7 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
 
 namespace rkolib::mh {
 
@@ -13,7 +13,7 @@ namespace rkolib::mh {
     // Helper Function: UpdatePopulation (Internal)
     // Description: update the size of the population according to the current state
     // -------------------------------------------------------------------------
-    static void UpdatePopulation(int sizePop, std::vector<TSol> &Pop, const IProblem &problem)
+    static void UpdatePopulation(int sizePop, std::vector<TSol> &Pop, RkoSolver &solver)
     {
         // size of the current population
         int oldPsize = (int)Pop.size();
@@ -31,8 +31,8 @@ namespace rkolib::mh {
 
             for (int k = oldPsize; k < sizePop; k++)
             {     
-                CreateInitialSolutions(Pop[k], problem.getDimension()); 
-                Pop[k].ofv = problem.evaluate(Pop[k]);  
+                CreateInitialSolutions(Pop[k], solver.getProblemDimension()); 
+                solver.evaluateSolution(Pop[k]);  
             }
         }
     }
@@ -40,7 +40,7 @@ namespace rkolib::mh {
     // -------------------------------------------------------------------------
     // Main Algorithm: GA
     // -------------------------------------------------------------------------
-    void GA(const TRunData &runData, const IProblem &problem)
+    void GA(const TRunData &runData, RkoSolver &solver)
     {
         const char* method = "GA";
         int sizePop = 0;                        // population size
@@ -62,7 +62,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());       // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());       // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -89,7 +89,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
          // offline control
         if (runData.control == 0){
@@ -135,8 +135,8 @@ namespace rkolib::mh {
         
         for (int i=0; i<sizePop; i++)
         {
-            CreateInitialSolutions(Pop[i], problem.getDimension()); 
-            Pop[i].ofv = problem.evaluate(Pop[i]);  
+            CreateInitialSolutions(Pop[i], solver.getProblemDimension()); 
+            solver.evaluateSolution(Pop[i]);  
 
             // set the best individual
             if (Pop[i].ofv < bestInd.ofv)
@@ -168,7 +168,7 @@ namespace rkolib::mh {
                     probCros = (float)S[iCurr].par[1];
                     probMut  = (float)S[iCurr].par[2]; 
 
-                    UpdatePopulation(sizePop, Pop, problem);
+                    UpdatePopulation(sizePop, Pop, solver);
                 }
             }
 
@@ -217,7 +217,7 @@ namespace rkolib::mh {
                 // check the probability of crossover
                 if (randomico(0, 1) < probCros)
                 {
-                    for(int j = 0; j < problem.getDimension(); j++)
+                    for(int j = 0; j < solver.getProblemDimension(); j++)
                     {
                         // swap the alleles of offspring i
                         if (randomico(0, 1) < 0.5){
@@ -241,8 +241,8 @@ namespace rkolib::mh {
                     }
 
                     // calculate fitness
-                    PopNew[i].ofv    = problem.evaluate(PopNew[i]);
-                    PopNew[i+1].ofv  = problem.evaluate(PopNew[i+1]);
+                    solver.evaluateSolution(PopNew[i]);
+                    solver.evaluateSolution(PopNew[i+1]);
                 }
 
                 // avrgOff += PopNew[i].ofv + PopNew[i+1].ofv;
@@ -276,7 +276,7 @@ namespace rkolib::mh {
             // -----------------------------------------------------------------
             // Apply local search in randomly selected solution and assigning it in Pop
             int pos1 = irandomico(0, sizePop - 1);
-            NelderMeadSearch(PopNew[pos1], problem);
+            NelderMeadSearch(PopNew[pos1], solver);
 
             // set the best individual
             if (PopNew[pos1].ofv < bestInd.ofv){

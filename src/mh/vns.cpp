@@ -3,11 +3,11 @@
 // Dependências internas da Lib
 #include "rkolib/core/method.hpp"   // Utils (randomico, get_time, stop_execution, RVND, Shake)
 #include "rkolib/core/qlearning.hpp" // Lógica de Q-Learning
-#include "rkolib/core/iproblem.hpp" // Acesso à estrutura IProblem (problem.getDimension())
+#include "rkolib/core/solver.hpp" // Acesso à estrutura IProblem (solver.getProblemDimension())
 
 namespace rkolib::mh {
 
-    void VNS(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
+    void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver)
     {
         using namespace rkolib::core; // Facilita acesso a TSol, TState, etc.
 
@@ -30,7 +30,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());   // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());   // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -61,7 +61,7 @@ namespace rkolib::mh {
         parameters.resize(numPar);
 
         // read parameters from txt or yaml
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
         // offline control
         if (runData.control == 0){
@@ -102,8 +102,8 @@ namespace rkolib::mh {
         // Loop de 1 iteração apenas para gerar solução inicial (mantido do original)
         for (int i=0; i<1; i++)
         {
-            CreateInitialSolutions(s, problem.getDimension()); 
-            s.ofv = problem.evaluate(s);
+            CreateInitialSolutions(s, solver.getProblemDimension()); 
+            solver.evaluateSolution(s);
             if (s.ofv < sBest.ofv)
                 sBest = s;
         }
@@ -148,14 +148,14 @@ namespace rkolib::mh {
 
                 // perturb the current solution (s)
                 sLine = s;
-                ShakeSolution(sLine, beta, beta, problem.getDimension());
+                ShakeSolution(sLine, beta, beta, solver.getProblemDimension());
 
                 // calculate OFV
-                sLine.ofv = problem.evaluate(sLine);
+                solver.evaluateSolution(sLine);
 
                 //s*' <- local search (s')
                 sBestLine = sLine; 
-                RVND(sBestLine, problem, (int)runData.strategy, RKorder);
+                RVND(sBestLine, solver, (int)runData.strategy, RKorder);
 
                 //s <- acceptance criterion (s,s*', historico)
                 if (sBestLine.ofv < s.ofv)

@@ -2,11 +2,11 @@
 
 // Dependências internas
 #include "rkolib/core/method.hpp"  // Utils (CreateInitialSolutions, Decoder, etc.)
-#include "rkolib/core/iproblem.hpp" // Definição de IProblem
+#include "rkolib/core/solver.hpp" // Definição de IProblem
 
 namespace rkolib::mh {
 
-    void MultiStart(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
+    void MultiStart(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver)
     {
         using namespace rkolib::core;
 
@@ -23,8 +23,8 @@ namespace rkolib::mh {
         double end_timeMH = get_time_in_seconds();      // end computational time
 
         // Generate first solution
-        CreateInitialSolutions(s, problem.getDimension()); 
-        s.ofv = problem.evaluate(s);
+        CreateInitialSolutions(s, solver.getProblemDimension()); 
+        solver.evaluateSolution(s);
         sBest = s;
         
         // run the search process until stop criterion
@@ -33,8 +33,8 @@ namespace rkolib::mh {
             if (SOLVER_SHOULD_STOP) return;      
             
             // Create a new solution with random keys 
-            CreateInitialSolutions(s, problem.getDimension()); 
-            s.ofv = problem.evaluate(s);
+            CreateInitialSolutions(s, solver.getProblemDimension()); 
+            solver.evaluateSolution(s);
 
             // Verify improvement
             if (s.ofv < sBest.ofv)

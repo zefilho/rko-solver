@@ -3,11 +3,11 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para definição completa de IProblem e problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para definição completa de IProblem e solver.getProblemDimension()
 
 namespace rkolib::mh {
 
-    void SA(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
+    void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver)
     {
         using namespace rkolib::core; // Facilita o uso de TSol, TState, funções auxiliares
 
@@ -33,7 +33,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());    // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());    // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -63,7 +63,7 @@ namespace rkolib::mh {
         std::vector<std::vector<double>> parameters;
         parameters.resize(numPar);
 
-        readParameters(method, runData.control, parameters, numPar);
+        readParametersYaml(method, runData.control, parameters, numPar);
 
         // offline control
         if (runData.control == 0){
@@ -110,8 +110,8 @@ namespace rkolib::mh {
         // Initialization
         // ---------------------------------------------------------------------
         // Create the initial solution with random keys
-        CreateInitialSolutions(s, problem.getDimension()); 
-        s.ofv = problem.evaluate(s);
+        CreateInitialSolutions(s, solver.getProblemDimension()); 
+        solver.evaluateSolution(s);
         sBest = s;
 
         // ---------------------------------------------------------------------
@@ -158,10 +158,10 @@ namespace rkolib::mh {
 
                     // Shake the current solution
                     sViz = s;
-                    ShakeSolution(sViz, betaMin, betaMax, problem.getDimension());
+                    ShakeSolution(sViz, betaMin, betaMax, solver.getProblemDimension());
 
                     // calculate the OFV
-                    sViz.ofv = problem.evaluate(sViz);
+                    solver.evaluateSolution(sViz);
                     
                     // value function is the best solution found in this iteration
                     if (sViz.ofv < bestOFV)
@@ -233,7 +233,7 @@ namespace rkolib::mh {
 
                 // apply local search (Nelder-Mead)
                 sViz = s;
-                NelderMeadSearch(sViz, problem);
+                NelderMeadSearch(sViz, solver);
 
                 // update the best solution found by SA
                 if (sViz.ofv < sBest.ofv)

@@ -3,11 +3,11 @@
 // Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/iproblem.hpp" // Para problem.getDimension()
+#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
 
 namespace rkolib::mh {
 
-    void ILS(const rkolib::core::TRunData &runData, const rkolib::core::IProblem &problem)
+    void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver)
     {
         using namespace rkolib::core;
 
@@ -28,7 +28,7 @@ namespace rkolib::mh {
         double start_timeMH = get_time_in_seconds();    // start computational time
         double end_timeMH = get_time_in_seconds();      // end computational time
 
-        std::vector<int> RKorder(problem.getDimension());    // define a order for the neighors
+        std::vector<int> RKorder(solver.getProblemDimension());    // define a order for the neighors
         std::iota(RKorder.begin(), RKorder.end(), 0);
 
         // ---------------------------------------------------------------------
@@ -91,11 +91,11 @@ namespace rkolib::mh {
         Iter = 0;
 
         // create initial solution
-        CreateInitialSolutions(sBest, problem.getDimension()); 
-        sBest.ofv = problem.evaluate(sBest);
+        CreateInitialSolutions(sBest, solver.getProblemDimension()); 
+        solver.evaluateSolution(sBest);
 
         // apply local search
-        RVND(sBest, problem, runData.strategy, RKorder);
+        RVND(sBest, solver, runData.strategy, RKorder);
         UpdatePoolSolutions(sBest, method, runData.debug);
 
         // terminate the search process in MAXTIME
@@ -132,14 +132,14 @@ namespace rkolib::mh {
             sLine = sBest;
 
             // Shake the current solution
-            ShakeSolution(sLine, betaMin, betaMax, problem.getDimension());
+            ShakeSolution(sLine, betaMin, betaMax, solver.getProblemDimension());
 
             // calculate the OFV
-            sLine.ofv = problem.evaluate(sLine);
+            solver.evaluateSolution(sLine);
 
             //s*' <- local search (s')
             sBestLine = sLine;
-            RVND(sBestLine, problem, runData.strategy, RKorder);
+            RVND(sBestLine, solver, runData.strategy, RKorder);
 
             //s* <- acceptance criterion (s*, s*', historico)
             if (sBestLine.ofv < sBest.ofv)
