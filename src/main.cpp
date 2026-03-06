@@ -28,8 +28,8 @@ int main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
 
   } catch (const CLI::ParseError &e) {
-    // CLI11 já imprimiu a mensagem de erro ou help
-    // Retorna o código de saída apropriado
+    // CLI11 prints the error message or help
+    // Return the appropriate exit code
     return (e.get_exit_code() == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 
   } catch (const std::exception &e) {

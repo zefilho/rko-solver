@@ -1,56 +1,54 @@
 #include "rkolib/mh/multistart.hpp"
 
-// Dependências internas
-#include "rkolib/core/method.hpp"  // Utils (CreateInitialSolutions, Decoder, etc.)
-#include "rkolib/core/solver.hpp" // Definição de IProblem
+#include "rkolib/core/method.hpp"
+#include "rkolib/core/solver.hpp"
 
 namespace rkolib::mh {
 
-    void MultiStart(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver)
-    {
-        using namespace rkolib::core;
+void MultiStart(const rkolib::core::TRunData &runData,
+                rkolib::RkoSolver &solver) {
+  using namespace rkolib::core;
 
-        const char* method = "MultiStart";
-        
-        TSol s;                         // current solution
-        TSol sBest;                     // best solution
+  const char *method = "MultiStart";
 
-        int IterT = 0;                  // current iteration
+  TSol s;     // current solution
+  TSol sBest; // best solution
 
-        float currentTime = 0;          // computational time of the search process
-        
-        double start_timeMH = get_time_in_seconds();    // start computational time
-        double end_timeMH = get_time_in_seconds();      // end computational time
+  int IterT = 0; // current iteration
 
-        // Generate first solution
-        CreateInitialSolutions(s, solver.getProblemDimension()); 
-        solver.evaluateSolution(s);
-        sBest = s;
-        
-        // run the search process until stop criterion
-        while(currentTime < runData.MAXTIME * runData.restart)
-        {
-            if (SOLVER_SHOULD_STOP) return;      
-            
-            // Create a new solution with random keys 
-            CreateInitialSolutions(s, solver.getProblemDimension()); 
-            solver.evaluateSolution(s);
+  float currentTime = 0; // computational time of the search process
 
-            // Verify improvement
-            if (s.ofv < sBest.ofv)
-            {
-                sBest = s;
+  double start_timeMH = get_time_in_seconds(); // start computational time
+  double end_timeMH = get_time_in_seconds();   // end computational time
 
-                // update the SOLVER_POOL of solutions
-                UpdatePoolSolutions(sBest, method, runData.debug);
-            }
+  // Generate first solution
+  CreateInitialSolutions(s, solver.getProblemDimension());
+  solver.decodeSolution(s);
+  sBest = s;
 
-            IterT++;
+  // run the search process until stop criterion
+  while (currentTime < runData.MAXTIME * runData.restart) {
+    if (SOLVER_SHOULD_STOP)
+      return;
 
-            // terminate the evolutionary process in MAXTIME
-            end_timeMH = get_time_in_seconds();
-            currentTime = (float)(end_timeMH - start_timeMH);
-        }
+    // Create a new solution with random keys
+    CreateInitialSolutions(s, solver.getProblemDimension());
+    solver.decodeSolution(s);
+
+    // Verify improvement
+    if (s.ofv < sBest.ofv) {
+      sBest = s;
+
+      // update the SOLVER_POOL of solutions
+      UpdatePoolSolutions(sBest, method, runData.debug);
     }
+
+    IterT++;
+
+    // terminate the evolutionary process in MAXTIME
+    end_timeMH = get_time_in_seconds();
+    currentTime = (float)(end_timeMH - start_timeMH);
+  }
+}
 
 } // namespace rkolib::mh

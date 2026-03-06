@@ -10,30 +10,36 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Saída dos binários na pasta raiz (opcional, mas facilita achar o executável)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
+# Organização de saída de binários
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugins)
 
-# Encontrar dependências (OpenMP como pedido anteriormente)
+# Encontrar OpenMP
 find_package(OpenMP REQUIRED)
 
-# # 1.2 yaml-cpp via FetchContent (Hermetic Build)
+# Variável para biblioteca de link dinâmico (necessária para dlopen/dlsym no Linux)
+set(DL_LIB ${CMAKE_DL_LIBS})
+
+# ------------------------------------------------------------------------------
+# 2. Gerenciamento de Dependências (Hermetic Build)
+# ------------------------------------------------------------------------------
 include(FetchContent)
 
+# No seu CMakeLists.txt, substitua a parte do yaml-cpp por esta:
 FetchContent_Declare(
     yaml-cpp
     GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
     GIT_TAG        yaml-cpp-0.7.0  # Usar uma TAG fixa é crucial para estabilidade
 )
 
-# Opções para não compilar testes ou ferramentas extras do yaml-cpp (acelera o build)
-set(YAML_CPP_BUILD_TESTS OFF CACHE INTERNAL "")
-set(YAML_CPP_BUILD_TOOLS OFF CACHE INTERNAL "")
-set(YAML_CPP_INSTALL OFF CACHE INTERNAL "") # Não precisamos instalar no sistema, apenas usar local
+# Forçar a desativação de funcionalidades pesadas do yaml-cpp
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
 
-# Baixa e disponibiliza os targets (yaml-cpp)
 FetchContent_MakeAvailable(yaml-cpp)
 
-# 1.3 CLI11 via FetchContent
+# CLI11
 FetchContent_Declare(
     cli11
     GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
@@ -42,52 +48,54 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cli11)
 
 # ------------------------------------------------------------------------------
-# 2. Definição da Biblioteca (rkolib)
+# 3. Definição da Biblioteca Core (Motor do Solver)
 # ------------------------------------------------------------------------------
-# Coleta automaticamente os .cpp dentro de src/core e src/mh
-# Nota Senior: Em projetos gigantes, listamos arquivos manualmente. 
-# Para libs médias, GLOB_RECURSE é muito prático.
-file(GLOB_RECURSE LIB_SOURCES 
-    "src/core/*.cpp"
-    "src/utils/*.cpp"
-    "src/mh/*.cpp"
+# CORREÇÃO: Listamos os arquivos do CORE explicitamente para evitar Undefined Reference.
+# Certifique-se de que qlearning.cpp está nesta lista.
+set(CORE_SOURCES
+    "src/core/solver.cpp"
+    "src/core/method.cpp"
+    "src/core/qlearning.cpp"  # Essencial para as referências de ChooseAction/CreateStates
 )
 
-# Cria a biblioteca estática (libRKOLib.a ou RKOLib.lib)
-add_library(rkolib STATIC ${LIB_SOURCES})
+# Coleta todas as Meta-heurísticas em src/mh/
+file(GLOB_RECURSE MH_SOURCES "src/mh/*.cpp")
 
-# Configura os diretórios de include
-# PUBLIC = Quem usar a lib (main.cpp) também enxerga essa pasta 'include'
+# Cria a biblioteca estática combinando o Motor, as MHs e a lógica de RL
+add_library(rkolib STATIC ${CORE_SOURCES} ${MH_SOURCES})
+
+# Configura diretórios de include para que headers como common.hpp sejam achados
 target_include_directories(rkolib PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
 )
 
-# Linka OpenMP na biblioteca (se ela usar paralelismo interno)
+# Linka dependências no Core. Note que DL_LIB é linkada aqui para os plugins funcionarem.
 target_link_libraries(rkolib PUBLIC 
     OpenMP::OpenMP_CXX
     yaml-cpp
     CLI11::CLI11
+    ${DL_LIB}
 )
 
-# Flags de compilação específicas da Lib
+# Flags de compilação: -fPIC é obrigatório para que o código estático funcione com plugins .so
 target_compile_options(rkolib PRIVATE
-    -Wall -Wextra
+    -Wall -Wextra -fPIC
     $<$<CONFIG:Release>:-O3 -march=native>
 )
 
 # ------------------------------------------------------------------------------
-# 3. Definição do Executável (Main)
+# 4. Executável Principal (Host)
 # ------------------------------------------------------------------------------
-# Compila o src/main.cpp
-add_executable(runApp src/main.cpp)
-
-# Linka o executável com sua biblioteca recém-criada
-target_link_libraries(runApp PRIVATE rkolib)
+add_executable(rkosolver src/main.cpp)
+target_link_libraries(rkosolver PRIVATE rkolib)
 
 # ------------------------------------------------------------------------------
-# 4. (Opcional) Testes
+# 5. O PLUGIN DO PROBLEMA (Módulo dinâmico)
 # ------------------------------------------------------------------------------
-# Se a pasta 'tests' tiver um CMakeLists.txt próprio:
-# enable_testing()
-# add_subdirectory(tests)
+# add_library MODULE impede que o linker tente carregar isso no início da execução
+add_library(kpproblem MODULE src/core/kpproblem.cpp)
+
+target_include_directories(kpproblem PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Remove o prefixo 'lib' no Linux (gera kpproblem.so)
+set_target_properties(kpproblem PROPERTIES PREFIX "")

@@ -5,99 +5,110 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "rkolib/core/data.hpp"
-#include "rkolib/core/problem.hpp"
 #include "rkolib/core/method.hpp"
+#include "rkolib/core/problem.hpp" // Certifique-se que o nome é iproblem.hpp
 #include "rkolib/core/scalarizer.hpp"
-
 
 namespace rkolib {
 
-    /**
-    * @brief Main solver class - orchestrates optimization process
-    */
-    class RkoSolver {
-    public:
-        // -------------------------------------------------------------------------
-        // CONSTRUCTOR & DESTRUCTOR
-        // -------------------------------------------------------------------------
-        RkoSolver();
-        ~RkoSolver();
+/**
+ * @brief Main solver class - orchestrates optimization process
+ */
+class RkoSolver {
+public:
+  // -------------------------------------------------------------------------
+  // CONSTRUCTOR & DESTRUCTOR
+  // -------------------------------------------------------------------------
+  RkoSolver();
+  ~RkoSolver();
 
-        // -------------------------------------------------------------------------
-        // PUBLIC INTERFACE
-        // -------------------------------------------------------------------------
-        void parseArguments(int argc, char* argv[]);
-        void loadConfiguration(const std::string& configFile = "");
-        void run();
+  // -------------------------------------------------------------------------
+  // PUBLIC INTERFACE
+  // -------------------------------------------------------------------------
+  void parseArguments(int argc, char *argv[]);
+  void loadConfiguration(const std::string &configFile = "");
+  void run();
 
-        // -------------------------------------------------------------------------
-        // ACCESSORS
-        // -------------------------------------------------------------------------
-        const core::TSol& getBestSolution() const { return bestSolutionGlobal_; }
-        const core::TRunData& getRunData() const { return runData_; }
-        double getBestObjective() const { return bestObjective_; }
-        double getAverageObjective() const { return averageObjective_; }
+  // -------------------------------------------------------------------------
+  // ACCESSORS
+  // -------------------------------------------------------------------------
+  const core::TSol &getBestSolution() const { return bestSolutionGlobal_; }
+  const core::TRunData &getRunData() const { return runData_; }
+  double getBestObjective() const { return bestObjective_; }
+  double getAverageObjective() const { return averageObjective_; }
 
-        void evaluateSolution(core::TSol& sol, const std::vector<double>& lambda = {});
+  void decodeSolution(core::TSol &sol, const std::vector<double> &lambda = {});
 
-        int getProblemDimension() const;
-        const std::vector<double>& getIdealPoint() const { return idealPoint_; }
-        // Helper para inicializar antes do loop paralelo
-        void initReferencePoints(int nObj);
+  int getProblemDimension() const;
+  const std::vector<double> &getIdealPoint() const { return idealPoint_; }
+  const std::vector<double> &getNadirPoint() const { return nadirPoint_; }
 
-    private:
-        struct AlgorithmEntry {
-            std::string name;
-            std::function<void(const core::TRunData&, RkoSolver&)> function;
-        };
+  // Helper para inicializar antes do loop paralelo
+  void initReferencePoints(int nObj);
 
-        // Private Initialization & Execution Helpers
-        void initializeRegistry();
-        void validateConfiguration();
-        void loadProblemData();
-        void initializeStatistics();
-        void executeRun(int runIndex);
-        void executeParallelMethods(double startTime, core::TSol& bestSolutionRun, unsigned int baseSeed);
-        void updateStatistics(const core::TSol& runSolution, double startTime, double endTime);
-        void computeFinalStatistics();
-        void displayResults();
-        void cleanup();
+private:
+  struct AlgorithmEntry {
+    std::string name;
+    std::function<void(const core::TRunData &, RkoSolver &)> function;
+  };
 
-        // Helper Accessors
-        std::string getActiveName(int index) const;
-        std::function<void(const core::TRunData&, RkoSolver&)> getActiveFunction(int index) const;
+  // Private Initialization & Execution Helpers
+  void initializeRegistry();
+  void validateConfiguration();
+  void loadProblemData();
+  void unloadProblemLibrary();
+  void initializeStatistics();
+  void executeRun(int runIndex);
+  void executeParallelMethods(double startTime, core::TSol &bestSolutionRun,
+                              unsigned int baseSeed);
+  void updateStatistics(const core::TSol &runSolution, double startTime,
+                        double endTime);
+  void computeFinalStatistics();
+  void displayResults();
+  void cleanup();
 
-        // Helper para o ponto ideal (estado global da otimização)
-        void updateIdealPoint(const std::vector<double>& objs);
+  // Helper Accessors
+  std::string getActiveName(int index) const;
+  std::function<void(const core::TRunData &, RkoSolver &)>
+  getActiveFunction(int index) const;
 
-        // -------------------------------------------------------------------------
-        // MEMBER VARIABLES
-        // -------------------------------------------------------------------------
-        std::string instancePath_;
-        std::string configPath_;
-        core::TRunData runData_;
-        std::shared_ptr<core::IProblem> problemInstance_;
+  // -------------------------------------------------------------------------
+  // MEMBER VARIABLES
+  // -------------------------------------------------------------------------
+  std::string instancePath_;
+  std::string configPath_;
+  core::TRunData runData_;
 
-        std::vector<AlgorithmEntry> algorithmRegistry_;
-        std::vector<int> activateMethods_;
-        int numActiveMethods_;
+  // Instance of the problem loaded dynamically
+  std::shared_ptr<core::IProblem> problemInstance_;
 
-        core::TSol bestSolutionGlobal_;
-        double bestObjective_;
-        double averageObjective_;
-        double bestTime_;
-        double totalTime_;
-        std::vector<double> objectiveValues_;
-      
-        // A ESTRATÉGIA ATUAL (Polimorfismo aqui!)
-        std::unique_ptr<core::IScalarizer> scalarizer_; 
+  // Path to the problem library (.so / .dll)
+  std::string problemLibPath_;
 
-        std::mutex mtx_; // O guarda de trânsito
-        // Estado global para Tchebycheff e outros métodos que precisam de referência
-        std::vector<double> idealPoint_;
-    };
+  // Handle of the library loaded in the OS (dlopen/LoadLibrary)
+  void *libHandle_;
+
+  std::vector<AlgorithmEntry> algorithmRegistry_;
+  std::vector<int> activateMethods_;
+  int numActiveMethods_;
+
+  core::TSol bestSolutionGlobal_;
+  double bestObjective_;
+  double averageObjective_;
+  double bestTime_;
+  double totalTime_;
+  std::vector<double> objectiveValues_;
+
+  // Scalarization strategy (Tchebycheff, WeightedSum, etc)
+  std::unique_ptr<core::IScalarizer> scalarizer_;
+
+  // Thread synchronization for multiobjective
+  std::mutex mtx_;
+
+  // Global reference points for multiobjective
+  std::vector<double> idealPoint_;
+  std::vector<double> nadirPoint_; // Added for normalization
+};
 
 } // namespace rkolib
