@@ -1,34 +1,35 @@
 #pragma once
 
-#include "rkolib/core/data.hpp" // Para TSol e Common
-#include "rkolib/core/solver.hpp"
-// Forward declaration: Avisa que IProblem existe, sem precisar do include pesado aqui.
-// (Assumindo que IProblem foi definido no seu KnapsackProblem.hpp ou similar)
-struct IProblem;
+#include "rkolib/core/data.hpp"
 
 namespace rkolib::utils {
 
-    /**
-     * Outputs the solution to the screen using the Decoder.
-     */
-    void WriteSolutionScreen(const char *algorithms[], int numMH, rkolib::core::TSol s, 
-                             float timeBest, float timeTotal, char instance[], 
-                             rkolib::RkoSolver &solver, std::vector<rkolib::core::TSol> pool);
+    // Imprime o sumário no terminal
+    void WriteSolutionScreen(const std::vector<std::string>& algorithms, 
+                             const core::TSol& s, 
+                             double timeBest, 
+                             double timeTotal, 
+                             const std::string& instance, 
+                             int dimension, 
+                             const std::vector<core::TSol>& pool);
 
-    /**
-     * Outputs the solution in a txt file.
-     * Note: Requires "../Results/" folder to exist.
-     */
-    void WriteSolution(const char *algorithms[], int numMH, rkolib::core::TSol s, 
-                       float timeBest, float timeTotal, char instance[], 
-                       rkolib::RkoSolver &solver);
+    // Salva o log detalhado da melhor solução (Random Keys incluídas)
+    void WriteSolution(const std::vector<std::string>& algorithms, 
+                       const core::TSol& s, 
+                       double timeBest, 
+                       double timeTotal, 
+                       const std::string& instance, 
+                       int dimension, 
+                       const std::string& outDir = "../results");
 
-    /**
-     * Outputs the results in a csv file.
-     * Note: Requires "../Results/" folder to exist.
-     */
-    void WriteResults(const char *algorithms[], int numMH, double ofv, 
-                      double ofvAverage, std::vector<double> ofvs, float timeBest, 
-                      float timeTotal, char instance[]);
+    // Salva a linha de estatísticas consolidadas em CSV
+    void WriteResults(const std::vector<std::string>& algorithms, 
+                      double ofv, 
+                      double ofvAverage, 
+                      const std::vector<double>& ofvs, 
+                      double timeBest, 
+                      double timeTotal, 
+                      const std::string& instance, 
+                      const std::string& outDir = "../results");
 
 } // namespace rkolib::utils

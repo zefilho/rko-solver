@@ -1,98 +1,116 @@
 #include "rkolib/utils/io.hpp"
-#include "rkolib/core/data.hpp"
-#include "rkolib/core/solver.hpp"
+#include <filesystem>
+#include <numeric>
+
+namespace fs = std::filesystem;
 
 namespace rkolib::utils {
 
-    void WriteSolutionScreen(const char *algorithms[], int numMH, rkolib::core::TSol s, 
-                             float timeBest, float timeTotal, char instance[], 
-                             rkolib::RkoSolver &solver, std::vector<rkolib::core::TSol> pool)
-    {
-        printf("\n\n\nRKO: ");
-        for (int i=0; i<numMH; i++)
-            printf("%s | ", algorithms[i]);
-        
-        // s.nameMH agora é std::string (do passo anterior), usamos .c_str() para printf
-        printf("\nBest MH: %s \nInstance: %s \nsol: ", s.nameMH.c_str(), instance);
-        
-        for (int i=0; i<solver.getProblemDimension(); i++)
-            printf("%.3lf ", s.rk[i]);
-
-        printf("\nofv: %.5lf", s.ofv); 
-        printf("\nTotal time: %.3f",timeTotal);
-        printf("\nBest time: %.3f\n\n",timeBest);
-
-        // print solution pool 
-        printf("\nSolution Pool:\n");
-        for (int i = 0; i< (int)pool.size(); i++)
-            printf("%.5lf [%s]\n", pool[i].ofv, pool[i].nameMH.c_str());
+    // Helper: Formats the list of algorithms as a single string (ex: "SA | VNS | ILS | ")
+    std::string JoinAlgorithms(const std::vector<std::string>& algorithms) {
+        std::string result;
+        for (size_t i = 0; i < algorithms.size(); ++i) {
+            result += algorithms[i];
+            if (i < algorithms.size() - 1) {
+                result += " | "; // Only adds the bar if it's not the last one
+            }
+        }
+        return result;
     }
 
-    void WriteSolution(const char *algorithms[], int numMH, rkolib::core::TSol s, 
-                       float timeBest, float timeTotal, char instance[], 
-                       rkolib::RkoSolver &solver)
-    {
-        char name[256]="../Results/Solutions_RKO";
-        strcat(name,".txt");
-
-        // file to write the best solution found
-        FILE *solFile;                       
-
-        solFile = fopen(name,"a");
-
-        if (!solFile)
-        {
-            printf("\n\nFile not found %s!!! (Please create 'Results' folder ../)", name);
-            // getchar(); // Removido para não travar automação em servidores
-            exit(1);
+    // Helper: Ensures that the destination directory exists
+    void EnsureDirectoryExists(const std::string& path) {
+        if (!fs::exists(path)) {
+            fs::create_directories(path);
         }
-
-        fprintf(solFile,"\n\nInstance: %s", instance);
-        fprintf(solFile,"\nRKO: ");
-        for (int i=0; i<numMH; i++)
-            fprintf(solFile,"%s | ", algorithms[i]);
-
-        fprintf(solFile,"\nSol: ");
-        for (int i=0; i<solver.getProblemDimension(); i++)
-            fprintf(solFile,"%.3lf ", s.rk[i]);
-
-        fprintf(solFile,"\nofv: %lf", s.ofv);
-        fprintf(solFile,"\nBest time: %.3f",timeBest);
-        fprintf(solFile,"\nTotal time:%.3f \n",timeTotal);
-
-        fclose(solFile);
     }
 
-    void WriteResults(const char *algorithms[], int numMH, double ofv, 
-                      double ofvAverage, std::vector<double> ofvs, float timeBest, 
-                      float timeTotal, char instance[])
-    {
-        char name[256]="../Results/Results_RKO";
-        strcat(name,".csv");
-
-        FILE *File;
-        File = fopen(name,"a");
-
-        if (!File)
-        {
-            printf("\n\nFile not found %s!!! (Please create 'Results' folder ../)", name);
-            exit(1);
+    void WriteSolutionScreen(const std::vector<std::string>& algorithms, const core::TSol& s, 
+                             double timeBest, double timeTotal, const std::string& instance, 
+                             int dimension, const std::vector<core::TSol>& pool) {
+        
+        std::cout << "\n\n========================================\n";
+        std::cout << "RKO: " << JoinAlgorithms(algorithms) << "\n";
+        std::cout << "Best MH: " << s.nameMH << "\n";
+        std::cout << "Instance: " << instance << "\n";
+        
+        std::cout << "Sol (RK): ";
+        for (int i = 0; i < dimension; i++) {
+            std::cout << std::format("{:.3f} ", s.rk[i]);
         }
 
-        fprintf(File,"\n%s\t", instance);
-        for (int i=0; i<numMH; i++)
-            fprintf(File,"%s | ", algorithms[i]);
+        std::cout << std::format("\nOFV: {:.5f}", s.ofv);
+        std::cout << std::format("\nTotal time: {:.3f}s", timeTotal);
+        std::cout << std::format("\nBest time: {:.3f}s\n", timeBest);
 
-        fprintf(File,"\t%d", (int)ofvs.size());
-        for (unsigned int i=0; i<ofvs.size(); i++){
-            fprintf(File,"\t%lf", ofvs[i]);   
+        std::cout << "\nSolution Pool (Top Elite):\n";
+        for (const auto& sol : pool) {
+            std::cout << std::format("{:.5f} [{}]\n", sol.ofv, sol.nameMH);
         }
-        fprintf(File,"\t%lf", ofv);
-        fprintf(File,"\t%lf", ofvAverage);
-        fprintf(File,"\t%.3f", timeBest);
-        fprintf(File,"\t%.3f", timeTotal);
+        std::cout << "========================================\n\n";
+    }
 
-        fclose(File);
+    void WriteSolution(const std::vector<std::string>& algorithms, const core::TSol& s, 
+                       double timeBest, double timeTotal, const std::string& instance, 
+                       int dimension, const std::string& outDir) {
+        
+        EnsureDirectoryExists(outDir);
+        std::string filepath = outDir + "/Solutions_RKO.txt";
+        
+        // std::ios::app opens in "append" mode (adds to the end of the file without overwriting)
+        std::ofstream solFile(filepath, std::ios::app);
+        
+        if (!solFile.is_open()) {
+            std::cerr << "\n[Erro FATAL] Nao foi possivel abrir o arquivo: " << filepath << "\n";
+            return;
+        }
+
+        solFile << "\n\nInstance: " << instance << "\n";
+        solFile << "RKO: " << JoinAlgorithms(algorithms) << "\n";
+        
+        solFile << "Sol: ";
+        for (int i = 0; i < dimension; i++) {
+            solFile << std::format("{:.3f} ", s.rk[i]);
+        }
+
+        solFile << std::format("\nOFV: {:.6f}\n", s.ofv);
+        solFile << std::format("Best time: {:.3f}s\n", timeBest);
+        solFile << std::format("Total time: {:.3f}s\n", timeTotal);
+    }
+
+    void WriteResults(const std::vector<std::string>& algorithms, double ofv, 
+                      double ofvAverage, const std::vector<double>& ofvs, 
+                      double timeBest, double timeTotal, const std::string& instance, 
+                      const std::string& outDir) {
+        
+        EnsureDirectoryExists(outDir);
+        std::string filepath = outDir + "/Results_RKO.csv";
+        
+        bool isNewFile = !fs::exists(filepath);
+        std::ofstream file(filepath, std::ios::app);
+
+        if (!file.is_open()) {
+            std::cerr << "\n[Erro FATAL] Nao foi possivel abrir o arquivo: " << filepath << "\n";
+            return;
+        }
+
+        // If the file was just created, inject the CSV header  
+        if (isNewFile) {
+            file << "Instance,Algorithms,Num_Runs,All_OFVs...,Best_OFV,Average_OFV,Best_Time,Total_Time\n";
+        }
+
+        // CSV format (using comma or semicolon as separator)
+        file << instance << "," << JoinAlgorithms(algorithms) << "," << ofvs.size() << ",";
+        
+        // Concatenate all the results of the rounds (independent runs)
+        for (size_t i = 0; i < ofvs.size(); ++i) {
+            file << std::format("{:.6f}", ofvs[i]);
+            if (i < ofvs.size() - 1) {
+                file << "|";
+            }
+        }
+
+        file << std::format(",{:.6f},{:.6f},{:.3f},{:.3f}\n", ofv, ofvAverage, timeBest, timeTotal);
     }
 
 } // namespace rkolib::utils

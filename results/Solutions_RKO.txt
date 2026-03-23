@@ -1,0 +1,24 @@
+
+
+Instance: ../examples/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR | 
+Sol: 0.636 0.866 0.833 0.763 0.196 0.337 0.799 0.661 0.129 0.746 
+OFV: -31.000000
+Best time: 2.001s
+Total time: 2.001s
+
+
+Instance: ../examples/cover/instance.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR | 
+Sol: 0.942 0.849 0.066 
+OFV: 2.000000
+Best time: 2.001s
+Total time: 2.001s
+
+
+Instance: ../examples/tsp/tsp_5.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.820 0.781 0.410 0.563 0.532 
+OFV: 85.000000
+Best time: 2.005s
+Total time: 2.005s

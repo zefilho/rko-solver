@@ -15,7 +15,7 @@ metaheuristics:
 # Configurações Gerais de Execução
 execution_settings:
   max_runs: 1          # Número máximo de execuções
-  debug_mode: 1        # 0: teste, 1: debug
+  debug_mode: 0        # 0: teste, 1: debug
   control_mode: 1      # 0: offline tuning, 1: Q-Learning (online)
 
 # Parâmetros de Algoritmo e Busca

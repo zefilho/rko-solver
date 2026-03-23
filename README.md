@@ -1,102 +1,117 @@
-# RKO - Random-Key Optimizer v2.0
-This is the second version of the RKO framework in C++.
+# RKO - Random-Key Optimizer (Modern Plugin Architecture)
 
-This is an implementation of the RKO to solve combinatorial optimization problems. The code was prepared for Unix and Windows systems. However, the openMP paradigm needs to be enabled.
+This is the modernized C++20 implementation of the RKO framework. 
 
-This algorithm's C++ code has been designed to be easy to reuse. Users can only implement specific functions (read and decoder in Problem.h). 
-
-Here, we have the RKO version 2.0.1 code. RKO is constantly improving based on users’ feedback. 
+This algorithm has been heavily refactored to support a **Dynamic Plugin Architecture**. The core optimization engine is now completely decoupled from the problem-specific logic. Users no longer need to recompile the solver to test new combinatorial optimization problems; they simply compile their problem as a shared library (`.so` or `.dll`) and inject it into the solver at runtime.
 
 ![RKO_pipeline](https://github.com/user-attachments/assets/bb26650b-b5f0-4fc7-9cb1-55f5ca8b6132)
-
 
 ## References
 
 When using this algorithm in academic studies, please refer to the following work:
 
-[1] Chaves, A.A., Resende, M.G.C., Schuetz, M.J.A.,  Brubaker, J.K., Katzgraber, H.G., Arruda, E.F., Silva, R.M.A. 
-A Random-Key Optimizer for Combinatorial Optimization. Journal of Heuristics, v. 31, n. 4, p. 32, 2025.
+[1] Chaves, A.A., Resende, M.G.C., Schuetz, M.J.A., Brubaker, J.K., Katzgraber, H.G., Arruda, E.F., Silva, R.M.A. 
+*A Random-Key Optimizer for Combinatorial Optimization*. Journal of Heuristics, v. 31, n. 4, p. 32, 2025.
 
-DOI
-https://doi.org/10.1007/s10732-025-09568-z
+**DOI:** [https://doi.org/10.1007/s10732-025-09568-z](https://doi.org/10.1007/s10732-025-09568-z)  
+**Technical Report:** [https://doi.org/10.48550/arXiv.2411.04293](https://doi.org/10.48550/arXiv.2411.04293)
 
-Available here in technical report form: 
-https://doi.org/10.48550/arXiv.2411.04293
+## Architectural Scope
 
-## Scope
+This framework is split into two major components:
+1. **The Core Engine (`rkosolver`)**: Handles the metaheuristics, OpenMP parallelization, solution pool (with cosine-similarity diversity), and multi-objective scalarization.
+2. **The Problem Plugins (`.so` / `.dll`)**: Independent shared libraries that implement the `IProblem` interface (Decoder and IO).
 
-This code has been designed to solve the Knapsack Problem (KP). To solve other problems, users only need to configure the Problem.h file.
+This code natively supports Single and **Multi-Objective** optimization problems (using Tchebycheff or Weighted Sum scalarization).
 
+## Building the Project
 
-## Running the algorithm
+The project uses **CMake** for the core engine and a highly optimized **Makefile** for rapid plugin development.
 
-* Enter the Program directory: `cd Program`
-* Run the make command: `make rebuild`
-* Run the RKO: `./runTest ../Instances/KP/kp50.txt T`, where T is the maximum running time (in seconds)
-* In Windows: runTest.exe ../Instances/KP/kp50.txt T
+### 1. Build the Core Solver
+From the root directory, run:
+```bash
+make build
+```
 
-* Or compile via terminal: `g++ -std=c++20 -o runTest main.cpp -O3 -fopenmp`
+This will create the `build/` directory, resolve dependencies (yaml-cpp, CLI11), and compile the `rkosolver` binary.
 
+### 2. Build a Problem Plugin
 
-## Code structure
+To compile a specific problem (e.g., the Knapsack Problem or TSP) without recompiling the core, use the agile plugin command:
+```bash
+make plugin PROB=kpproblem
+# Or for the Traveling Salesman Problem:
+make plugin PROB=tspproblem
+```
 
-The code structure is documented in [1] and organized in the following manner:
+The compiled plugins will be output to `build/plugins/`.
 
-* **SPECIFIC_CODE:**
-    * **Problem.h**: Contains data structure of the problem, the read data function, and the decoder.
+## Running the Algorithm
 
-* **GENERAL_CODE:**
-    * **/MH**: Contains all of the metaheuristic (MH) algorithm's mechanisms.
-    * **/Main**: Contains the main function to start the algorithm and stores the shared variables.
-    * **Data.h**: Represents the data structures.
-    * **Output.h**: Stores the output functions, including the best solution found and statistical analysis of the MH.
+The solver is executed via a robust CLI (Command Line Interface). You must provide the instance, the configuration file, the max time, and the compiled plugin.
 
-## File config_tests.conf is the configuration of the RKO test
+Linux:
+```bash
+./build/bin/rkosolver -i ./instances/kp/kp10.txt -c ./config/yaml/config.yaml -t 10 -p ./build/plugins/kpproblem.so
+```
 
-* Metaheuristics in the RKO, each line is executed in a separate thread 
-    * SA
-    * ILS
-    * VNS
-    * BRKGA
-    * BRKGA-CS
-    * PSO
-    * GA
-    * LNS
-    * GRASP
-    * IPR
+**CLI Arguments:**
 
-* defines the maximum number of runs
-    * MAXRUNS 1
+- `-i`, `--instance`: Path to the problem instance file.
+- `-t`, `--time`: Maximum execution time in seconds.
+- `-c`, `--config`: Path to the YAML configuration file.
+- `-p`, `--plugin`: Path to the problem dynamic library (`.so` or `.dll`).
 
-* defines the execution mode (0 for test mode or 1 for debug mode)
-    * debug 1
+*Note: Results are automatically exported to the `Results/` directory as `Solutions_RKO.txt` and `Results_RKO.csv`.*
 
-* defines the parameter configuration mode (0 for offline tuning, 1 for online configuration using Q-Learning)
-    * control 1
+## Configuration (config.yaml)
 
-* local search strategy (1 for first improvement, 2 for best improvement)
-    * strategy 1
+The legacy `.conf` files have been replaced by a modern, readable YAML configuration system.
 
-* strategy to restart the search process (percentage of the maximum time at which the restart is triggered)
-    * restart 1
+```yaml
+# Selected Metaheuristics (Each runs in a dedicated OpenMP thread)
+metaheuristics:
+  - SA
+  - ILS
+  - VNS
+  - BRKGA
+  - BRKGA-CS
 
-* size of the elite pool solution
-    * sizePool 10
+execution_settings:
+  max_runs: 10
+  debug_mode: 0       # 0: File Output (CSV/TXT), 1: Terminal Output
+  control_mode: 1     # 0: Offline Tuning, 1: Online Control (Q-Learning)
 
-Users need to create a folder named "Instances/ProblemName", where the instances must be; users also need to create a folder named "Results", where the results files are written.
+search_parameters:
+  local_search_strategy: 1
+  restart_threshold: 1.0
+  elite_pool_size: 10
 
-## File Parameters
+# Multi-objective handling (Tchebycheff or WeightedSum)
+scalarization: Tchebycheff
+```
 
-Users can choose two parameter settings: parameter tuning (option 0) and parameter control (option 1). 
- - For parameter tuning, users must inform the static configuration of each parameter in ParametersOffline.txt.
- - For parameter control, users must inform a set of possible values for each parameter in ParametersOnline.txt. We use the Q-Learning method to learn the best configuration for each metaheuristic during the search process.
+## Creating a New Problem (Plugin Development)
+
+To solve a new problem, you do not need to touch the core code.
+
+1. Create a new `.cpp` file in `problems/` (e.g., `myproblem.cpp`).
+2. Inherit from `rkolib::core::IProblem` - include `rkolib/core/problem.hpp` - and implement the `load()` and `evaluate(TSol& s)` methods.
+3. Export the factory functions:
+
+```cpp
+extern "C" {
+    EXPORT_PLUGIN rkolib::core::IProblem* create_problem() { return new MyProblem(); }
+    EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem* p) { delete p; }
+}
+```
+Obs: It is necessary to maintain the same signature and sequence of functions so that the solver can find the functions in the plugin.
+
+4. Run `make plugin PROB=myproblem` OR `g++ -O3 -shared -fPIC -std=c++20 ./problems/myproblem.cpp -o ./build/plugins/myproblem.so`.
+
+5. Execute myproblem with `./build/bin/rkosolver -i ./examples/kp/kp10.txt -c ./config/yaml/config.yaml --time 2 -p ./build/plugins/myproblem.so`.
 
 ## OpenMP
 
-The code was implemented to run in parallel using the OpenMP directive. In this setup, #MH threads are required for each run. Each thread executes a different metaheuristic. The threads run independently, and information about the best solutions is shared through a solution pool.
-
-## Object-oriented C++
-
-An object-oriented C++ version of RKO has been recently developed by Johnny Dutra. The project was created from a fork of this repository and is available at the following link:
-
-https://github.com/dutrajy/librko
+The code is heavily parallelized using OpenMP directives. In this setup, `#MH` threads are dynamically allocated based on your `config.yaml`. Each thread executes a different metaheuristic independently, sharing elite solutions through a thread-safe, diversity-aware solution pool.

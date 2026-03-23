@@ -79,6 +79,8 @@ public:
 
   bool shouldStop() const { return stopExecution_.load(); }
 
+  const std::vector<TSol>& getPool() const { return pool_; }
+
   // -------------------------------------------------------------------------
   // POOL MANAGEMENT
   // -------------------------------------------------------------------------

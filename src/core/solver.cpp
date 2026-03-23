@@ -4,6 +4,7 @@
 
 #include "rkolib/core/solver.hpp"
 #include "rkolib/core/context.hpp"
+#include "rkolib/utils/io.hpp"
 
 // Includes das Meta-heurísticas
 #include "rkolib/mh/brkga.hpp"
@@ -20,6 +21,7 @@
 
 #include <CLI/CLI.hpp>
 #include <iostream>
+#include <numeric>
 #include <omp.h>
 #include <yaml-cpp/yaml.h>
 
@@ -249,6 +251,56 @@ void RkoSolver::run() {
 
   computeFinalStatistics();
   displayResults();
+
+  // =========================================================================
+  // NEW: RESULT SAVING LOGIC
+  // =========================================================================
+  
+  // 1. Extract the names of the algorithms that actually ran
+  std::vector<std::string> activeAlgorithms;
+  activeAlgorithms.reserve(numActiveMethods_);
+  for (int i = 0; i < numActiveMethods_; ++i) {
+      activeAlgorithms.push_back(getActiveName(i));
+  }
+
+  // 2. Fetch the problem dimension
+  int dimension = getProblemDimension();
+
+  // 3. Route the output based on the debug flag
+  if (runData_.debug == 0) { // Assuming 0 means "Production/Save to file"
+      // Save the detailed best solution to a text file
+      utils::WriteSolution(
+          activeAlgorithms, 
+          bestSolutionGlobal_, 
+          bestTime_,       // Best time found across all runs
+          totalTime_,      // Average total time per run
+          instancePath_, 
+          dimension
+      );
+      
+      // Save the statistical summary to the CSV file
+      utils::WriteResults(
+          activeAlgorithms, 
+          bestObjective_, 
+          averageObjective_, 
+          objectiveValues_, // Contains the OFV of each independent run
+          bestTime_, 
+          totalTime_, 
+          instancePath_
+      );
+  } else {
+      // Print detailed pool information to the screen instead of saving
+      auto& ctx = core::SolverContext::instance();
+      utils::WriteSolutionScreen(
+          activeAlgorithms, 
+          bestSolutionGlobal_, 
+          bestTime_, 
+          totalTime_, 
+          instancePath_, 
+          dimension, 
+          ctx.getPool() // Assuming you have a getter for SOLVER_POOL in context
+      );
+  }
 }
 
 void RkoSolver::validateConfiguration() {
