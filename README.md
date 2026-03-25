@@ -53,7 +53,8 @@ The solver is executed via a robust CLI (Command Line Interface). You must provi
 
 Linux:
 ```bash
-./build/bin/rkosolver -i ./instances/kp/kp10.txt -c ./config/yaml/config.yaml -t 10 -p ./build/plugins/kpproblem.so
+cd build
+./bin/rkosolver -i ../instances/kp/kp10.txt -c ../config/yaml/config.yaml -t 10 -p ./plugins/kpproblem.so
 ```
 
 **CLI Arguments:**
@@ -110,7 +111,7 @@ Obs: It is necessary to maintain the same signature and sequence of functions so
 
 4. Run `make plugin PROB=myproblem` OR `g++ -O3 -shared -fPIC -std=c++20 ./problems/myproblem.cpp -o ./build/plugins/myproblem.so`.
 
-5. Execute myproblem with `./build/bin/rkosolver -i ./examples/kp/kp10.txt -c ./config/yaml/config.yaml --time 2 -p ./build/plugins/myproblem.so`.
+5. Execute myproblem with `./build/bin/rkosolver -i ../instances/kp/kp10.txt -c ../config/yaml/config.yaml --time 2 -p ./build/plugins/myproblem.so`.
 
 ## OpenMP
 

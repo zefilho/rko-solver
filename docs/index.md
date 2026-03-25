@@ -49,7 +49,8 @@ The solver is executed via a robust CLI (Command Line Interface). You must provi
 
 **Linux Example:**
 ```bash
-./build/bin/rkosolver -i ./instances/kp/kp10.txt -c ./config/yaml/config.yaml -t 10 -p ./build/plugins/kpproblem.so
+cd build
+./bin/rkosolver -i ../instances/kp/kp10.txt -c ../config/yaml/config.yaml -t 10 -p ./plugins/kpproblem.so
 ```
 
 **CLI Arguments:**
@@ -111,7 +112,7 @@ extern "C" {
 4. Run `make plugin PROB=myproblem` **OR** `g++ -O3 -shared -fPIC -std=c++20 ./problems/myproblem.cpp -o ./build/plugins/myproblem.so`.
 5. Execute `myproblem` with:
 ```bash
-./build/bin/rkosolver -i ./examples/kp/kp10.txt -c ./config/yaml/config.yaml --time 2 -p ./build/plugins/myproblem.so
+./build/bin/rkosolver -i ../instances/kp/kp10.txt -c ../config/yaml/config.yaml --time 2 -p ./build/plugins/myproblem.so
 ```
 
 ---
