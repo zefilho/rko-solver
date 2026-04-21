@@ -180,7 +180,7 @@ void BuildStateConnections(std::vector<TState> &S) {
       if (GetHammingDistance(S[i], S[j]) <= 1) {
         S[i].Ai.push_back(j);
 
-        double q0 = randomico(0.05, 0.01);
+        double q0 = randomico(0.005, 0.01);
         S[i].Qa.push_back(q0);
 
         if (q0 > S[i].maxQ) {

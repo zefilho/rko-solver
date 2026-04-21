@@ -160,6 +160,13 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
     scalarizer_ = std::make_unique<core::TchebycheffScalarizer>();
   }
 
+  if (config["default_weights"]) {
+    defaultWeights_.clear();
+    for (const auto &w : config["default_weights"]) {
+      defaultWeights_.push_back(w.as<double>());
+    }
+  }
+
   std::cout << "Scalarization Strategy: " << scalarizer_->getName()
             << std::endl;
 }
@@ -301,6 +308,9 @@ void RkoSolver::run() {
           ctx.getPool() // Assuming you have a getter for SOLVER_POOL in context
       );
   }
+
+  // Save convergence log
+  utils::WriteConvergenceLog(convergenceHistory_, "../results");
 }
 
 void RkoSolver::validateConfiguration() {
@@ -386,6 +396,10 @@ void RkoSolver::executeParallelMethods(double startTime,
       core::TSol ctxBest = ctx.getBestSolution();
       if (ctxBest.ofv < bestSolutionRun.ofv) {
         bestSolutionRun = ctxBest;
+
+        // --- Recording the best solution found so far ---
+        double currentTime = omp_get_wtime() - startTime;
+        convergenceHistory_.push_back({currentTime, ctxBest.nameMH, ctxBest.ofv});
       }
 
       if ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
@@ -408,6 +422,7 @@ void RkoSolver::initializeStatistics() {
   bestSolutionGlobal_.ofv = std::numeric_limits<double>::infinity();
   objectiveValues_.clear();
   objectiveValues_.reserve(runData_.MAXRUNS);
+  convergenceHistory_.clear();
 }
 
 void RkoSolver::updateStatistics(const core::TSol &runSolution,
@@ -497,8 +512,20 @@ void RkoSolver::decodeSolution(core::TSol &sol,
     }
   }
 
+
+  // If the meta-heuristic did not provide weights, use the default weights from YAML
+  std::vector<double> activeLambda = lambda;
+  if (activeLambda.empty()) {
+      if (!defaultWeights_.empty()) {
+          activeLambda = defaultWeights_;
+      } else {
+          // Fallback to uniform weights
+          activeLambda.assign(sol.objs.size(), 1.0 / sol.objs.size());
+      }
+  }
+
   // Send nadirPoint_ also so that the normalization of the scalarizer works
-  sol.ofv = scalarizer_->scalarize(sol, lambda, idealPoint_);
+  sol.ofv = scalarizer_->scalarize(sol, activeLambda, idealPoint_, nadirPoint_);
 }
 
 // Removed: updateIdealPoint(const std::vector<double>& objs)

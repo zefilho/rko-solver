@@ -31,5 +31,7 @@ namespace rkolib::utils {
                       double timeTotal, 
                       const std::string& instance, 
                       const std::string& outDir = "../results");
+    
+    void WriteConvergenceLog(const std::vector<core::ConvergencePoint>& history, const std::string& outDir);
 
 } // namespace rkolib::utils

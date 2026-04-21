@@ -1049,4 +1049,8 @@ dkms.conf
 
 *.sh
 
-agents
+agents/
+results/
+
+*.csv
+*.txt

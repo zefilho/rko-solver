@@ -68,4 +68,10 @@ namespace rkolib::core {
         int maxA;                  // Index of action with max Q
     };
 
+    struct ConvergencePoint{
+        double timestamp; // Exact Time of the solution found //
+        std::string mh_name; // Name of the metaheuristic/algorithm //
+        double ofv; // Objective function value //
+    };
+
 } // namespace rkolib::core

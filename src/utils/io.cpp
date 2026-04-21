@@ -113,4 +113,16 @@ namespace rkolib::utils {
         file << std::format(",{:.6f},{:.6f},{:.3f},{:.3f}\n", ofv, ofvAverage, timeBest, timeTotal);
     }
 
+    // Em rkolib::utils
+    void WriteConvergenceLog(const std::vector<core::ConvergencePoint>& history, const std::string& outDir) {
+        std::cout << "[Info] Escrevendo log de convergencia...\n";
+        EnsureDirectoryExists(outDir);
+        std::ofstream file(outDir + "/Convergence_Log.csv");
+        
+        file << "Time,MH,OFV\n";
+        for (const auto& point : history) {
+            file << std::format("{:.4f},{},{:.6f}\n", point.timestamp, point.mh_name, point.ofv);
+        }
+    }
+
 } // namespace rkolib::utils

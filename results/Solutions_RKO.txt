@@ -22,3 +22,115 @@ Sol: 0.820 0.781 0.410 0.563 0.532
 OFV: 85.000000
 Best time: 2.005s
 Total time: 2.005s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.383 0.395 0.173 0.760 0.567 0.331 0.925 0.482 0.101 0.127 
+OFV: -31.000000
+Best time: 10.005s
+Total time: 10.005s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.725 0.008 0.246 0.829 0.272 0.203 0.859 0.319 0.608 0.459 
+OFV: -31.000000
+Best time: 10.002s
+Total time: 10.002s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.568 0.110 0.136 0.613 0.597 0.566 0.600 0.893 0.594 0.168 
+OFV: -31.000000
+Best time: 10.001s
+Total time: 10.001s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.765 0.690 0.298 0.860 0.891 0.459 0.760 0.029 0.896 0.655 
+OFV: -31.000000
+Best time: 10.001s
+Total time: 10.001s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.725 0.009 0.715 0.420 0.223 0.353 0.909 0.776 0.597 0.826 
+OFV: -31.000000
+Best time: 2.001s
+Total time: 2.001s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.134 0.756 0.094 0.963 0.884 0.205 0.566 0.074 0.600 0.367 
+OFV: -31.000000
+Best time: 2.001s
+Total time: 2.001s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.718 0.509 0.342 0.591 0.651 0.023 0.839 0.544 0.549 0.036 
+OFV: -31.000000
+Best time: 10.002s
+Total time: 10.002s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.614 0.044 0.349 0.522 0.927 0.343 0.645 0.552 0.682 0.406 
+OFV: -31.000000
+Best time: 20.001s
+Total time: 20.001s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.692 0.522 0.731 0.042 0.668 0.031 0.871 0.665 0.176 0.849 
+OFV: -31.000000
+Best time: 2.002s
+Total time: 2.002s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.571 0.225 0.872 0.334 0.721 0.167 0.993 0.700 0.239 0.520 
+OFV: -31.000000
+Best time: 3.001s
+Total time: 3.001s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.721 0.965 0.139 0.006 0.670 0.290 0.361 0.659 0.179 0.384 
+OFV: -31.000000
+Best time: 10.002s
+Total time: 10.002s
+
+
+Instance: ../instances/kp/kp10.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.144 0.536 0.047 0.549 0.903 0.490 0.750 0.909 0.915 0.488 
+OFV: -31.000000
+Best time: 100.002s
+Total time: 100.002s
+
+
+Instance: ../instances/kp/kp10_multi.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.838 0.745 0.352 0.901 0.452 0.100 0.907 0.336 0.511 0.577 
+OFV: 0.000500
+Best time: 2.001s
+Total time: 2.001s
+
+
+Instance: ../instances/kp/kp10_multi.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.566 0.709 0.549 0.971 0.370 0.569 0.739 0.136 0.698 0.697 
+OFV: 0.034093
+Best time: 2.001s
+Total time: 2.001s

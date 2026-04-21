@@ -9,7 +9,8 @@ class IScalarizer {
 public:
   virtual ~IScalarizer() = default;
   virtual double scalarize(const TSol &s, const std::vector<double> &lambda,
-                           const std::vector<double> &idealPoint) = 0;
+                           const std::vector<double> &idealPoint,
+                           const std::vector<double> &nadirPoint) = 0;
   virtual std::string getName() const = 0;
 };
 
@@ -17,7 +18,8 @@ public:
 class TchebycheffScalarizer : public IScalarizer {
 public:
   double scalarize(const TSol &s, const std::vector<double> &lambda,
-                   const std::vector<double> &idealPoint) override {
+                   const std::vector<double> &idealPoint, 
+                   const std::vector<double> &nadirPoint) override {
     if (s.objs.empty())
       return 1e15; // Valor ruim
 
@@ -30,11 +32,23 @@ public:
 
     for (size_t k = 0; k < nObj; ++k) {
       double w = use_default ? default_w : lambda[k];
-      // | z* - f(x) |
+      // // | z* - f(x) |
+      // double diff = std::abs(idealPoint[k] - s.objs[k]);
+      // double val = w * diff;
+      // if (val > max_dist)
+      //   max_dist = val;
       double diff = std::abs(idealPoint[k] - s.objs[k]);
-      double val = w * diff;
-      if (val > max_dist)
+      double range = std::abs(nadirPoint[k] - idealPoint[k]);
+      
+      // Evita divisão por zero se Ideal e Nadir forem iguais
+      if (range < 1e-9) range = 1e-9; 
+
+      // Normalized distance formula
+      double val = w * (diff / range);
+      
+      if (val > max_dist) {
         max_dist = val;
+      }
     }
     return max_dist;
   }
@@ -45,7 +59,8 @@ public:
 class WeightedSumScalarizer : public IScalarizer {
 public:
   double scalarize(const TSol &s, const std::vector<double> &lambda,
-                   const std::vector<double> & /*ideal*/) override {
+                   const std::vector<double> & /*ideal*/,
+                   const std::vector<double> & /*nadir*/) override {
     if (s.objs.empty())
       return 1e15;
     double sum = 0.0;
@@ -56,7 +71,7 @@ public:
     for (size_t k = 0; k < nObj; ++k) {
       double w = use_default ? default_w : lambda[k];
       // Invert sign if it's profit maximization -> cost minimization
-      sum += s.objs[k] * w * -1.0;
+      sum += s.objs[k] * w;
     }
     return sum;
   }

@@ -109,6 +109,10 @@ private:
   // Global reference points for multiobjective
   std::vector<double> idealPoint_;
   std::vector<double> nadirPoint_; // Added for normalization
+  std::vector<double> defaultWeights_;
+
+  // Convergence points
+  std::vector<core::ConvergencePoint> convergenceHistory_;
 };
 
 } // namespace rkolib
