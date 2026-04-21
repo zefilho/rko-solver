@@ -77,4 +77,37 @@ public:
   }
   std::string getName() const override { return "WeightedSum"; }
 };
+
+// Fairness Methods
+
+class GiniScalarizer : public IScalarizer {
+public:
+    double scalarize(const TSol &s, const std::vector<double> &/*lambda*/,
+                     const std::vector<double> &/*ideal*/,
+                     const std::vector<double> &/*nadir*/) override {
+        if (s.objs.empty()) return 1e15;
+
+        double sum_diffs = 0.0;
+        double sum = 0.0;
+        int n = s.objs.size();
+
+        for (int i = 0; i < n; ++i) {
+            sum += s.objs[i];
+            for (int j = 0; j < n; ++j) {
+                sum_diffs += std::abs(s.objs[i] - s.objs[j]);
+            }
+        }
+
+        if (sum < 1e-9) return 0.0; // All resources are zero
+
+        double mean = sum / n;
+        double gini = sum_diffs / (2.0 * n * n * mean);
+        
+        return gini; // The engine will minimize the inequality
+    }
+    
+    std::string getName() const override { return "Gini_Coefficient"; }
+};
+
+
 } // namespace rkolib::core

@@ -134,3 +134,19 @@ Sol: 0.566 0.709 0.549 0.971 0.370 0.569 0.739 0.136 0.698 0.697
 OFV: 0.034093
 Best time: 2.001s
 Total time: 2.001s
+
+
+Instance: ../instances/vrp/vrp_6_2.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.417 0.549 0.702 0.009 0.300 
+OFV: 0.009434
+Best time: 2.001s
+Total time: 2.001s
+
+
+Instance: ../instances/vrp/vrp_6_2.txt
+RKO: SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR
+Sol: 0.322 0.347 0.811 0.915 0.628 
+OFV: 88.000000
+Best time: 2.002s
+Total time: 2.002s

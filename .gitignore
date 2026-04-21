@@ -1054,3 +1054,5 @@ results/
 
 *.csv
 *.txt
+
+*.md.*

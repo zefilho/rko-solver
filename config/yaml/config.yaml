@@ -25,8 +25,8 @@ search_parameters:
   elite_pool_size: 10       # Tamanho do pool de soluções de elite
 
 # Se o problema carregado for multi-objetivo, qual técnica usar?
-# Opções: "Tchebycheff", "WeightedSum", "MinMax"
-scalarization: "Tchebycheff"
+# Opções: "Tchebycheff", "WeightedSum", "Gini_Coefficient"
+scalarization: "Gini_Coefficient"
 
 # Pesos padrão (caso o algoritmo não forneça dinamicamente)
 default_weights: [0.5, 0.5]

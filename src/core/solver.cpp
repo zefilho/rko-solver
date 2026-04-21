@@ -156,6 +156,8 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
 
   if (scalarizationMethod == "WeightedSum") {
     scalarizer_ = std::make_unique<core::WeightedSumScalarizer>();
+  } else if (scalarizationMethod == "Gini_Coefficient") {
+    scalarizer_ = std::make_unique<core::GiniScalarizer>();
   } else {
     scalarizer_ = std::make_unique<core::TchebycheffScalarizer>();
   }

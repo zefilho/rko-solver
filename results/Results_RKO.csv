@@ -16,3 +16,5 @@ Instance,Algorithms,Num_Runs,All_OFVs...,Best_OFV,Average_OFV,Best_Time,Total_Ti
 ../instances/kp/kp10.txt,SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR,1,-31.000000,-31.000000,-31.000000,100.002,100.002
 ../instances/kp/kp10_multi.txt,SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR,1,0.000500,0.000500,0.000500,2.001,2.001
 ../instances/kp/kp10_multi.txt,SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR,1,0.034093,0.034093,0.034093,2.001,2.001
+../instances/vrp/vrp_6_2.txt,SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR,1,0.009434,0.009434,0.009434,2.001,2.001
+../instances/vrp/vrp_6_2.txt,SA | ILS | VNS | BRKGA | BRKGA-CS | PSO | GA | LNS | GRASP | IPR,1,88.000000,88.000000,88.000000,2.002,2.002
