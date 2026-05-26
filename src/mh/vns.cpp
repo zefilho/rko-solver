@@ -111,6 +111,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // Main Loop
   // ---------------------------------------------------------------------
   // run the search process until stop criterion
+  //std::cout << "VNS init" << std::endl;
   while (currentTime < runData.MAXTIME * runData.restart) {
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
@@ -214,6 +215,8 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       }
     }
   }
+
+  //std::cout << "VNS end" << std::endl;
 
   // print policy (commented in original)
   // if (runData.debug and runData.control == 1)

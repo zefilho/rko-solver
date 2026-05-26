@@ -410,6 +410,8 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   }
 
   // initialize population
+  //std::cout << "BRKGA-CS init" << std::endl;
+
   Pop.clear();
   PopInter.clear();
 
@@ -631,6 +633,8 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   // free memory of BRKGA-CS components
   Pop.clear();
   PopInter.clear();
+
+  //std::cout << "BRKGA-CS end" << std::endl;
 }
 
 } // namespace rkolib::mh

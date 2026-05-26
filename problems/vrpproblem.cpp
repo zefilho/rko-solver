@@ -107,7 +107,7 @@ public:
     // A dimensão do problema é apenas o número de clientes que precisamos ordenar
     int getDimension() const override { return numNodes - 1; }
     
-    // O pulo do gato da Justiça: Cada veículo é um objetivo a ser otimizado/balanceado
+    // Cada veículo é um objetivo a ser otimizado/balanceado
     int getNumObjectives() const override { return numVehicles; }
 };
 

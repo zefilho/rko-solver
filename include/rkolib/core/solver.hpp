@@ -33,7 +33,22 @@ public:
   // -------------------------------------------------------------------------
   // ACCESSORS
   // -------------------------------------------------------------------------
-  const core::TSol &getBestSolution() const { return bestSolutionGlobal_; }
+  // const core::TSol &getBestSolution() const { return bestSolutionGlobal_; }
+  core::TSol getBestSolution() const {
+    core::TSol copy;
+    
+    // A trava DEVE ter o mesmo nome do UpdatePoolSolutions
+    #pragma omp critical(pool_lock)
+    {
+        // Pega do Pool se existir, senão usa o bestGlobal de fallback
+        if (!SOLVER_POOL.empty()) {
+            copy = SOLVER_POOL[0]; 
+        } else {
+            copy = bestSolutionGlobal_;
+        }
+    }
+    return copy;
+  }
   const core::TRunData &getRunData() const { return runData_; }
   double getBestObjective() const { return bestObjective_; }
   double getAverageObjective() const { return averageObjective_; }

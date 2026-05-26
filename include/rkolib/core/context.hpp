@@ -92,7 +92,7 @@ public:
 
   void clearPool() { pool_.clear(); }
 
-  TSol &getBestSolution() {
+  TSol getBestSolution() const {
     if (pool_.empty())
       throw std::runtime_error("Pool vazio!");
     return pool_[0];

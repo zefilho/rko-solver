@@ -16,20 +16,33 @@ void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
   // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    // Check if the SOLVER_POOL has enough solutions
-    if (SOLVER_POOL.size() < 2)
-      break;
+    TSol atual, guia;
+    bool pool_ok = false;
 
-    // randomly choose two elite solutions
-    int k1, k2;
-    do {
-      k1 = irandomico(0, (int)SOLVER_POOL.size() - 1);
-      k2 = irandomico(0, (int)SOLVER_POOL.size() - 1);
-    } while (k1 == k2);
+    // =================================================================
+    // VACINA: LEITURA PROTEGIDA DO POOL
+    // =================================================================
+    #pragma omp critical
+    {
+      if (SOLVER_POOL.size() >= 2) {
+        int k1, k2;
+        do {
+          k1 = irandomico(0, (int)SOLVER_POOL.size() - 1);
+          k2 = irandomico(0, (int)SOLVER_POOL.size() - 1);
+        } while (k1 == k2);
+
+        // Copia os dados com segurança enquanto as outras threads esperam
+        atual = SOLVER_POOL[k1];
+        guia = SOLVER_POOL[k2];
+        pool_ok = true;
+      }
+    }
+
+    if (!pool_ok) break;
 
     // Loop scope: variables are reset at each iteration of the while loop
-    TSol atual = SOLVER_POOL[k1];
-    TSol guia = SOLVER_POOL[k2];
+    // TSol atual = SOLVER_POOL[k1];
+    // TSol guia = SOLVER_POOL[k2];
 
     TSol bestPath = atual;
     TSol bestIteration = atual;
