@@ -19,22 +19,17 @@ using namespace rkolib::core;
 // -------------------------------------------------------------------------
 static TSol PUX(int eliteSize, int popSize, double rhoe,
                 const std::vector<TSol> &Pop, const int n) {
-  TSol s;
-  // Avoid reallocation inside loop if possible, though TSol might dynamic alloc
-  s.rk.resize(n);
+                
+  int eliteParent = irandomico(0, eliteSize - 1); 
+  int nonEliteParent = irandomico(eliteSize, popSize - 1);
 
-  int eliteParent =
-      irandomico(0, eliteSize - 1); // one chromosome from elite set
-  int nonEliteParent = irandomico(
-      eliteSize, popSize - 1); // one chromosome from nonelite population
+  // Cean copy of the elite parent! This ensures that 
+  // all other fields of TSol remain consistent.
+  TSol s = Pop[eliteParent]; 
 
-  // Mate
   for (int j = 0; j < n; j++) {
-    // copy alleles of top chromosome of the new generation
-    // If random < rhoe, inherit from Elite (Biased)
-    if (randomico(0, 1) < rhoe) {
-      s.rk[j] = Pop[eliteParent].rk[j];
-    } else {
+    // If not inherit from elite, replace with non-elite
+    if (randomico(0, 1) >= rhoe) {
       s.rk[j] = Pop[nonEliteParent].rk[j];
     }
   }
@@ -49,50 +44,35 @@ static TSol PUX(int eliteSize, int popSize, double rhoe,
 static void UpdatePopSize(int p, double pe, double pm, double rhoe,
                           std::vector<TSol> &Pop, std::vector<TSol> &PopInter,
                           RkoSolver &solver) {
-  // size of the current population
   int oldPsize = (int)Pop.size();
 
-  // proportional pruning
   if (oldPsize > p) {
-
-    // copy the current population
     PopInter = Pop;
-
-    // define new size of Pop
     Pop.resize(p);
 
-    // 1. Select the elite chromosomes
-    // Note: This assumes PopInter is already sorted by fitness, which is true
-    // in the main loop
     int eliteLimit = (int)(p * pe);
     for (int i = 0; i < eliteLimit; i++) {
       Pop[i] = PopInter[i];
     }
 
-    // 2. Select the non-elite chromosomes to fill the rest
-    // Original logic: take from old population preserving relative order
     int pos = (int)(pe * oldPsize);
     for (int i = eliteLimit; i < p; i++) {
       if (pos < oldPsize) {
         Pop[i] = PopInter[pos];
         pos++;
       } else {
-        // Fallback safety
         CreateInitialSolutions(Pop[i], solver.getProblemDimension());
         solver.decodeSolution(Pop[i]);
       }
     }
-
-    // Clean intermediate population
-    PopInter.clear();
-    PopInter.resize(p);
+    
+    // Remova PopInter.clear();
+    // Apenas redimensione
+    PopInter.resize(p); 
   }
-
-  // generate new chromosomes
   else if (oldPsize < p) {
-
-    // define new size of Pop
     Pop.resize(p);
+    PopInter.resize(p); // Garanta que PopInter acompanhe o crescimento
 
     // generate new chromosomes using PUX from existing SOLVER_POOL
     for (int k = oldPsize; k < p; k++) {
@@ -108,8 +88,8 @@ static void UpdatePopSize(int p, double pe, double pm, double rhoe,
     std::sort(Pop.begin(), Pop.end(), sortByFitness);
 
     // clean intermediate population
-    PopInter.clear();
-    PopInter.resize(p);
+    //PopInter.clear();
+   // PopInter.resize(p);
   }
 }
 
@@ -204,6 +184,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
       }
     }
   }
+  //std::cout << "BRKGA init" << std::endl;
 
   // initialize population
   Pop.clear();
@@ -367,6 +348,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
   // free memory of BRKGA components
   Pop.clear();
   PopInter.clear();
+  //std::cout << "BRKGA end" << std::endl;
 }
 
 } // namespace rkolib::mh

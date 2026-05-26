@@ -10,6 +10,7 @@ PROB_DIR    := problems
 # Variáveis do Compilador para os Plugins (Fast Build)
 CXX        := g++
 CXXFLAGS   := -std=c++20 -O3 -Wall -Wextra -fPIC -shared
+#CXXFLAGS := -O0 -g -fsanitize=address -fno-omit-frame-pointer -fopenmp -std=c++20
 INCLUDES   := -I./include
 
 all: build

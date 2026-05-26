@@ -11,6 +11,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ==============================================================================
+#add_compile_options(-O0 -g -fsanitize=address -fno-omit-frame-pointer)
+#add_link_options(-fsanitize=address)
+
 # Organização de saída de binários
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugins)
@@ -51,12 +55,11 @@ FetchContent_MakeAvailable(cli11)
 # ------------------------------------------------------------------------------
 # 3. Definição da Biblioteca Core (Motor do Solver)
 # ------------------------------------------------------------------------------
-# CORREÇÃO: Listamos os arquivos do CORE explicitamente para evitar Undefined Reference.
-# Certifique-se de que qlearning.cpp está nesta lista.
+
 set(CORE_SOURCES
     "src/core/solver.cpp"
     "src/core/method.cpp"
-    "src/core/qlearning.cpp"  # Essencial para as referências de ChooseAction/CreateStates
+    "src/core/qlearning.cpp" 
     "src/utils/io.cpp"
 )
 

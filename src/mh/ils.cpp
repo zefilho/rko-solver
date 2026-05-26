@@ -92,6 +92,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // number of iterations
   Iter = 0;
 
+  //std::cout << "Debug: ILS started" << std::endl;
   // create initial solution
   CreateInitialSolutions(sBest, solver.getProblemDimension());
   solver.decodeSolution(sBest);
@@ -191,6 +192,8 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }
+
+  //std::cout << "Debug: ILS finished" << std::endl;
 }
 
 } // namespace rkolib::mh

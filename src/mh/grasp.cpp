@@ -250,6 +250,7 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
   }
 
   // create an initial solution
+  //std::cout << "GRASP init" << std::endl;
   CreateInitialSolutions(s, solver.getProblemDimension());
   solver.decodeSolution(s);
   sBest = s;
@@ -371,6 +372,8 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }
+
+  //std::cout << "GRASP end" << std::endl;
 }
 
 } // namespace rkolib::mh

@@ -170,6 +170,7 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   }
 
   // initialize population
+  //std::cout << "PSO init" << std::endl;
   X.clear();
   Pbest.clear();
   V.clear();
@@ -355,6 +356,8 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   X.clear();
   V.clear();
   Pbest.clear();
+
+  //std::cout << "PSO end" << std::endl;
 }
 
 } // namespace rkolib::mh

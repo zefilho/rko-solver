@@ -124,6 +124,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       }
     }
   }
+  //std::cout << "GA init" << std::endl;
 
   // initialize population
   Pop.resize(sizePop);
@@ -334,6 +335,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   Pop.clear();
   PopNew.clear();
   PopInter.clear();
+  //std::cout << "GA end" << std::endl;
 }
 
 } // namespace rkolib::mh

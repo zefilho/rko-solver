@@ -22,7 +22,6 @@
 #include <CLI/CLI.hpp>
 #include <iostream>
 #include <numeric>
-#include <algorithm> // Necessário para std::min
 #include <omp.h>
 #include <yaml-cpp/yaml.h>
 
@@ -40,8 +39,10 @@ namespace rkolib {
 // -------------------------------------------------------------------------
 RkoSolver::RkoSolver()
     : instancePath_(""), configPath_("config/yaml/config.yaml"),
-      problemLibPath_(""), // Path to the plugin
-      libHandle_(nullptr), // Handle of the plugin in memory
+      problemLibPath_("") // Path to the plugin
+      ,
+      libHandle_(nullptr) // Handle of the plugin in memory
+      ,
       problemInstance_(nullptr), numActiveMethods_(0),
       bestObjective_(std::numeric_limits<double>::infinity()),
       averageObjective_(0.0), bestTime_(0.0), totalTime_(0.0),
@@ -179,6 +180,7 @@ void RkoSolver::loadProblemData() {
   std::cout << "[Info] Carregando plugin do problema: " << problemLibPath_
             << "...\n";
 
+  // Types of the functions exported by the .so
   typedef core::IProblem *(*CreateProblemFunc)();
   typedef void (*DestroyProblemFunc)(core::IProblem *);
 
@@ -211,6 +213,8 @@ void RkoSolver::loadProblemData() {
                              "'destroy_problem' não encontradas no plugin.");
   }
 
+  // Instantiates the problem passing the correct destruction function of the
+  // plugin
   problemInstance_ = std::shared_ptr<core::IProblem>(createFunc(), destroyFunc);
 
   std::cout << "[Info] Lendo instância: " << instancePath_ << "...\n";
@@ -257,22 +261,57 @@ void RkoSolver::run() {
   computeFinalStatistics();
   displayResults();
 
+  // =========================================================================
+  // NEW: RESULT SAVING LOGIC
+  // =========================================================================
+  
+  // 1. Extract the names of the algorithms that actually ran
   std::vector<std::string> activeAlgorithms;
   activeAlgorithms.reserve(numActiveMethods_);
   for (int i = 0; i < numActiveMethods_; ++i) {
       activeAlgorithms.push_back(getActiveName(i));
   }
 
+  // 2. Fetch the problem dimension
   int dimension = getProblemDimension();
 
-  if (runData_.debug == 0) { 
-      utils::WriteSolution(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension);
-      utils::WriteResults(activeAlgorithms, bestObjective_, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+  // 3. Route the output based on the debug flag
+  if (runData_.debug == 0) { // Assuming 0 means "Production/Save to file"
+      // Save the detailed best solution to a text file
+      utils::WriteSolution(
+          activeAlgorithms, 
+          bestSolutionGlobal_, 
+          bestTime_,       // Best time found across all runs
+          totalTime_,      // Average total time per run
+          instancePath_, 
+          dimension
+      );
+      
+      // Save the statistical summary to the CSV file
+      utils::WriteResults(
+          activeAlgorithms, 
+          bestObjective_, 
+          averageObjective_, 
+          objectiveValues_, // Contains the OFV of each independent run
+          bestTime_, 
+          totalTime_, 
+          instancePath_
+      );
   } else {
+      // Print detailed pool information to the screen instead of saving
       auto& ctx = core::SolverContext::instance();
-      utils::WriteSolutionScreen(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension, ctx.getPool());
+      utils::WriteSolutionScreen(
+          activeAlgorithms, 
+          bestSolutionGlobal_, 
+          bestTime_, 
+          totalTime_, 
+          instancePath_, 
+          dimension, 
+          ctx.getPool() // Assuming you have a getter for SOLVER_POOL in context
+      );
   }
 
+  // Save convergence log
   utils::WriteConvergenceLog(convergenceHistory_, "../results");
 }
 
@@ -289,7 +328,6 @@ void RkoSolver::validateConfiguration() {
 // RUN EXECUTION
 // -------------------------------------------------------------------------
 void RkoSolver::executeRun(int runIndex) {
-  
   auto &ctx = core::SolverContext::instance();
 
   unsigned int seed =
@@ -301,6 +339,8 @@ void RkoSolver::executeRun(int runIndex) {
   ctx.setSeed(seed);
 
   int nObj = problemInstance_->getNumObjectives();
+
+  // Initialization of reference points
   initReferencePoints(nObj);
 
   core::TSol bestSolutionRun;
@@ -321,72 +361,56 @@ void RkoSolver::executeRun(int runIndex) {
   updateStatistics(bestSolutionRun, startTime, endTime);
 }
 
-// -------------------------------------------------------------------------
-// EXECUÇÃO PARALELA 
-// -------------------------------------------------------------------------
+// Run parallel methods
 void RkoSolver::executeParallelMethods(double startTime,
                                        core::TSol &bestSolutionRun,
                                        unsigned int /*baseSeed*/) {
   auto &ctx = core::SolverContext::instance();
   omp_set_num_threads(numActiveMethods_);
 
-  // Only one parallel region. Threads are born here and die at the end of the round.
-  #pragma omp parallel
-  {
-    while ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
+    #pragma omp parallel
+    {
+      while ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
 
-      #pragma omp single
-      {
-        ctx.resetStopFlag();
-      }
-      // Ensures the stopFlag is cleared for all before starting
-      #pragma omp barrier 
+    #pragma omp single
+    {
+      ctx.resetStopFlag();
+    }
+    #pragma omp barrier
 
-      // 1. Manual distribution (Much safer and lighter than #pragma omp for)
-      int tid = omp_get_thread_num();
-      
-      if (tid < numActiveMethods_) {
-        try {
-          // Thread roda sua MH correspondente.
-          getActiveFunction(tid)(runData_, *this);
-        } catch (const std::exception& e) {
-          #pragma omp critical
-          std::cerr << "[T-" << tid << "] Exception: " << e.what() << std::endl;
-        } catch (...) {
-          #pragma omp critical
-          std::cerr << "[T-" << tid << "] Unknown Error" << std::endl;
-        }
-        
-        // 2. The first MH that meets the stopping criterion (or finds the optimum) 
-        // raises the flag for the others to stop peacefully.
-        ctx.signalStop();
+    #pragma omp for
+    for (int i = 0; i < numActiveMethods_; ++i) {
+      #pragma omp cancellation point for
+
+      try {
+        getActiveFunction(i)(runData_, *this);
+      } catch (...) {
+      #pragma omp critical
+        std::cerr << "Error in thread " << omp_get_thread_num() << std::endl;
       }
 
-      // 3. CRITICAL BARRIER: Wait for ALL MHs to see the flag and exit their functions
-      #pragma omp barrier 
+      ctx.signalStop();
+      #pragma omp cancel for
+    }
 
-      // 4. Only one thread updates the global best of the round
-      #pragma omp single
-      {
-        core::TSol ctxBest = ctx.getBestSolution();
-        if (ctxBest.ofv < bestSolutionRun.ofv) {
-          bestSolutionRun = ctxBest;
+    #pragma omp single
+    {
+      core::TSol ctxBest = ctx.getBestSolution();
+      if (ctxBest.ofv < bestSolutionRun.ofv) {
+        bestSolutionRun = ctxBest;
 
-          double currentTime = omp_get_wtime() - startTime;
-          convergenceHistory_.push_back({currentTime, ctxBest.nameMH, ctxBest.ofv});
-        }
-
-        if ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
-          core::CreatePoolSolutions(*this, runData_.sizePool);
-        }
+        // --- Recording the best solution found so far ---
+        double currentTime = omp_get_wtime() - startTime;
+        convergenceHistory_.push_back({currentTime, ctxBest.nameMH, ctxBest.ofv});
       }
-      // No thread advances while the update does not finish
-      #pragma omp barrier 
 
-    } // End of while(MAXTIME)
-  } // End of parallel block. The threads are returned clean to the OS.
-
-  ctx.resetStopFlag();
+      if ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
+        core::CreatePoolSolutions(*this, runData_.sizePool);
+      }
+    }
+  }
+}
+    ctx.resetStopFlag();
 }
 
 // -------------------------------------------------------------------------
@@ -407,102 +431,108 @@ void RkoSolver::updateStatistics(const core::TSol &runSolution,
                                  double startTime, double endTime) {
   double runTime = endTime - startTime;
 
-  // 1. Unificação da checagem do Melhor Global (Garante sincronia de estado)
   if (runSolution.ofv < bestSolutionGlobal_.ofv) {
-    
-    bestSolutionGlobal_ = runSolution; // Cópia profunda da solução completa
-    bestObjective_ = runSolution.ofv;  // Cache rápido da função objetivo
-    
-    // 2. Correção da precisão do tempo
-    // Se a struct TSol registrou o momento exato do "achado" (best_time), usamos ele.
-    // Caso contrário, fazemos o fallback para o tempo total da rodada.
-    if (runSolution.best_time > 0.0) {
-        bestTime_ = runSolution.best_time; 
-    } else {
-        bestTime_ = runTime;
-    }
+    bestSolutionGlobal_ = runSolution;
   }
 
-  // 3. Acumuladores globais para cálculo de média no final
+  if (runSolution.ofv < bestObjective_) {
+    bestObjective_ = runSolution.ofv;
+    bestTime_ = runTime;
+  }
+
   averageObjective_ += runSolution.ofv;
   objectiveValues_.push_back(runSolution.ofv);
-  totalTime_ += runTime; 
+  totalTime_ += runTime;
 }
 
 void RkoSolver::computeFinalStatistics() {
-  if (runData_.MAXRUNS > 0) { averageObjective_ /= runData_.MAXRUNS; totalTime_ /= runData_.MAXRUNS; }
+  if (runData_.MAXRUNS > 0) {
+    averageObjective_ /= runData_.MAXRUNS;
+    totalTime_ /= runData_.MAXRUNS;
+  }
 }
 
 void RkoSolver::displayResults() {
-  std::cout << "\n\n╔════════════════════════════════════════════════════════╗\n"
-            << "║                    RESULTS SUMMARY                     ║\n"
-            << "╚════════════════════════════════════════════════════════╝\n";
+  std::cout
+      << "\n\n╔════════════════════════════════════════════════════════╗\n"
+      << "║                    RESULTS SUMMARY                     ║\n"
+      << "╚════════════════════════════════════════════════════════╝\n";
   std::cout << std::fixed << std::setprecision(5);
 
   if (problemInstance_->getNumObjectives() <= 1) {
+    // We use std::abs for case the fitness is stored negative (maximization as
+    // minimization)
     std::cout << "Best Objective:    " << std::abs(bestObjective_) << "\n"
               << "Average Objective: " << std::abs(averageObjective_) << "\n"
               << "Avg Run Time:      " << totalTime_ << "s\n";
     return;
   }
 
-  std::cout << "Scalarized Fitness (Dist): " << bestObjective_ << " (Minimization)\n";
+  std::cout << "Scalarized Fitness (Dist): " << bestObjective_
+            << " (Minimization)\n";
+
   std::cout << "Real Objectives Values:    [ ";
-  for (double val : bestSolutionGlobal_.objs) { std::cout << val << " "; }
-  std::cout << "]\nAvg Run Time:              " << totalTime_ << "s\n";
+  for (double val : bestSolutionGlobal_.objs) {
+    std::cout << val << " ";
+  }
+  std::cout << "]\n";
+
+  std::cout << "Avg Run Time:              " << totalTime_ << "s\n";
+
   std::cout << "Ideal Point Found:         [ ";
-  for (double v : idealPoint_) std::cout << v << " ";
+  for (double v : idealPoint_)
+    std::cout << v << " ";
   std::cout << "]\n";
 }
 
-void RkoSolver::cleanup() {}
+void RkoSolver::cleanup() {
+  // Nothing else to do here, unloadProblemLibrary takes care of the plugin
+}
 
 // -------------------------------------------------------------------------
-// EVALUATION CORE 
+// EVALUATION CORE
 // -------------------------------------------------------------------------
-void RkoSolver::decodeSolution(core::TSol &sol, const std::vector<double> &lambda) {
- // fprintf(stderr, "[TRACE CORE] Inicio de decodeSolution. OFV: \n");
+void RkoSolver::decodeSolution(core::TSol &sol,
+                               const std::vector<double> &lambda) {
 
   problemInstance_->decode(sol);
 
-  if (problemInstance_->getNumObjectives() <= 1) return;
+  if (problemInstance_->getNumObjectives() <= 1)
+    return;
 
+  std::lock_guard<std::mutex> lock(mtx_);
+
+  for (size_t k = 0; k < sol.objs.size(); ++k) {
+    // Minimization: Update Ideal (adding epsilon to not stagnate the
+    // Tchebycheff in zero)
+    if (sol.objs[k] < idealPoint_[k]) {
+      idealPoint_[k] = sol.objs[k] - 1e-3;
+    }
+    // Minimization: Update Nadir (worst value found)
+    if (sol.objs[k] > nadirPoint_[k]) {
+      nadirPoint_[k] = sol.objs[k];
+    }
+  }
+
+
+  // If the meta-heuristic did not provide weights, use the default weights from YAML
   std::vector<double> activeLambda = lambda;
   if (activeLambda.empty()) {
-    if (!defaultWeights_.empty()) { 
-        activeLambda = defaultWeights_; 
-    } else { 
-        activeLambda.assign(sol.objs.size(), 1.0 / sol.objs.size()); 
-    }
+      if (!defaultWeights_.empty()) {
+          activeLambda = defaultWeights_;
+      } else {
+          // Fallback to uniform weights
+          activeLambda.assign(sol.objs.size(), 1.0 / sol.objs.size());
+      }
   }
 
-  #pragma omp critical(scalarization_lock)
-  {
-    
-    if (sol.objs.size() > idealPoint_.size()) {
-        idealPoint_.resize(sol.objs.size(), 1.0e15);
-        nadirPoint_.resize(sol.objs.size(), -1.0e15);
-    }
-
-    for (size_t k = 0; k < sol.objs.size(); ++k) {
-      // Atualiza Ideal: Queremos a MENOR distância possível
-      if (sol.objs[k] < idealPoint_[k]) { 
-          idealPoint_[k] = sol.objs[k]; 
-      }
-      // Atualiza Nadir: Captura a PIOR (maior) distância encontrada
-      if (sol.objs[k] > nadirPoint_[k]) { 
-          nadirPoint_[k] = sol.objs[k]; 
-      }
-    }
-
-    //fprintf(stderr, "[TRACE CORE] Inicio de scalarize. OFV:%f %d \n", sol.ofv, sol.objs.size());
-    // Calcula o OFV com segurança total de memória
-    sol.ofv = scalarizer_->scalarize(sol, activeLambda, idealPoint_, nadirPoint_);
-  }
-
-  //fprintf(stderr, "[TRACE CORE] Fim de decodeSolution. OFV: \n");
+  // Send nadirPoint_ also so that the normalization of the scalarizer works
+  sol.ofv = scalarizer_->scalarize(sol, activeLambda, idealPoint_, nadirPoint_);
 }
 
+// Removed: updateIdealPoint(const std::vector<double>& objs)
+// Reason: This logic was merged and protected with mutex inside
+// decodeSolution.
 
 int RkoSolver::getProblemDimension() const {
   return problemInstance_->getDimension();
@@ -512,18 +542,20 @@ void RkoSolver::initReferencePoints(int nObj) {
   if (nObj <= 1)
     return;
 
-  std::cout << "MultiObjetivo - Inicializando Pontos de Referência" << std::endl;
-  idealPoint_.assign(nObj, 1.0e15); 
-  nadirPoint_.assign(nObj, -1.0e15);  
-  
-  std::cout << "[DEBUG TRACE] Pontos de Referência inicializados e alocados. Tamanho idealPoint_: " << idealPoint_.size() << std::endl;
+  std::cout << "MultiObjetivo - Inicializando Pontos de Referência"
+            << std::endl;
+
+  // Initialize with safe and opposite values - Minimization
+  idealPoint_.assign(nObj, 1.0e15); // Starts very high to go down
+  nadirPoint_.assign(nObj, -1.0e15);  // Starts very low to go up
 }
 
 // -------------------------------------------------------------------------
 // HELPER ACCESSORS
 // -------------------------------------------------------------------------
 std::string RkoSolver::getActiveName(int index) const {
-  if (index < 0 || index >= numActiveMethods_) return "Unknown";
+  if (index < 0 || index >= numActiveMethods_)
+    return "Unknown";
   int registryIndex = activateMethods_[index];
   return algorithmRegistry_[registryIndex].name;
 }

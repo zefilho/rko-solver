@@ -20,8 +20,10 @@ public:
   double scalarize(const TSol &s, const std::vector<double> &lambda,
                    const std::vector<double> &idealPoint, 
                    const std::vector<double> &nadirPoint) override {
-    if (s.objs.empty())
+    if (s.objs.empty()){
+      //fprintf(stderr, "[TRACE CORE] Fim de scalarize. OFV:%f %d \n", s.ofv, s.objs.size());
       return 1e15; // Valor ruim
+    }
 
     double max_dist = -1.0;
     size_t nObj = s.objs.size();
@@ -29,6 +31,7 @@ public:
     // Pesos padrão se vetor vazio
     bool use_default = (lambda.size() != nObj);
     double default_w = 1.0 / (double)nObj;
+    double sum_dist = 0.0;
 
     for (size_t k = 0; k < nObj; ++k) {
       double w = use_default ? default_w : lambda[k];
@@ -44,13 +47,16 @@ public:
       if (range < 1e-9) range = 1e-9; 
 
       // Normalized distance formula
-      double val = w * (diff / range);
+      double norm_dist = diff / range;
+      double val = w * norm_dist;
+      sum_dist += norm_dist;
+
       
       if (val > max_dist) {
         max_dist = val;
       }
     }
-    return max_dist;
+    return max_dist + (0.0001 * sum_dist);
   }
   std::string getName() const override { return "Tchebycheff"; }
 };

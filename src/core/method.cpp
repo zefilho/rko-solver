@@ -235,6 +235,18 @@ TSol Blending(TSol &s1, TSol &s2, double factor, const int n) {
   TSol s;
   s.rk.resize(n);
 
+  // =================================================================
+  // VACINA: Proteção contra vetores vazios (Slots vazios do Pool)
+  // Se qualquer uma das soluções de entrada estiver malformada, 
+  // nós ignoramos a mistura e geramos chaves aleatórias seguras.
+  // =================================================================
+  if (s1.rk.size() < static_cast<size_t>(n) || s2.rk.size() < static_cast<size_t>(n)) {
+      for (int j = 0; j < n; j++) {
+          s.rk[j] = randomico(0, 1);
+      }
+      return s;
+  }
+
   for (int j = 0; j < n; j++) {
     double value;
     if (randomico(0, 1) < 0.02) { // mutation
@@ -253,9 +265,32 @@ TSol Blending(TSol &s1, TSol &s2, double factor, const int n) {
 }
 
 void NelderMeadSearch(TSol &x1, rkolib::RkoSolver &solver) {
-  int poolSize = (int)SOLVER_POOL.size();
-  if (poolSize < 2)
-    return; // Safety
+  TSol x2, x3;
+  int poolSize = 0;
+
+  // =================================================================
+  // VACINA 1: LEITURA PROTEGIDA DO POOL
+  // =================================================================
+  #pragma omp critical
+  {
+    poolSize = (int)SOLVER_POOL.size();
+    
+    // Só sorteia e faz a cópia se o pool for seguro
+    if (poolSize >= 2) {
+      int k1, k2;
+      do {
+        k1 = irandomico(0, poolSize - 1);
+        k2 = irandomico(0, poolSize - 1);
+      } while (k1 == k2);
+
+      // Cópia profunda e 100% protegida das soluções do Pool
+      x2 = SOLVER_POOL[k1];
+      x3 = SOLVER_POOL[k2];
+    }
+  }
+
+  // Se o pool for pequeno demais, aborta a busca local em segurança
+  if (poolSize < 2) return;
 
   TSol x1Origem = x1;
   TSol xBest = x1;
@@ -282,15 +317,15 @@ void NelderMeadSearch(TSol &x1, rkolib::RkoSolver &solver) {
       std::swap(b, c);
   };
 
-  // Random selection of x2 and x3
-  int k1, k2;
-  do {
-    k1 = irandomico(0, poolSize - 1);
-    k2 = irandomico(0, poolSize - 1);
-  } while (k1 == k2);
+  // // Random selection of x2 and x3
+  // int k1, k2;
+  // do {
+  //   k1 = irandomico(0, poolSize - 1);
+  //   k2 = irandomico(0, poolSize - 1);
+  // } while (k1 == k2);
 
-  TSol x2 = SOLVER_POOL[k1];
-  TSol x3 = SOLVER_POOL[k2];
+  // TSol x2 = SOLVER_POOL[k1];
+  // TSol x3 = SOLVER_POOL[k2];
 
   // Sort x1, x2, x3
   sortSimplex(x1, x2, x3);

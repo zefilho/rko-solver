@@ -128,6 +128,8 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
+  //std::cout << "LNS init" << std::endl;
+
   // Create the initial solution with random keys
   CreateInitialSolutions(s, solver.getProblemDimension());
   solver.decodeSolution(s);
@@ -171,6 +173,11 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
                                  (int)(betaMax * solver.getProblemDimension()));
       if (intensity < 1)
         intensity = 1; // Segurança mínima
+
+      // Segurança máxima (A FIX)
+      if (intensity > solver.getProblemDimension()) {
+        intensity = solver.getProblemDimension();
+      }
 
       // define which rk will be deleted - Random Removal
       // 'SOLVER_RNG' vem de Methods.hpp (extern)
@@ -277,6 +284,8 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     // reanneling
     reanneling = 1;
   }
+
+  //std::cout << "LNS end" << std::endl;
 }
 
 } // namespace rkolib::mh

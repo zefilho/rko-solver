@@ -118,6 +118,7 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   solver.decodeSolution(s);
   sBest = s;
 
+  //std::cout << "Debug: SA started" << std::endl;
   // ---------------------------------------------------------------------
   // Main Loop
   // ---------------------------------------------------------------------
@@ -254,6 +255,8 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     // reanneling
     reanneling = 1;
   }
+
+  //std::cout << "Debug: SA finished" << std::endl;
 
   // print policy
   // if (runData.debug and runData.control == 1)
