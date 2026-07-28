@@ -43,6 +43,8 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -77,6 +79,10 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
       // maximum epsilon
       epsilon_max = 1.0;
+
+      // set initial variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
 
       // current state
       iCurr = irandomico(0, numStates - 1);
@@ -115,9 +121,14 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
+      if (0){
       // set Q-Learning parameters
       SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
                      epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                       currentTime, delta);
+      }
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -147,6 +158,9 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // s* <- acceptance criterion (s*, s*', historico)
     if (sBestLine.ofv < sBest.ofv) {
+      //update variance
+      delta = (sBest.ofv - sBestLine.ofv) / (sBest.ofv + math_eps);
+      
       sBest = sBestLine;
       IterImprov = Iter;
       improv = 1;
@@ -163,8 +177,8 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
         improv = 0;
       } else {
         // Protection against division by zero
-        if (std::abs(sBestLine.ofv) > 1e-9)
-          R = (sBest.ofv - sBestLine.ofv) / sBestLine.ofv;
+        if (std::abs(sBestLine.ofv) > math_eps)
+          R = (sBest.ofv - sBestLine.ofv) / (sBestLine.ofv);
         else
           R = 0;
       }
@@ -193,7 +207,6 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     currentTime = (float)(end_timeMH - start_timeMH);
   }
 
-  //std::cout << "Debug: ILS finished" << std::endl;
 }
 
 } // namespace rkolib::mh

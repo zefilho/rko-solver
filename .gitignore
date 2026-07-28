@@ -1056,3 +1056,7 @@ results/
 *.txt
 
 *.md.*
+
+.agents
+.specs
+GEMINI.md

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <random>
 
 namespace rkolib::core {
 
@@ -145,116 +146,215 @@ public:
   }
 
   // =======================================================
-  // MÉTODO DECODE
+  // MÉTODO AUXILIAR: Simula a rota de um dia e verifica viabilidade temporal
+  // Retorna true se a rota é viável; preenche z1 e z2 parciais.
+  // =======================================================
+  struct SimResult {
+    bool viavel;
+    double z1_parcial;
+    double z2_parcial;
+    int visitas;
+    int no_final;   // nó onde o turista termina o dia (hotel ou base)
+  };
+
+  SimResult simulateRoute(const std::vector<int> &rota_dia, int t,
+                          int no_partida, int restaurante, int hotel) const {
+    SimResult res = {true, 0.0, 0.0, 0, no_partida};
+    double tempo = w0;
+    int no_atual = no_partida;
+
+    // Visitar atrações na ordem da rota
+    for (int k = 0; k < static_cast<int>(rota_dia.size()); ++k) {
+      int atr = rota_dia[k];
+      if (atr < 0 || atr >= n) continue;
+
+      double tempo_chegada = tempo + E[no_atual][atr];
+      tempo_chegada = std::max(tempo_chegada, a[atr][t]);
+
+      if (tempo_chegada > b[atr][t]) {
+        res.viavel = false;
+        return res;
+      }
+
+      res.z2_parcial += C[no_atual][atr];
+      int k_safe = std::min(k, n - 1);
+      res.z1_parcial += nos[atr].premio_q + P[k_safe][atr];
+      tempo = tempo_chegada + nos[atr].duracao;
+      no_atual = atr;
+      res.visitas++;
+    }
+
+    // Deslocamento ao restaurante
+    res.z2_parcial += C[no_atual][restaurante];
+    tempo += E[no_atual][restaurante] + nos[restaurante].duracao;
+    no_atual = restaurante;
+
+    // Deslocamento ao hotel
+    if (hotel >= 0 && hotel < n) {
+      res.z2_parcial += C[no_atual][hotel];
+      no_atual = hotel;
+    }
+
+    res.no_final = no_atual;
+    return res;
+  }
+
+  // =======================================================
+  // MÉTODO DECODE (Otimizado com Inserção Híbrida)
   // =======================================================
   void decode(rkolib::core::TSol &s) const override {
     if (s.rk.size() < static_cast<size_t>(getDimension())) return;
-
-    std::vector<double> rk_local = s.rk; 
 
     auto clamp_key = [](double k) {
         if (std::isnan(k) || std::isinf(k)) return 0.0;
         return std::max(0.0, std::min(k, 0.999999));
     };
 
-    int num_atracoes = n; 
+    // --- Layout de Segmentos ---
+    // Segmento A (Prioridades):       s.rk[0        .. n-1]
+    // Segmento B (Fator RCL):         s.rk[n]                  -> 1 ÚNICA CHAVE
+    // Segmento C (Restaurantes):      s.rk[n+1      .. n+T]
+    // Segmento D (Hotéis):            s.rk[n+T+1    .. n+2T-1]
+    int offset_B = n;
+    int offset_C = n + 1;
+    int offset_D = n + 1 + T_dias;
+
+    // 1. Segmento A: Ordenar atrações por prioridade (crescente de chave)
+    std::vector<std::pair<double, int>> prioridade(n);
+    for (int i = 0; i < n; ++i) {
+      prioridade[i] = {clamp_key(s.rk[i]), i};
+    }
+    std::sort(prioridade.begin(), prioridade.end());
+
+    // 2. Semente determinística para o modo aleatório
+    unsigned int semente = 0;
+    for (int i = 0; i < static_cast<int>(s.rk.size()); ++i) {
+      semente ^= static_cast<unsigned int>(s.rk[i] * 1e6) + static_cast<unsigned int>(i);
+    }
+    std::mt19937 local_rng(semente);
+
+    // 3. Pré-selecionar restaurantes e hotéis para cada dia (Segmentos C e D)
+    std::vector<int> restaurantes(T_dias, 0);
+    std::vector<int> hoteis(T_dias, 0);
+
+    for (int t = 0; t < T_dias; ++t) {
+      if (!R[t].empty()) {
+        double ck = clamp_key(s.rk[offset_C + t]);
+        int idx = static_cast<int>(ck * R[t].size());
+        idx = std::max(0, std::min(idx, static_cast<int>(R[t].size()) - 1));
+        restaurantes[t] = R[t][idx];
+      }
+      if (restaurantes[t] < 0 || restaurantes[t] >= n) restaurantes[t] = 0;
+
+      if (t < T_dias - 1 && !H[t].empty()) {
+        double ck = clamp_key(s.rk[offset_D + t]);
+        int idx = static_cast<int>(ck * H[t].size());
+        idx = std::max(0, std::min(idx, static_cast<int>(H[t].size()) - 1));
+        hoteis[t] = H[t][idx];
+      } else {
+        hoteis[t] = 0;
+      }
+      if (hoteis[t] < 0 || hoteis[t] >= n) hoteis[t] = 0;
+    }
+
+    // 4. Construção iterativa das rotas diárias com inserção híbrida
+    std::vector<bool> visitada(n, false);
+    std::vector<std::vector<int>> rotas(T_dias);
     double z1_qualidade = 0.0;
     double z2_distancia = 0.0;
+    int no_atual = 0; // Nó de partida global (aeroporto/base)
 
-    std::vector<std::pair<double, int>> prioridade_atracoes(num_atracoes);
-    for (int i = 0; i < num_atracoes; ++i) {
-      prioridade_atracoes[i] = {clamp_key(rk_local[i]), i};
-    }
-    std::sort(prioridade_atracoes.begin(), prioridade_atracoes.end());
-
-    std::vector<std::vector<int>> atracoes_por_dia(T_dias);
-    std::vector<int> contador_dia(T_dias, 0); 
-    
-    for (int t = 0; t < T_dias; ++t) {
-        atracoes_por_dia[t].resize(st[t], -1); 
-    }
-
-    for (const auto& par : prioridade_atracoes) {
-      int id_atracao = par.second;
-      double chave_dia = clamp_key(rk_local[num_atracoes + id_atracao]);
-      int dia_alocado = static_cast<int>(chave_dia * T_dias);
-      dia_alocado = std::max(0, std::min(dia_alocado, T_dias - 1));
-      
-      if (contador_dia[dia_alocado] < st[dia_alocado]) {
-        atracoes_por_dia[dia_alocado][contador_dia[dia_alocado]] = id_atracao;
-        contador_dia[dia_alocado]++; 
+    // Estrutura auxiliar para ordenar as posições viáveis pelo custo
+    struct PosCusto {
+      int pos;
+      double custo;
+      bool operator<(const PosCusto& outro) const {
+        return custo < outro.custo;
       }
-    }
-
-    int offset_C = 2 * num_atracoes;
-    int offset_D = offset_C + T_dias;
-    int no_atual = 0; 
+    };
 
     for (int t = 0; t < T_dias; ++t) {
-      int restaurante_dia = 0; 
-      if (!R[t].empty()) {
-          double chave_rest = clamp_key(rk_local[offset_C + t]);
-          int idx_rest = static_cast<int>(chave_rest * R[t].size());
-          idx_rest = std::max(0, std::min(idx_rest, static_cast<int>(R[t].size() - 1)));
-          restaurante_dia = R[t][idx_rest];
-      }
+      int visitas_dia = 0;
+      std::vector<PosCusto> posicoes_viaveis;
+      posicoes_viaveis.reserve(n);
 
-      int hotel_noite = -1;
-      if (t < T_dias - 1 && !H[t].empty()) {
-          double chave_hotel = clamp_key(rk_local[offset_D + t]);
-          int idx_hotel = static_cast<int>(chave_hotel * H[t].size());
-          idx_hotel = std::max(0, std::min(idx_hotel, static_cast<int>(H[t].size() - 1)));
-          hotel_noite = H[t][idx_hotel];
-      } else {
-          hotel_noite = 0; 
-      }
+      // Tentar inserir cada atração na rota do dia (por ordem de prioridade)
+      for (const auto &[chave, id_atr] : prioridade) {
+        if (visitada[id_atr]) continue;
+        if (visitas_dia >= st[t]) break;
 
-      if (restaurante_dia < 0 || restaurante_dia >= n) restaurante_dia = 0;
-      if (hotel_noite < 0 || hotel_noite >= n) hotel_noite = 0;
+        if (a[id_atr][t] > b[id_atr][t]) continue;
 
-      double tempo_atual = w0; 
-      int visitas_hoje = 0;
+        posicoes_viaveis.clear();
+        const int limite_posicoes = static_cast<int>(rotas[t].size());
 
-      for (int k = 0; k < contador_dia[t]; ++k) {
-        int proxima_atracao = atracoes_por_dia[t][k];
-        if (proxima_atracao < 0 || proxima_atracao >= n) continue; 
+        // Avalia TODAS as posições de inserção e calcula o custo
+        for (int pos = 0; pos <= limite_posicoes; ++pos) {
+          rotas[t].insert(rotas[t].begin() + pos, id_atr);
+          SimResult sim = simulateRoute(rotas[t], t, no_atual,
+                                        restaurantes[t], hoteis[t]);
+
+          if (sim.viavel) {
+            // Custo de inserção: quanto menor, melhor.
+            double custo = sim.z2_parcial - sim.z1_parcial; 
+            posicoes_viaveis.push_back({pos, custo});
+          }
+
+          rotas[t].erase(rotas[t].begin() + pos);
+        }
+
+        int pos_final = -1;
         
-        double tempo_chegada = tempo_atual + E[no_atual][proxima_atracao];
-        tempo_chegada = std::max(tempo_chegada, a[proxima_atracao][t]);
+        // --- NOVA LÓGICA: Lista Restrita de Candidatos (RCL) ---
+        if (!posicoes_viaveis.empty()) {
+          // 1. Ordena os candidatos do melhor (menor custo) para o pior
+          std::sort(posicoes_viaveis.begin(), posicoes_viaveis.end());
 
-        if (tempo_chegada <= b[proxima_atracao][t]) {
-          z2_distancia += C[no_atual][proxima_atracao];
-          int k_safe = std::min(static_cast<int>(k), n - 1);
-          z1_qualidade += nos[proxima_atracao].premio_q + P[k_safe][proxima_atracao];
-          tempo_atual = tempo_chegada + nos[proxima_atracao].duracao;
-          no_atual = proxima_atracao;
-          visitas_hoje++;
+          // 2. Define o tamanho da lista baseado na única chave do Segmento B
+          double fator_rcl = clamp_key(s.rk[offset_B]);
+          
+          // Tamanho da lista = ceil(fator * total_viaveis). Mínimo de 1 candidato.
+          // Se fator_rcl for 0.0 -> rcl_size = 1 (Puramente Guloso)
+          // Se fator_rcl for quase 1.0 -> rcl_size = todas viáveis (Puramente Aleatório)
+          int rcl_size = std::max(1, static_cast<int>(std::ceil(fator_rcl * posicoes_viaveis.size())));
+          
+          // Limita o tamanho máximo por segurança
+          rcl_size = std::min(rcl_size, static_cast<int>(posicoes_viaveis.size()));
+
+          // 3. Sorteia um candidato APENAS dentre os melhores da lista restrita
+          std::uniform_int_distribution<int> dist(0, rcl_size - 1);
+          pos_final = posicoes_viaveis[dist(local_rng)].pos;
+        }
+
+        // Insere na posição sorteada da RCL
+        if (pos_final >= 0) {
+          rotas[t].insert(rotas[t].begin() + pos_final, id_atr);
+          visitada[id_atr] = true;
+          visitas_dia++;
         }
       }
 
-      if (visitas_hoje < rt[t]) z1_qualidade -= M; 
+      // 5. Avaliar a rota final do dia e acumular objetivos
+      SimResult resultado = simulateRoute(rotas[t], t, no_atual,
+                                          restaurantes[t], hoteis[t]);
+      z1_qualidade += resultado.z1_parcial;
+      z2_distancia += resultado.z2_parcial;
 
-      z2_distancia += C[no_atual][restaurante_dia];
-      tempo_atual += E[no_atual][restaurante_dia] + nos[restaurante_dia].duracao;
-      no_atual = restaurante_dia;
+      if (resultado.visitas < rt[t]) z1_qualidade -= M;
 
-      if (hotel_noite != -1) {
-        z2_distancia += C[no_atual][hotel_noite];
-        no_atual = hotel_noite;
-      }
+      no_atual = resultado.no_final;
     }
 
-    s.objs.assign(nObj, 0.0); 
-
-    // Objetivo 1: Qualidade (Queremos maximizar, então enviamos negativo para o motor minimizar)
-    s.objs[0] = -z1_qualidade; 
-    
-    // Objetivo 2: Distância (Já queremos minimizar, enviamos positivo)
+    // 6. Gravar objetivos
+    s.objs.assign(nObj, 0.0);
+    // Objetivo 1: Qualidade (maximizar -> negativo para minimização do motor)
+    s.objs[0] = -z1_qualidade;
+    // Objetivo 2: Distância (minimizar -> positivo)
     s.objs[1] = z2_distancia;
-    //s.ofv = -z1_qualidade + z2_distancia;
   }
 
-  int getDimension() const override { return (2 * n) + T_dias + (T_dias - 1); }
+  // Dimensão reduzida: n + 3T - 1 (era 2n + 2T - 1)
+  int getDimension() const override { return n + (3 * T_dias) - 1; }
   int getNumObjectives() const override { return nObj; }
 };
 

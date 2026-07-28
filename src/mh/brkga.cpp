@@ -4,6 +4,7 @@
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
 #include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
+#include <cstdlib>
 
 namespace rkolib::mh {
 
@@ -133,6 +134,8 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -171,6 +174,10 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
 
       // maximum epsilon
       epsilon_max = 1.0;
+
+      //variance and epison
+      epsilon = 0.95;
+      delta = 0.0;
 
       // current state
       iCurr = irandomico(0, numStates - 1);
@@ -215,8 +222,16 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       // set Q-Learning parameters
+      if (0) {
       SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
                      epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+          currentTime, delta);
+      }
+
+      // 
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -299,6 +314,9 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     if (Pop[0].ofv < bestInd.ofv) {
       bestGeneration = numGenerations;
       improv = 1;
+
+      delta = (bestInd.ofv - Pop[0].ofv) / (bestInd.ofv + math_eps);
+
       bestInd = Pop[0];
 
       // Update SOLVER_POOL of solutions

@@ -75,6 +75,8 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0;     // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -113,6 +115,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
 
@@ -149,13 +155,24 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     // number of generations
     numGenerations++;
 
+    //best solution found so far
+    double bestOfvStartGen = bestInd.ofv;
+
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      if (0) {
+        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
+                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+          currentTime, delta);
+      }
+
+      //set variance
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -300,9 +317,11 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
+        // update the variance
+        delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
-        if (std::abs(bestOFcurrent) > 1e-9)
-          R = (bestInd.ofv - bestOFcurrent) / bestOFcurrent;
+        if (std::abs(bestOFcurrent) > math_eps)
+          R = (bestInd.ofv - bestOFcurrent) / (bestOFcurrent + math_eps);
         else
           R = 0;
       }

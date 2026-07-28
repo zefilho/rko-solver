@@ -30,173 +30,119 @@ public:
 };
 } // namespace rkolib::core
 
-// ---------------------------------------------------------
-// ESTRUTURA DO NÓ
-// ---------------------------------------------------------
 struct No {
   int id;
   double x, y;
-  double duracao;  // d_i
-  double premio_q; // q_i
+  double duracao; 
+  double premio_q; 
 };
-
-// ---------------------------------------------------------
-// CLASSE DO PROBLEMA
-// ---------------------------------------------------------
 
 class TouristProblem : public rkolib::core::IProblem {
 private:
   int nObj;
-  
-  // Parâmetros da Instância
   int n;
   double M, w0;
   int T_dias;
 
   std::vector<No> nos;
-  std::vector<std::vector<double>> a; // janelas de abertura  a[i][t]
-  std::vector<std::vector<double>> b; // janelas de fechamento b[i][t]
-  std::vector<int> rt;                // mínimo de atrações por dia
-  std::vector<int> st;                // máximo de atrações por dia
-  std::vector<std::vector<double>> P; // prêmios por ordem   P[k][i]
-  std::vector<std::vector<double>> C; // distâncias          C[i][j]
-  std::vector<std::vector<double>> E; // tempos de viagem    E[i][j]
-  std::vector<std::vector<int>> R;    // restaurantes por dia R[t]
-  std::vector<std::vector<int>> H;    // hotéis por dia       H[t]
+  std::vector<std::vector<double>> a, b, P, C, E;
+  std::vector<int> rt, st;
+  std::vector<std::vector<int>> R, H;
 
-  // ---------------------------------------------------------
-  // UTILITÁRIOS DE LEITURA (Privados)
-  // ---------------------------------------------------------
   void pularAte(std::ifstream& file, const std::string& marcador) {
     std::string linha;
     while (std::getline(file, linha)) {
-      if (linha.find(marcador) != std::string::npos)
-        return;
+      if (linha.find(marcador) != std::string::npos) return;
     }
-    throw std::runtime_error("Marcador nao encontrado no arquivo: " + marcador);
+    throw std::runtime_error("Marcador nao encontrado: " + marcador);
   }
 
   std::string valorApos(const std::string& token) {
     size_t pos = token.find('=');
-    if (pos == std::string::npos)
-      throw std::runtime_error("Token invalido, esperado '=': " + token);
+    if (pos == std::string::npos) return "0";
     return token.substr(pos + 1);
   }
 
   std::vector<std::vector<double>> lerMatrizDouble(std::ifstream& file, int linhas, int colunas) {
-    std::vector<std::vector<double>> mat(linhas, std::vector<double>(colunas));
+    std::vector<std::vector<double>> mat(linhas, std::vector<double>(colunas, 0.0));
     for (int i = 0; i < linhas; ++i) {
       for (int j = 0; j < colunas; ++j) {
-        file >> mat[i][j];
+        if (!(file >> mat[i][j])) mat[i][j] = 0.0; // Prevenção de EOF
       }
     }
     return mat;
   }
 
 public:
-  // Inicializa o problema como bi-objetivo (nObj = 2)
   TouristProblem() : nObj(2), n(0), M(0.0), w0(0.0), T_dias(0) {}
-
   ~TouristProblem() override = default;
 
-  // =======================================================
-  // MÉTODO LOAD
-  // =======================================================
   void load(const std::string &nomeArquivo) override {
     std::ifstream file(nomeArquivo);
-    if (!file.is_open()) {
-      throw std::runtime_error("Erro ao abrir o arquivo da instancia: " + nomeArquivo);
-    }
+    if (!file.is_open()) throw std::runtime_error("Erro abrir: " + nomeArquivo);
 
     std::string token, linha;
 
-    // 0. PARAMETROS_GERAIS
     pularAte(file, "PARAMETROS_GERAIS");
     file >> token; n = std::stoi(valorApos(token));
     file >> token; M = std::stod(valorApos(token));
     file >> token; w0 = std::stod(valorApos(token));
     file >> token; T_dias = std::stoi(valorApos(token));
 
-    // 1. LIMITES_ATRACOES_POR_DIA
+    // VALIDAÇÃO CRÍTICA DE LIMITES
+    if (n <= 0) n = 1;
+    if (T_dias <= 0) T_dias = 1;
+
     pularAte(file, "LIMITES_ATRACOES_POR_DIA");
-    rt.resize(T_dias);
-    st.resize(T_dias);
+    rt.resize(T_dias, 0);
+    st.resize(T_dias, 0);
     for (int t = 0; t < T_dias; ++t) {
-      int dia, rmin, smax;
+      int dia = 0, rmin = 0, smax = 0;
       file >> dia >> rmin >> smax;
-      rt[t] = rmin;
-      st[t] = smax;
+      
+      // VACINA 1: Impede Segfault de Alocação Gigante ou Negativa
+      rt[t] = std::max(0, rmin);
+      st[t] = std::max(0, std::min(smax, n)); 
     }
 
-    // 2. TABELA_NOS
     pularAte(file, "TABELA_NOS");
     nos.resize(n);
     for (int i = 0; i < n; ++i) {
       No no;
-      file >> no.id >> no.x >> no.y >> no.duracao >> no.premio_q;
-      nos[i] = no;
+      if (file >> no.id >> no.x >> no.y >> no.duracao >> no.premio_q) nos[i] = no;
     }
 
-    // 3 e 4. JANELAS DE TEMPO (A e B)
-    pularAte(file, "JANELAS_TEMPO_ABERTURA_A");
-    a = lerMatrizDouble(file, n, T_dias);
+    pularAte(file, "JANELAS_TEMPO_ABERTURA_A"); a = lerMatrizDouble(file, n, T_dias);
+    pularAte(file, "JANELAS_TEMPO_FECHAMENTO_B"); b = lerMatrizDouble(file, n, T_dias);
+    pularAte(file, "MATRIZ_PREMIOS_ORDEM_P"); P = lerMatrizDouble(file, n, n);
+    pularAte(file, "MATRIZ_DISTANCIAS_C"); C = lerMatrizDouble(file, n, n);
+    pularAte(file, "MATRIZ_TEMPO_VIAGEM_E"); E = lerMatrizDouble(file, n, n);
 
-    pularAte(file, "JANELAS_TEMPO_FECHAMENTO_B");
-    b = lerMatrizDouble(file, n, T_dias);
-
-    // 5, 6 e 7. MATRIZES P, C e E
-    pularAte(file, "MATRIZ_PREMIOS_ORDEM_P");
-    P = lerMatrizDouble(file, n, n);
-
-    pularAte(file, "MATRIZ_DISTANCIAS_C");
-    C = lerMatrizDouble(file, n, n);
-
-    pularAte(file, "MATRIZ_TEMPO_VIAGEM_E");
-    E = lerMatrizDouble(file, n, n);
-
-    // 8. RESTAURANTES_R
     pularAte(file, "RESTAURANTES_R");
     R.resize(T_dias);
     for (int t = 0; t < T_dias; ++t) {
       std::getline(file, linha);
       std::istringstream ss(linha);
-      std::string prefixo;
-      ss >> prefixo; 
+      std::string prefixo; ss >> prefixo; 
       int id;
       while (ss >> id) {
         int idx = id - 1;
-        if (idx >= 0 && idx < n) {
-          R[t].push_back(idx); 
-        } else {
-          std::cerr << "[Aviso] ID de Restaurante fora do limite n: " << id << ". Ignorado.\n";
-        }
-      }
-      if(R[t].empty()) {
-          throw std::runtime_error("Nenhum restaurante valido para o dia " + std::to_string(t+1));
+        if (idx >= 0 && idx < n) R[t].push_back(idx); 
       }
     }
 
-    // 9. HOTEIS_H
     pularAte(file, "HOTEIS_H");
-    H.resize(T_dias - 1);
+    H.resize(T_dias > 1 ? T_dias - 1 : 1);
     for (int t = 0; t < T_dias - 1; ++t) {
       std::getline(file, linha);
       std::istringstream ss(linha);
-      std::string prefixo;
-      ss >> prefixo; 
+      std::string prefixo; ss >> prefixo; 
       int id;
       while (ss >> id) {
         int idx = id - 1;
-        if (idx >= 0 && idx < n) {
-          H[t].push_back(idx); 
-        } else {
-          std::cerr << "[Aviso] ID de Hotel fora do limite n: " << id << ". Ignorado.\n";
-        }
+        if (idx >= 0 && idx < n) H[t].push_back(idx); 
       }
     }
-    
-    std::cout << "[DEBUG] Instancia carregada com sucesso: n=" << n 
-              << ", Dias=" << T_dias << std::endl;
   }
 
   // =======================================================
@@ -261,9 +207,7 @@ public:
 
     auto clamp_key = [](double k) {
         if (std::isnan(k) || std::isinf(k)) return 0.0;
-        if (k < 0.0) return 0.0;
-        if (k > 0.999999) return 0.999999;
-        return k;
+        return std::max(0.0, std::min(k, 0.999999));
     };
 
     // --- Layout de Segmentos ---
@@ -324,6 +268,9 @@ public:
       bool modo_guloso = (clamp_key(s.rk[offset_B + t]) < 0.5);
       int visitas_dia = 0;
 
+      std::vector<int> posicoes_viaveis;
+      posicoes_viaveis.reserve(n);
+
       // Tentar inserir cada atração na rota do dia (por ordem de prioridade)
       for (const auto &[chave, id_atr] : prioridade) {
         if (visitada[id_atr]) continue;
@@ -333,17 +280,27 @@ public:
         if (a[id_atr][t] > b[id_atr][t]) continue;
 
         // Avaliar inserção em todas as posições possíveis da rota atual
+        posicoes_viaveis.clear();
         int melhor_pos = -1;
         double melhor_custo = std::numeric_limits<double>::infinity();
-        std::vector<int> posicoes_viaveis;
+        //std::vector<int> posicoes_viaveis;
 
-        for (int pos = 0; pos <= static_cast<int>(rotas[t].size()); ++pos) {
+        const int limite_posicoes = static_cast<int>(rotas[t].size());
+
+        for (int pos = 0; pos <= limite_posicoes; ++pos) {
           // Criar rota candidata com a atração inserida na posição 'pos'
-          std::vector<int> rota_teste = rotas[t];
-          rota_teste.insert(rota_teste.begin() + pos, id_atr);
+          
+          //código original
+          //std::vector<int> rota_teste = rotas[t];
+          //rota_teste.insert(rota_teste.begin() + pos, id_atr);
+          //SimResult sim = simulateRoute(rota_teste, t, no_atual,
+          //                              restaurantes[t], hoteis[t]);
 
-          SimResult sim = simulateRoute(rota_teste, t, no_atual,
+          //codigo otimizado sem copias
+          rotas[t].insert(rotas[t].begin() + pos, id_atr);
+          SimResult sim = simulateRoute(rotas[t], t, no_atual,
                                         restaurantes[t], hoteis[t]);
+
           if (sim.viavel) {
             if (modo_guloso) {
               // Guloso: minimiza incremento de distância
@@ -357,6 +314,8 @@ public:
               posicoes_viaveis.push_back(pos);
             }
           }
+
+          rotas[t].erase(rotas[t].begin() + pos);
         }
 
         // Determinar a posição final de inserção
@@ -388,40 +347,24 @@ public:
     }
 
     // 6. Gravar objetivos
-    if (s.objs.size() != static_cast<size_t>(nObj)) return;
+    s.objs.assign(nObj, 0.0);
     // Objetivo 1: Qualidade (maximizar -> negativo para minimização do motor)
     s.objs[0] = -z1_qualidade;
     // Objetivo 2: Distância (minimizar -> positivo)
     s.objs[1] = z2_distancia;
   }
 
-  // =======================================================
-  // INFORMAÇÕES DO PROBLEMA
-  // =======================================================
   // Dimensão reduzida: n + 3T - 1 (era 2n + 2T - 1)
   int getDimension() const override { return n + (3 * T_dias) - 1; }
   int getNumObjectives() const override { return nObj; }
 };
 
-// ---------------------------------------------------------
-// EXPORTAÇÃO DO PLUGIN (Contrato C)
-// ---------------------------------------------------------
 extern "C" {
   #ifdef _WIN32
-    __declspec(dllexport) rkolib::core::IProblem *create_problem() {
-      return new TouristProblem();
-    }
-    __declspec(dllexport) void destroy_problem(rkolib::core::IProblem *p) {
-      delete p;
-    }
+    __declspec(dllexport) rkolib::core::IProblem *create_problem() { return new TouristProblem(); }
+    __declspec(dllexport) void destroy_problem(rkolib::core::IProblem *p) { delete p; }
   #else
-    __attribute__((visibility("default"))) rkolib::core::IProblem *
-    create_problem() {
-      return new TouristProblem();
-    }
-    __attribute__((visibility("default"))) void
-    destroy_problem(rkolib::core::IProblem *p) {
-      delete p;
-    }
+    __attribute__((visibility("default"))) rkolib::core::IProblem *create_problem() { return new TouristProblem(); }
+    __attribute__((visibility("default"))) void destroy_problem(rkolib::core::IProblem *p) { delete p; }
   #endif
 }

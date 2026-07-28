@@ -72,6 +72,8 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9;
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -115,6 +117,10 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //initial epsilon and delta
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
 
@@ -145,10 +151,18 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
       // Q-Learning Update Phase (Pre-Action)
       if (runData.control == 1 && !S.empty()) {
-        // set Q-Learning parameters
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
-                       epsilon_min, epsilon, lf, df,
-                       (int)(runData.MAXTIME * runData.restart));
+        if (0) {
+          // set Q-Learning parameters
+          SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
+                         epsilon_min, epsilon, lf, df,
+                         (int)(runData.MAXTIME * runData.restart));
+        } else {
+          // set Q-Learning parameters
+          SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                        currentTime, delta);
+        }
+
+        delta = 0.0;
 
         // choose a action at for current state st
         at = ChooseAction(S, st, epsilon);
@@ -225,9 +239,9 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
         s = sLineBest;
 
         if (s.ofv < sBest.ofv) {
+          delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
           sBest = s;
           improv = 1;
-
           // update the SOLVER_POOL of solutions
           UpdatePoolSolutions(s, method, runData.debug);
         }

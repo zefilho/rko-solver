@@ -246,13 +246,16 @@ void RkoSolver::run() {
   std::cout << "\n[Info] Instance: " << instancePath_
             << "\n[Info] Methods:  " << numActiveMethods_
             << "\n[Info] Runs:     " << runData_.MAXRUNS
-            << "\n[Info] Time Limit: " << runData_.MAXTIME << "s"
-            << "\n\nProgress: " << std::flush;
+            << "\n[Info] Time Limit: " << runData_.MAXTIME << "s" << std::endl;
+
+  std::cout << "\nProcessing: " << std::flush;
+  char spinner[] = {'|', '/', '-', '\\'};
 
   for (int run = 0; run < runData_.MAXRUNS; ++run) {
-    std::cout << "[" << (run + 1) << "] " << std::flush;
-    executeRun(run);
+      std::cout << "\rProcessing: " << spinner[run % 4] << " [" << (run + 1) << "]" << std::flush;
+      executeRun(run);
   }
+  std::cout << "\rProcessing: Pronto!       \n" << std::endl;
 
   computeFinalStatistics();
   displayResults();
@@ -267,7 +270,13 @@ void RkoSolver::run() {
 
   if (runData_.debug == 0) { 
       utils::WriteSolution(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension);
-      utils::WriteResults(activeAlgorithms, bestObjective_, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+      
+      if(problemInstance_->getNumObjectives() > 1){
+        utils::WriteMultiObjectiveResults(activeAlgorithms, bestObjective_, bestSolutionGlobal_.objs, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+      } else {
+        utils::WriteResults(activeAlgorithms, bestObjective_, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+      }
+      
   } else {
       auto& ctx = core::SolverContext::instance();
       utils::WriteSolutionScreen(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension, ctx.getPool());
@@ -508,15 +517,19 @@ int RkoSolver::getProblemDimension() const {
   return problemInstance_->getDimension();
 }
 
+int RkoSolver::getNumObjectives() const {
+  return problemInstance_->getNumObjectives();
+}
+
 void RkoSolver::initReferencePoints(int nObj) {
   if (nObj <= 1)
     return;
 
-  std::cout << "MultiObjetivo - Inicializando Pontos de Referência" << std::endl;
+  //std::cout << "MultiObjetivo - Inicializando Pontos de Referência" << std::endl;
   idealPoint_.assign(nObj, 1.0e15); 
   nadirPoint_.assign(nObj, -1.0e15);  
   
-  std::cout << "[DEBUG TRACE] Pontos de Referência inicializados e alocados. Tamanho idealPoint_: " << idealPoint_.size() << std::endl;
+  //std::cout << "[DEBUG TRACE] Pontos de Referência inicializados e alocados. Tamanho idealPoint_: " << idealPoint_.size() << std::endl;
 }
 
 // -------------------------------------------------------------------------

@@ -357,6 +357,8 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0;     // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -395,6 +397,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
       // maximum epsilon
       epsilon_max = 1.0;
+
+      //variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
 
       // current state
       iCurr = irandomico(0, numStates - 1);
@@ -443,13 +449,24 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
     // number of generations without improvement in the best solution
     noImprovBRKGA++;
 
+    //best solution found so far
+    double bestOfvStartGen = bestInd.ofv;
+
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      if (0) {
+        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
+                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+          currentTime, delta);
+      }
+
+      //set variance
+      delta = 0.0;
 
       // choose a action a_t for current state s_t
       at = ChooseAction(S, st, epsilon);
@@ -526,10 +543,12 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
         // fitness and binary reward
         R = 1.0 + 1.0 / (double)p;
         improv = 0;
+        // update the variance
+        delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
         // Protection against division by zero
-        if (std::abs(bestOFV) > 1e-9)
-          R = (bestInd.ofv - bestOFV) / bestOFV;
+        if (std::abs(bestOFV) > math_eps)
+          R = (bestInd.ofv - bestOFV) / (bestOFV + math_eps);
         else
           R = 0;
       }

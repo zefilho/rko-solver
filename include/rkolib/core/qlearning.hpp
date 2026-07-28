@@ -33,5 +33,12 @@ namespace rkolib::core {
     void SetQLParameter(float currentTime, int &Ti, int &restartEpsilon, 
                         float epsilon_max, float epsilon_min, 
                         double &epsilon, double &lf, double &df, int MAXTIME);
+    
+    /**
+     * Method: SetQLParameter
+     * Description: Update the parameters of the Q-Learning method (epsilon decay, learning rate)
+     */
+    void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME, 
+        float currentTime, float delta);
 
 } // namespace rkolib::core

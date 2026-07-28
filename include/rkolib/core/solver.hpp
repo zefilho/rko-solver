@@ -56,6 +56,7 @@ public:
   void decodeSolution(core::TSol &sol, const std::vector<double> &lambda = {});
 
   int getProblemDimension() const;
+  int getNumObjectives() const;
   const std::vector<double> &getIdealPoint() const { return idealPoint_; }
   const std::vector<double> &getNadirPoint() const { return nadirPoint_; }
 

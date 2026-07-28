@@ -51,6 +51,8 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // std::vector <std::vector <TQ> > Q; // (Nota: Não utilizado no original)
   // std::vector<int> ai;               // (Nota: Não utilizado no original)
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta_q = 0.0;   // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -94,6 +96,9 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      epsilon = 0.95;
+      delta_q = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
 
@@ -132,12 +137,23 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // Temperature Loop
     while (T > 0.0001 && currentTime < runData.MAXTIME * runData.restart) {
+      
+      double bestOfvStartGen = sBest.ofv;
+      
       // Q-Learning Update (Pre-Action)
       if (runData.control == 1 && !S.empty()) {
-        // set Q-Learning parameters
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
-                       epsilon_min, epsilon, lf, df,
-                       (int)(runData.MAXTIME * runData.restart));
+
+        if(0){
+          // set Q-Learning parameters
+          SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
+                         epsilon_min, epsilon, lf, df,
+                         (int)(runData.MAXTIME * runData.restart));
+        } else {
+          SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                         currentTime, delta_q);
+        }
+        //reset delta
+        delta_q = 0.0;
 
         // choose a action at for current state st
         at = ChooseAction(S, st, epsilon);
@@ -205,8 +221,9 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
         if (improv) {
           R = 1;
           improv = 0;
+          delta_q = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
         } else {
-          if (std::abs(bestOFV) > 1e-9)
+          if (std::abs(bestOFV) > math_eps)
             R = (sBest.ofv - bestOFV) / bestOFV;
           else
             R = 0;

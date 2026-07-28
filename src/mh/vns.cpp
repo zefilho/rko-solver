@@ -43,6 +43,8 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -79,6 +81,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      // set initial variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
 
@@ -113,11 +119,23 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // run the search process until stop criterion
   //std::cout << "VNS init" << std::endl;
   while (currentTime < runData.MAXTIME * runData.restart) {
+
+    //best solution found so far
+    double bestOfvStartGen = sBest.ofv;
+
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
+      if (0){
       // set Q-Learning parameters
       SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
                      epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                       currentTime, delta);
+      }
+
+      //set variance
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -187,9 +205,11 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
+        delta = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
+
       } else {
         // Evita divisão por zero
-        if (std::abs(s.ofv) > 1e-9)
+        if (std::abs(s.ofv) > math_eps)
           R = (sBest.ofv - s.ofv) / s.ofv;
         else
           R = 0;
@@ -216,11 +236,6 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     }
   }
 
-  //std::cout << "VNS end" << std::endl;
-
-  // print policy (commented in original)
-  // if (runData.debug and runData.control == 1)
-  //     PrintPolicy(S, st);
 }
 
 } // namespace rkolib::mh

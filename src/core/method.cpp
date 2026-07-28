@@ -53,29 +53,35 @@ void CreateInitialSolutions(TSol &s, const int n) {
 }
 
 void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool) {
-// Note: Accesses the global variable 'SOLVER_POOL'
-#pragma omp critical
+
+  // 1. Definição Dinâmica do Tamanho do Pool
+  int actualSizePool = sizePool;
+  if (solver.getNumObjectives() > 1) { 
+      actualSizePool = sizePool * 2;
+  }
+
+  #pragma omp critical
   {
     auto &ctx = SolverContext::instance();
-    if (ctx.getPool().size() != (size_t)sizePool) {
-      ctx.initializePool(sizePool);
+    if (ctx.getPool().size() != (size_t)actualSizePool) {
+      ctx.initializePool(actualSizePool);
     }
 
-    for (int i = 0; i < sizePool; i++) {
+    for (int i = 0; i < actualSizePool; i++) {
       CreateInitialSolutions(SOLVER_POOL[i], solver.getProblemDimension());
       solver.decodeSolution(SOLVER_POOL[i]); // Calls external Decoder
       SOLVER_POOL[i].best_time = get_time_in_seconds();
     }
 
     // sort SOLVER_POOL in increasing order of fitness
-    std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + sizePool,
+    std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + actualSizePool,
               sortByFitness);
 
     // verify if similar solutions exist in the SOLVER_POOL
     int clone = 0;
-    // Note: original reverse loop maintained, but check if sizePool <=
+    // Note: original reverse loop maintained, but check if actualSizePool <=
     // SOLVER_POOL.size()
-    for (int i = sizePool - 1; i > 0; i--) {
+    for (int i = actualSizePool - 1; i > 0; i--) {
       if (std::abs(SOLVER_POOL[i].ofv - SOLVER_POOL[i - 1].ofv) <
           1e-9) { // Safe double comparison
         for (int j = 0; j < 0.2 * solver.getProblemDimension(); j++) {
@@ -89,7 +95,7 @@ void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool) {
 
     // sort SOLVER_POOL again if clones were mutated
     if (clone) {
-      std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + sizePool,
+      std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + actualSizePool,
                 sortByFitness);
     }
   }
@@ -110,62 +116,307 @@ inline double CosineSimilarity(const std::vector<double>& a, const std::vector<d
     return dot / (std::sqrt(norm_a) * std::sqrt(norm_b));
 }
 
-void UpdatePoolSolutions(TSol s, const char *mh, const int debug) {
-  #pragma omp critical
+// void UpdatePoolSolutions(TSol s, const char *mh, const int debug) {
+  
+//   #pragma omp critical(pool_lock)
+//   {
+//     int pool_size = static_cast<int>(SOLVER_POOL.size());
+    
+//     // Only proceed if the pool is initialized
+//     if (pool_size > 0) {
+        
+//         // ====================================================================
+//         // 1. GUARDIÃO MULTI-OBJETIVO: Filtro de Dominância de Pareto
+//         // ====================================================================
+//         if (s.objs.size() > 1) {
+//             bool is_dominated = false;
+//             for (const auto& pool_sol : SOLVER_POOL) {
+//                 // Checagens para Minimização
+//                 bool strictly_better = false;
+//                 bool worse_in_any = false;
+                
+//                 for (size_t k = 0; k < s.objs.size(); ++k) {
+//                     // Tolerância epsilon (1e-9) para erros de precisão
+//                     if (pool_sol.objs[k] > s.objs[k] + 1e-9) worse_in_any = true;
+//                     if (pool_sol.objs[k] < s.objs[k] - 1e-9) strictly_better = true;
+//                 }
+                
+//                 if (!worse_in_any && strictly_better) {
+//                     is_dominated = true;
+//                     break; 
+//                 }
+//             }
+            
+//             // Rejeição imediata se for dominada
+//             if (is_dominated) return; 
+//         }
+
+//         // ====================================================================
+//         // 2. Filtro de Existência (Evita clones perfeitos de OFV escalarizado)
+//         // ====================================================================
+//         bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto &entry) {
+//             return std::abs(entry.ofv - s.ofv) < 1e-9;
+//         });
+
+//         // 3. Entry Filter: Only accept if it doesn't exist AND is strictly better than the worst
+//         if (!exists && s.ofv < SOLVER_POOL.back().ofv) {
+            
+//             // The solution is accepted! Update its metadata.
+//             s.best_time = get_time_in_seconds();
+//             s.nameMH = mh;
+
+//             // Log globally if a new overall best solution is found
+//             if (s.ofv < SOLVER_POOL[0].ofv && debug) {
+//                 int thread_id = omp_get_thread_num();
+//                 std::cout << std::format("\nBest solution: {:.10f} (Thread: {} - MH: {})",
+//                                          s.ofv, thread_id, mh);
+//             }
+
+//             // ====================================================================
+//             // 4. Estratégia de Diversidade (Cosine Similarity)
+//             // ====================================================================
+//             int start_idx = std::max(1, pool_size / 2); 
+//             int target_idx = pool_size - 1; // Default victim is the absolute worst
+//             double max_sim = -2.0;          
+
+//             for (int i = start_idx; i < pool_size; i++) {
+//                 // Extra safeguard: the victim MUST have a worse objective function value
+//                 if (SOLVER_POOL[i].ofv > s.ofv) {
+//                     double sim = rkolib::core::CosineSimilarity(s.rk, SOLVER_POOL[i].rk);
+                    
+//                     if (sim > max_sim) {
+//                         max_sim = sim;
+//                         target_idx = i;
+//                     }
+//                 }
+//             }
+
+//             // 5. Substituição tática
+//             SOLVER_POOL[target_idx] = s;
+
+//             // 6. Reordena o pool para manter o invariante 
+//             // (Ordemos pelo Tchebycheff/OFV Escalarizado para apoiar o MOEA/D)
+//             std::ranges::sort(SOLVER_POOL, [](const TSol& a, const TSol& b) {
+//                 return a.ofv < b.ofv; // Ascending order
+//             });
+            
+//         } // End of conditional entry
+//     } // End of pool_size check
+//   } // End of #pragma omp critical(pool_lock)
+// }
+
+void UpdatePoolSolutions(core::TSol s, const char *mh, const int debug) {
+  #pragma omp critical(pool_lock)
   {
     int pool_size = static_cast<int>(SOLVER_POOL.size());
-    
-    // Only proceed if the pool is initialized
-    if (pool_size > 0) {
-        
-        // 1. Check if the solution already exists in the pool (exact fitness match)
-        bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto &entry) {
-            return std::abs(entry.ofv - s.ofv) < 1e-9;
-        });
+    if (pool_size == 0) return;
 
-        // 2. Entry Filter: Only accept if it doesn't exist AND is strictly better than the worst
-        if (!exists && s.ofv < SOLVER_POOL.back().ofv) {
+    bool is_mo = s.objs.size() > 1;
+
+    // ====================================================================
+    // 1. Filtro de Clones Exatos (Objetivos Reais)
+    // ====================================================================
+    bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto &entry) {
+        if (is_mo) {
+            for (size_t k = 0; k < s.objs.size(); ++k)
+                if (std::abs(entry.objs[k] - s.objs[k]) > 1e-9) return false;
+            return true;
+        }
+        return std::abs(entry.ofv - s.ofv) < 1e-9;
+    });
+
+    if (exists) return; // Descarte imediato
+
+    // Atualiza metadados
+    s.best_time = get_time_in_seconds();
+    s.nameMH = mh;
+
+    // Se for Mono-Objetivo, mantém a lógica antiga simplificada
+    if (!is_mo) {
+        if (s.ofv < SOLVER_POOL.back().ofv) {
+            SOLVER_POOL.back() = s;
+            std::ranges::sort(SOLVER_POOL, [](const auto& a, const auto& b) { return a.ofv < b.ofv; });
             
-            // The solution is accepted! Update its metadata.
-            s.best_time = get_time_in_seconds();
-            s.nameMH = mh;
-
-            // Log globally if a new overall best solution is found
             if (s.ofv < SOLVER_POOL[0].ofv && debug) {
-                int thread_id = omp_get_thread_num();
-                std::cout << std::format("\nBest solution: {:.10f} (Thread: {} - MH: {})",
-                                         s.ofv, thread_id, mh);
+                std::cout << std::format("\nBest (Mono): {:.6f} (T-{} | MH: {})", s.ofv, omp_get_thread_num(), mh);
+            }
+        }
+        return;
+    }
+
+    // ====================================================================
+    // 2. LÓGICA NSGA-II (Fast Non-Dominated Sorting & Crowding Distance)
+    // ====================================================================
+    
+    // Cria população unida N+1
+    std::vector<core::TSol> combined = SOLVER_POOL;
+    combined.push_back(s);
+    int N_plus_1 = combined.size();
+
+    // Estruturas auxiliares para o NSGA-II
+    std::vector<int> rank(N_plus_1, 0);
+    std::vector<double> cd(N_plus_1, 0.0);
+    std::vector<std::vector<int>> S_dom(N_plus_1); // Soluções dominadas por i
+    std::vector<int> n_dom(N_plus_1, 0); // Quantas dominam i
+    std::vector<std::vector<int>> fronts(1);
+
+    // Passo 2.1: Identificação de Fronteiras (Fast Non-Dominated Sort)
+    for (int p = 0; p < N_plus_1; p++) {
+        for (int q = 0; q < N_plus_1; q++) {
+            if (p == q) continue;
+            
+            bool p_dominates_q = false;
+            bool q_dominates_p = false;
+            bool p_strictly_better = false;
+            bool q_strictly_better = false;
+
+            for (size_t k = 0; k < s.objs.size(); k++) {
+                if (combined[p].objs[k] < combined[q].objs[k] - 1e-9) p_strictly_better = true;
+                if (combined[q].objs[k] < combined[p].objs[k] - 1e-9) q_strictly_better = true;
             }
 
-            // 3. Diversity Strategy (Cosine Similarity Replacement)
-            int start_idx = std::max(1, pool_size / 2); 
-            int target_idx = pool_size - 1; // Default victim is the absolute worst
-            double max_sim = -2.0;          
+            if (p_strictly_better && !q_strictly_better) p_dominates_q = true;
+            if (q_strictly_better && !p_strictly_better) q_dominates_p = true;
 
-            for (int i = start_idx; i < pool_size; i++) {
-                // Extra safeguard: the victim MUST have a worse objective function value
-                if (SOLVER_POOL[i].ofv > s.ofv) {
-                    double sim = rkolib::core::CosineSimilarity(s.rk, SOLVER_POOL[i].rk);
-                    
-                    if (sim > max_sim) {
-                        max_sim = sim;
-                        target_idx = i;
-                    }
+            if (p_dominates_q) S_dom[p].push_back(q);
+            else if (q_dominates_p) n_dom[p]++;
+        }
+
+        if (n_dom[p] == 0) {
+            rank[p] = 1;
+            fronts[0].push_back(p);
+        }
+    }
+
+    // Define fronteiras subsequentes
+    int i = 0;
+    while (!fronts[i].empty()) {
+        std::vector<int> next_front;
+        for (int p : fronts[i]) {
+            for (int q : S_dom[p]) {
+                n_dom[q]--;
+                if (n_dom[q] == 0) {
+                    rank[q] = i + 2;
+                    next_front.push_back(q);
                 }
             }
+        }
+        i++;
+        if (!next_front.empty()) fronts.push_back(next_front);
+    }
 
-            // 4. Perform the tactical replacement
-            SOLVER_POOL[target_idx] = s;
-
-            // 5. Re-sort the entire pool to maintain the ordering invariant
-            std::ranges::sort(SOLVER_POOL, [](const TSol& a, const TSol& b) {
-                return a.ofv < b.ofv; // Ascending order
+    // Passo 2.2: Cálculo do Crowding Distance
+    int num_objs = s.objs.size();
+    for (const auto& front : fronts) {
+        if (front.empty()) continue;
+        
+        int l = front.size();
+        for (int idx : front) cd[idx] = 0.0; // Reseta distâncias
+        
+        for (int m = 0; m < num_objs; m++) {
+            // Ordena a fronteira pelo objetivo 'm'
+            std::vector<int> sorted_front = front;
+            std::ranges::sort(sorted_front, [&](int a, int b) {
+                return combined[a].objs[m] < combined[b].objs[m];
             });
-            
-        } // End of conditional entry
-    } // End of pool_size check
-  } // End of #pragma omp critical (All threads exit here cleanly, unlocking the mutex)
+
+            // Extremos recebem distância infinita para sempre serem preservados
+            cd[sorted_front[0]] = std::numeric_limits<double>::infinity();
+            cd[sorted_front[l - 1]] = std::numeric_limits<double>::infinity();
+
+            double obj_min = combined[sorted_front[0]].objs[m];
+            double obj_max = combined[sorted_front[l - 1]].objs[m];
+            double delta = obj_max - obj_min;
+            if (delta < 1e-9) delta = 1.0; // Previne divisão por zero
+
+            for (int j = 1; j < l - 1; j++) {
+                if (cd[sorted_front[j]] != std::numeric_limits<double>::infinity()) {
+                    cd[sorted_front[j]] += (combined[sorted_front[j + 1]].objs[m] - 
+                                            combined[sorted_front[j - 1]].objs[m]) / delta;
+                }
+            }
+        }
+    }
+
+    // Passo 2.3: Operador de Comparação (Crowded-Comparison)
+    std::vector<int> indices(N_plus_1);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // O melhor é quem tem o Menor Rank. 
+    // Em caso de empate no Rank, o melhor é quem tem MAIOR Crowding Distance.
+    std::ranges::sort(indices, [&](int a, int b) {
+        if (rank[a] != rank[b]) return rank[a] < rank[b];
+        return cd[a] > cd[b];
+    });
+
+    // Passo 2.4: Trunca para o tamanho original e salva de volta no Pool
+    for (int k = 0; k < pool_size; k++) {
+        SOLVER_POOL[k] = combined[indices[k]];
+    }
+
+    if (debug && rank[N_plus_1 - 1] == 1) { 
+        // Se a nova solução (índice N_plus_1-1 original) entrou na Fronteira 1
+        std::cout << std::format("\nNova solucao Pareto-Otima (T-{} | MH: {})", omp_get_thread_num(), mh);
+    }
+  } // End #pragma omp critical(pool_lock)
 }
+
+// void UpdatePoolSolutions(TSol s, const char *mh, const int debug) {
+//   #pragma omp critical
+//   {
+//     int pool_size = static_cast<int>(SOLVER_POOL.size());
+    
+//     // Only proceed if the pool is initialized
+//     if (pool_size > 0) {
+        
+//         // 1. Check if the solution already exists in the pool (exact fitness match)
+//         bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto &entry) {
+//             return std::abs(entry.ofv - s.ofv) < 1e-9;
+//         });
+
+//         // 2. Entry Filter: Only accept if it doesn't exist AND is strictly better than the worst
+//         if (!exists && s.ofv < SOLVER_POOL.back().ofv) {
+            
+//             // The solution is accepted! Update its metadata.
+//             s.best_time = get_time_in_seconds();
+//             s.nameMH = mh;
+
+//             // Log globally if a new overall best solution is found
+//             if (s.ofv < SOLVER_POOL[0].ofv && debug) {
+//                 int thread_id = omp_get_thread_num();
+//                 std::cout << std::format("\nBest solution: {:.10f} (Thread: {} - MH: {})",
+//                                          s.ofv, thread_id, mh);
+//             }
+
+//             // 3. Diversity Strategy (Cosine Similarity Replacement)
+//             int start_idx = std::max(1, pool_size / 2); 
+//             int target_idx = pool_size - 1; // Default victim is the absolute worst
+//             double max_sim = -2.0;          
+
+//             for (int i = start_idx; i < pool_size; i++) {
+//                 // Extra safeguard: the victim MUST have a worse objective function value
+//                 if (SOLVER_POOL[i].ofv > s.ofv) {
+//                     double sim = rkolib::core::CosineSimilarity(s.rk, SOLVER_POOL[i].rk);
+                    
+//                     if (sim > max_sim) {
+//                         max_sim = sim;
+//                         target_idx = i;
+//                     }
+//                 }
+//             }
+
+//             // 4. Perform the tactical replacement
+//             SOLVER_POOL[target_idx] = s;
+
+//             // 5. Re-sort the entire pool to maintain the ordering invariant
+//             std::ranges::sort(SOLVER_POOL, [](const TSol& a, const TSol& b) {
+//                 return a.ofv < b.ofv; // Ascending order
+//             });
+            
+//         } // End of conditional entry
+//     } // End of pool_size check
+//   } // End of #pragma omp critical (All threads exit here cleanly, unlocking the mutex)
+// }
 
 // void UpdatePoolSolutions(TSol s, const char *mh, const int debug) {
 // #pragma omp critical
