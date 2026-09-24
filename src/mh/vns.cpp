@@ -87,6 +87,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of VNS based on initial state
       if (!S.empty()) {
@@ -94,6 +95,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
         betaMin = S[iCurr].par[1];
       }
     }
+  }
+
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] VNS iniciado. kMax=" << kMax << ", betaMin=" << betaMin << std::endl;
   }
 
   // ---------------------------------------------------------------------
@@ -117,7 +122,6 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // Main Loop
   // ---------------------------------------------------------------------
   // run the search process until stop criterion
-  //std::cout << "VNS init" << std::endl;
   while (currentTime < runData.MAXTIME * runData.restart) {
 
     //best solution found so far
@@ -153,8 +157,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     // VNS Loop: current neighborhood
     int k = 1;
     while (k <= kMax && currentTime < runData.MAXTIME * runData.restart) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] VNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       Iter++;
 
@@ -185,8 +191,13 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
           IterMelhora = Iter;
           improv = 1;
 
+          if (runData.debug > 0) {
+            std::cout << "[DEBUG][MH] VNS encontrou nova melhor solucao na iteracao " 
+                      << Iter << ": ofv=" << sBest.ofv << std::endl;
+          }
+
           // update the SOLVER_POOL of solutions (Global Method)
-          UpdatePoolSolutions(sBestLine, method, (int)runData.debug);
+          UpdatePoolSolutions(sBestLine, method, (int)runData.debug, runData.poolUpdateMethod);
         }
       } else {
         // next neighborhood structure
@@ -210,7 +221,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       } else {
         // Evita divisão por zero
         if (std::abs(s.ofv) > math_eps)
-          R = (sBest.ofv - s.ofv) / s.ofv;
+          R = (sBest.ofv - s.ofv) / (std::abs(s.ofv) + math_eps);
         else
           R = 0;
       }
@@ -225,9 +236,14 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -236,6 +252,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     }
   }
 
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] VNS finalizado. Iteracoes=" << Iter
+              << ", Melhor OFV=" << sBest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

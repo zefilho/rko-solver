@@ -67,9 +67,15 @@ void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool) {
       ctx.initializePool(actualSizePool);
     }
 
+    // Pass 1: Decode solutions to initialize random keys and establish consolidated reference points (ideal/nadir)
     for (int i = 0; i < actualSizePool; i++) {
       CreateInitialSolutions(SOLVER_POOL[i], solver.getProblemDimension());
-      solver.decodeSolution(SOLVER_POOL[i]); // Calls external Decoder
+      solver.decodeSolution(SOLVER_POOL[i]);
+    }
+
+    // Pass 2: Re-scalarize all pool solutions using the consolidated ideal/nadir reference points
+    for (int i = 0; i < actualSizePool; i++) {
+      solver.decodeSolution(SOLVER_POOL[i]);
       SOLVER_POOL[i].best_time = get_time_in_seconds();
     }
 
@@ -95,6 +101,9 @@ void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool) {
 
     // sort SOLVER_POOL again if clones were mutated
     if (clone) {
+      for (int i = 0; i < actualSizePool; i++) {
+        solver.decodeSolution(SOLVER_POOL[i]);
+      }
       std::sort(SOLVER_POOL.begin(), SOLVER_POOL.begin() + actualSizePool,
                 sortByFitness);
     }
@@ -205,160 +214,463 @@ inline double CosineSimilarity(const std::vector<double>& a, const std::vector<d
 //   } // End of #pragma omp critical(pool_lock)
 // }
 
-void UpdatePoolSolutions(core::TSol s, const char *mh, const int debug) {
+// void UpdatePoolSolutions(core::TSol s, const char *mh, const int debug) {
+//   #pragma omp critical(pool_lock)
+//   {
+//     int pool_size = static_cast<int>(SOLVER_POOL.size());
+//     if (pool_size == 0) return;
+
+//     bool is_mo = s.objs.size() > 1;
+
+//     // ====================================================================
+//     // 1. Filtro de Clones Exatos (Objetivos Reais)
+//     // ====================================================================
+//     bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto &entry) {
+//         if (is_mo) {
+//             for (size_t k = 0; k < s.objs.size(); ++k)
+//                 if (std::abs(entry.objs[k] - s.objs[k]) > 1e-9) return false;
+//             return true;
+//         }
+//         return std::abs(entry.ofv - s.ofv) < 1e-9;
+//     });
+
+//     if (exists) return; // Descarte imediato
+
+//     // Atualiza metadados
+//     s.best_time = get_time_in_seconds();
+//     s.nameMH = mh;
+
+//     // Se for Mono-Objetivo, mantém a lógica antiga simplificada
+//     if (!is_mo) {
+//         if (s.ofv < SOLVER_POOL.back().ofv) {
+//             SOLVER_POOL.back() = s;
+//             std::ranges::sort(SOLVER_POOL, [](const auto& a, const auto& b) { return a.ofv < b.ofv; });
+            
+//             if (s.ofv < SOLVER_POOL[0].ofv && debug) {
+//                 std::cout << std::format("\nBest (Mono): {:.6f} (T-{} | MH: {})", s.ofv, omp_get_thread_num(), mh);
+//             }
+//         }
+//         return;
+//     }
+
+//     // ====================================================================
+//     // 2. LÓGICA NSGA-II (Fast Non-Dominated Sorting & Crowding Distance)
+//     // ====================================================================
+    
+//     // Cria população unida N+1
+//     std::vector<core::TSol> combined = SOLVER_POOL;
+//     combined.push_back(s);
+//     int N_plus_1 = combined.size();
+
+//     // Estruturas auxiliares para o NSGA-II
+//     std::vector<int> rank(N_plus_1, 0);
+//     std::vector<double> cd(N_plus_1, 0.0);
+//     std::vector<std::vector<int>> S_dom(N_plus_1); // Soluções dominadas por i
+//     std::vector<int> n_dom(N_plus_1, 0); // Quantas dominam i
+//     std::vector<std::vector<int>> fronts(1);
+
+//     // Passo 2.1: Identificação de Fronteiras (Fast Non-Dominated Sort)
+//     for (int p = 0; p < N_plus_1; p++) {
+//         for (int q = 0; q < N_plus_1; q++) {
+//             if (p == q) continue;
+            
+//             bool p_dominates_q = false;
+//             bool q_dominates_p = false;
+//             bool p_strictly_better = false;
+//             bool q_strictly_better = false;
+
+//             for (size_t k = 0; k < s.objs.size(); k++) {
+//                 if (combined[p].objs[k] < combined[q].objs[k] - 1e-9) p_strictly_better = true;
+//                 if (combined[q].objs[k] < combined[p].objs[k] - 1e-9) q_strictly_better = true;
+//             }
+
+//             if (p_strictly_better && !q_strictly_better) p_dominates_q = true;
+//             if (q_strictly_better && !p_strictly_better) q_dominates_p = true;
+
+//             if (p_dominates_q) S_dom[p].push_back(q);
+//             else if (q_dominates_p) n_dom[p]++;
+//         }
+
+//         if (n_dom[p] == 0) {
+//             rank[p] = 1;
+//             fronts[0].push_back(p);
+//         }
+//     }
+
+//     // Define fronteiras subsequentes
+//     int i = 0;
+//     while (!fronts[i].empty()) {
+//         std::vector<int> next_front;
+//         for (int p : fronts[i]) {
+//             for (int q : S_dom[p]) {
+//                 n_dom[q]--;
+//                 if (n_dom[q] == 0) {
+//                     rank[q] = i + 2;
+//                     next_front.push_back(q);
+//                 }
+//             }
+//         }
+//         i++;
+//         if (!next_front.empty()) fronts.push_back(next_front);
+//     }
+
+//     // Passo 2.2: Cálculo do Crowding Distance
+//     int num_objs = s.objs.size();
+//     for (const auto& front : fronts) {
+//         if (front.empty()) continue;
+        
+//         int l = front.size();
+//         for (int idx : front) cd[idx] = 0.0; // Reseta distâncias
+        
+//         for (int m = 0; m < num_objs; m++) {
+//             // Ordena a fronteira pelo objetivo 'm'
+//             std::vector<int> sorted_front = front;
+//             std::ranges::sort(sorted_front, [&](int a, int b) {
+//                 return combined[a].objs[m] < combined[b].objs[m];
+//             });
+
+//             // Extremos recebem distância infinita para sempre serem preservados
+//             cd[sorted_front[0]] = std::numeric_limits<double>::infinity();
+//             cd[sorted_front[l - 1]] = std::numeric_limits<double>::infinity();
+
+//             double obj_min = combined[sorted_front[0]].objs[m];
+//             double obj_max = combined[sorted_front[l - 1]].objs[m];
+//             double delta = obj_max - obj_min;
+//             if (delta < 1e-9) delta = 1.0; // Previne divisão por zero
+
+//             for (int j = 1; j < l - 1; j++) {
+//                 if (cd[sorted_front[j]] != std::numeric_limits<double>::infinity()) {
+//                     cd[sorted_front[j]] += (combined[sorted_front[j + 1]].objs[m] - 
+//                                             combined[sorted_front[j - 1]].objs[m]) / delta;
+//                 }
+//             }
+//         }
+//     }
+
+//     // Passo 2.3: Operador de Comparação (Crowded-Comparison)
+//     std::vector<int> indices(N_plus_1);
+//     std::iota(indices.begin(), indices.end(), 0);
+
+//     // O melhor é quem tem o Menor Rank. 
+//     // Em caso de empate no Rank, o melhor é quem tem MAIOR Crowding Distance.
+//     std::ranges::sort(indices, [&](int a, int b) {
+//         if (rank[a] != rank[b]) return rank[a] < rank[b];
+//         return cd[a] > cd[b];
+//     });
+
+//     // Passo 2.4: Trunca para o tamanho original e salva de volta no Pool
+//     for (int k = 0; k < pool_size; k++) {
+//         SOLVER_POOL[k] = combined[indices[k]];
+//     }
+
+//     if (debug && rank[N_plus_1 - 1] == 1) { 
+//         // Se a nova solução (índice N_plus_1-1 original) entrou na Fronteira 1
+//         std::cout << std::format("\nNova solucao Pareto-Otima (T-{} | MH: {})", omp_get_thread_num(), mh);
+//     }
+//   } // End #pragma omp critical(pool_lock)
+// }
+
+void UpdatePoolSolutions(core::TSol s, const char *mh, const int debug, int updateMethod) {
   #pragma omp critical(pool_lock)
   {
     int pool_size = static_cast<int>(SOLVER_POOL.size());
-    if (pool_size == 0) return;
-
-    bool is_mo = s.objs.size() > 1;
-
-    // ====================================================================
-    // 1. Filtro de Clones Exatos (Objetivos Reais)
-    // ====================================================================
-    bool exists = std::ranges::any_of(SOLVER_POOL, [&](const auto &entry) {
-        if (is_mo) {
-            for (size_t k = 0; k < s.objs.size(); ++k)
-                if (std::abs(entry.objs[k] - s.objs[k]) > 1e-9) return false;
-            return true;
-        }
-        return std::abs(entry.ofv - s.ofv) < 1e-9;
-    });
-
-    if (exists) return; // Descarte imediato
-
-    // Atualiza metadados
-    s.best_time = get_time_in_seconds();
-    s.nameMH = mh;
-
-    // Se for Mono-Objetivo, mantém a lógica antiga simplificada
-    if (!is_mo) {
-        if (s.ofv < SOLVER_POOL.back().ofv) {
-            SOLVER_POOL.back() = s;
-            std::ranges::sort(SOLVER_POOL, [](const auto& a, const auto& b) { return a.ofv < b.ofv; });
-            
-            if (s.ofv < SOLVER_POOL[0].ofv && debug) {
-                std::cout << std::format("\nBest (Mono): {:.6f} (T-{} | MH: {})", s.ofv, omp_get_thread_num(), mh);
-            }
-        }
-        return;
-    }
-
-    // ====================================================================
-    // 2. LÓGICA NSGA-II (Fast Non-Dominated Sorting & Crowding Distance)
-    // ====================================================================
     
-    // Cria população unida N+1
-    std::vector<core::TSol> combined = SOLVER_POOL;
-    combined.push_back(s);
-    int N_plus_1 = combined.size();
+    // REGRA OPENMP: Só executa se o pool for maior que 0 (Sem 'return' antecipado)
+    if (pool_size > 0) {
+        bool is_mo = s.objs.size() > 1;
 
-    // Estruturas auxiliares para o NSGA-II
-    std::vector<int> rank(N_plus_1, 0);
-    std::vector<double> cd(N_plus_1, 0.0);
-    std::vector<std::vector<int>> S_dom(N_plus_1); // Soluções dominadas por i
-    std::vector<int> n_dom(N_plus_1, 0); // Quantas dominam i
-    std::vector<std::vector<int>> fronts(1);
+        // ====================================================================
+        // FILTRO GLOBAL: Guardião de Clones e Dominância Restrita
+        // ====================================================================
+        bool exists = false;
+        bool is_dominated = false;
 
-    // Passo 2.1: Identificação de Fronteiras (Fast Non-Dominated Sort)
-    for (int p = 0; p < N_plus_1; p++) {
-        for (int q = 0; q < N_plus_1; q++) {
-            if (p == q) continue;
+        for (const auto& pool_sol : SOLVER_POOL) {
+            if (is_mo) {
+                // Verifica Clone Exato
+                bool clone = true;
+                for (size_t k = 0; k < s.objs.size(); ++k) {
+                    if (std::abs(pool_sol.objs[k] - s.objs[k]) > 1e-9) clone = false;
+                }
+                if (clone) { exists = true; break; }
+
+                // Verifica Dominância
+                bool strictly_better = false;
+                bool worse_in_any = false;
+                for (size_t k = 0; k < s.objs.size(); ++k) {
+                    if (pool_sol.objs[k] > s.objs[k] + 1e-9) worse_in_any = true;
+                    if (pool_sol.objs[k] < s.objs[k] - 1e-9) strictly_better = true;
+                }
+                if (!worse_in_any && strictly_better) {
+                    is_dominated = true;
+                    break;
+                }
+            } else {
+                if (std::abs(pool_sol.ofv - s.ofv) < 1e-9) { exists = true; break; }
+            }
+        }
+
+        // REGRA OPENMP: Só procede se a solução passou nos filtros
+        if (!exists && !is_dominated) {
             
-            bool p_dominates_q = false;
-            bool q_dominates_p = false;
-            bool p_strictly_better = false;
-            bool q_strictly_better = false;
+            // Atualiza metadados da nova solução
+            s.best_time = get_time_in_seconds();
+            s.nameMH = mh;
 
-            for (size_t k = 0; k < s.objs.size(); k++) {
-                if (combined[p].objs[k] < combined[q].objs[k] - 1e-9) p_strictly_better = true;
-                if (combined[q].objs[k] < combined[p].objs[k] - 1e-9) q_strictly_better = true;
-            }
+            // ====================================================================
+            // MÉTODO 0: SUBSTITUIÇÃO TÁTICA (Cosseno) OU MONO-OBJETIVO
+            // ====================================================================
+            if (updateMethod == 0 || !is_mo) { 
+                if (s.ofv < SOLVER_POOL.back().ofv) {
+                    bool new_best = (s.ofv < SOLVER_POOL[0].ofv);
+                    int start_idx = std::max(1, pool_size / 2); 
+                    int target_idx = pool_size - 1; 
+                    double max_sim = -2.0;          
 
-            if (p_strictly_better && !q_strictly_better) p_dominates_q = true;
-            if (q_strictly_better && !p_strictly_better) q_dominates_p = true;
+                    for (int i = start_idx; i < pool_size; i++) {
+                        if (SOLVER_POOL[i].ofv > s.ofv) {
+                            double sim = rkolib::core::CosineSimilarity(s.rk, SOLVER_POOL[i].rk);
+                            if (sim > max_sim) {
+                                max_sim = sim;
+                                target_idx = i;
+                            }
+                        }
+                    }
+                    SOLVER_POOL[target_idx] = s;
+                    std::ranges::sort(SOLVER_POOL, [](const auto& a, const auto& b) { return a.ofv < b.ofv; });
 
-            if (p_dominates_q) S_dom[p].push_back(q);
-            else if (q_dominates_p) n_dom[p]++;
-        }
-
-        if (n_dom[p] == 0) {
-            rank[p] = 1;
-            fronts[0].push_back(p);
-        }
-    }
-
-    // Define fronteiras subsequentes
-    int i = 0;
-    while (!fronts[i].empty()) {
-        std::vector<int> next_front;
-        for (int p : fronts[i]) {
-            for (int q : S_dom[p]) {
-                n_dom[q]--;
-                if (n_dom[q] == 0) {
-                    rank[q] = i + 2;
-                    next_front.push_back(q);
+                    if (debug && new_best) {
+                        std::cout << "\n[DEBUG][pool] Nova melhor solucao pela MH (" << mh 
+                                  << "): ofv=" << s.ofv << std::endl;
+                    }
                 }
             }
-        }
-        i++;
-        if (!next_front.empty()) fronts.push_back(next_front);
-    }
+            // ====================================================================
+            // MÉTODO 1: NSGA-II (Rank + Crowding Distance)
+            // ====================================================================
+            else if (updateMethod == 1 && is_mo) {
+                std::vector<core::TSol> combined = SOLVER_POOL;
+                combined.push_back(s);
+                int N_plus_1 = combined.size();
 
-    // Passo 2.2: Cálculo do Crowding Distance
-    int num_objs = s.objs.size();
-    for (const auto& front : fronts) {
-        if (front.empty()) continue;
-        
-        int l = front.size();
-        for (int idx : front) cd[idx] = 0.0; // Reseta distâncias
-        
-        for (int m = 0; m < num_objs; m++) {
-            // Ordena a fronteira pelo objetivo 'm'
-            std::vector<int> sorted_front = front;
-            std::ranges::sort(sorted_front, [&](int a, int b) {
-                return combined[a].objs[m] < combined[b].objs[m];
-            });
+                std::vector<int> rank(N_plus_1, 0);
+                std::vector<double> cd(N_plus_1, 0.0);
+                std::vector<std::vector<int>> S_dom(N_plus_1); // Soluções dominadas por i
+                std::vector<int> n_dom(N_plus_1, 0); // Quantas dominam i
+                std::vector<std::vector<int>> fronts(1);
 
-            // Extremos recebem distância infinita para sempre serem preservados
-            cd[sorted_front[0]] = std::numeric_limits<double>::infinity();
-            cd[sorted_front[l - 1]] = std::numeric_limits<double>::infinity();
+                // Passo 2.1: Identificação de Fronteiras (Fast Non-Dominated Sort)
+                for (int p = 0; p < N_plus_1; p++) {
+                    for (int q = 0; q < N_plus_1; q++) {
+                        if (p == q) continue;
+                        
+                        bool p_dominates_q = false;
+                        bool q_dominates_p = false;
+                        bool p_strictly_better = false;
+                        bool q_strictly_better = false;
 
-            double obj_min = combined[sorted_front[0]].objs[m];
-            double obj_max = combined[sorted_front[l - 1]].objs[m];
-            double delta = obj_max - obj_min;
-            if (delta < 1e-9) delta = 1.0; // Previne divisão por zero
+                        for (size_t k = 0; k < s.objs.size(); k++) {
+                            if (combined[p].objs[k] < combined[q].objs[k] - 1e-9) p_strictly_better = true;
+                            if (combined[q].objs[k] < combined[p].objs[k] - 1e-9) q_strictly_better = true;
+                        }
 
-            for (int j = 1; j < l - 1; j++) {
-                if (cd[sorted_front[j]] != std::numeric_limits<double>::infinity()) {
-                    cd[sorted_front[j]] += (combined[sorted_front[j + 1]].objs[m] - 
-                                            combined[sorted_front[j - 1]].objs[m]) / delta;
+                        if (p_strictly_better && !q_strictly_better) p_dominates_q = true;
+                        if (q_strictly_better && !p_strictly_better) q_dominates_p = true;
+
+                        if (p_dominates_q) S_dom[p].push_back(q);
+                        else if (q_dominates_p) n_dom[p]++;
+                    }
+
+                    if (n_dom[p] == 0) {
+                        rank[p] = 1;
+                        fronts[0].push_back(p);
+                    }
+                }
+
+                // Define fronteiras subsequentes
+                int i = 0;
+                while (!fronts[i].empty()) {
+                    std::vector<int> next_front;
+                    for (int p : fronts[i]) {
+                        for (int q : S_dom[p]) {
+                            n_dom[q]--;
+                            if (n_dom[q] == 0) {
+                                rank[q] = i + 2;
+                                next_front.push_back(q);
+                            }
+                        }
+                    }
+                    i++;
+                    if (!next_front.empty()) fronts.push_back(next_front);
+                }
+
+                // Passo 2.2: Cálculo do Crowding Distance
+                int num_objs = s.objs.size();
+                for (const auto& front : fronts) {
+                    if (front.empty()) continue;
+                    
+                    int l = front.size();
+                    for (int idx : front) cd[idx] = 0.0; // Reseta distâncias
+                    
+                    for (int m = 0; m < num_objs; m++) {
+                        // Ordena a fronteira pelo objetivo 'm'
+                        std::vector<int> sorted_front = front;
+                        std::ranges::sort(sorted_front, [&](int a, int b) {
+                            return combined[a].objs[m] < combined[b].objs[m];
+                        });
+
+                        // Extremos recebem distância infinita para sempre serem preservados
+                        cd[sorted_front[0]] = std::numeric_limits<double>::infinity();
+                        cd[sorted_front[l - 1]] = std::numeric_limits<double>::infinity();
+
+                        double obj_min = combined[sorted_front[0]].objs[m];
+                        double obj_max = combined[sorted_front[l - 1]].objs[m];
+                        double delta = obj_max - obj_min;
+                        if (delta < 1e-9) delta = 1.0; // Previne divisão por zero
+
+                        for (int j = 1; j < l - 1; j++) {
+                            if (cd[sorted_front[j]] != std::numeric_limits<double>::infinity()) {
+                                cd[sorted_front[j]] += (combined[sorted_front[j + 1]].objs[m] - 
+                                                        combined[sorted_front[j - 1]].objs[m]) / delta;
+                            }
+                        }
+                    }
+                }
+
+                // Passo 2.3: Operador de Comparação (Crowded-Comparison)
+                std::vector<int> indices(N_plus_1);
+                std::iota(indices.begin(), indices.end(), 0);
+
+                // O melhor é quem tem o Menor Rank. 
+                // Em caso de empate no Rank, o melhor é quem tem MAIOR Crowding Distance.
+                std::ranges::sort(indices, [&](int a, int b) {
+                    if (rank[a] != rank[b]) return rank[a] < rank[b];
+                    return cd[a] > cd[b];
+                });
+
+                // Passo 2.4: Trunca para o tamanho original e salva de volta no Pool
+                for (int k = 0; k < pool_size; k++) {
+                    SOLVER_POOL[k] = combined[indices[k]];
+                }
+
+                if (debug && rank[N_plus_1 - 1] == 1) { 
+                    // Se a nova solução (índice N_plus_1-1 original) entrou na Fronteira 1
+                    std::cout << std::format("\nNova solucao Pareto-Otima (T-{} | MH: {})", omp_get_thread_num(), mh);
                 }
             }
-        }
-    }
+            // ====================================================================
+            // MÉTODO 2: MEMÓRIA ESPACIAL DA FRONTEIRA (Geometria de Nichos)
+            // ====================================================================
+            else if (updateMethod == 2 && is_mo && s.objs.size() >= 2) {
+                
+                const int K = 5; 
+                int capacity = std::max(1, (pool_size + K - 1) / K); 
 
-    // Passo 2.3: Operador de Comparação (Crowded-Comparison)
-    std::vector<int> indices(N_plus_1);
-    std::iota(indices.begin(), indices.end(), 0);
+                // Passo 1: Encontrar Extremos da Fronteira Atual (E0 e E1)
+                int idx_E0 = 0, idx_E1 = 0;
+                for (int i = 1; i < pool_size; i++) {
+                    if (SOLVER_POOL[i].objs[1] < SOLVER_POOL[idx_E0].objs[1]) idx_E0 = i;
+                    if (SOLVER_POOL[i].objs[0] < SOLVER_POOL[idx_E1].objs[0]) idx_E1 = i;
+                }
 
-    // O melhor é quem tem o Menor Rank. 
-    // Em caso de empate no Rank, o melhor é quem tem MAIOR Crowding Distance.
-    std::ranges::sort(indices, [&](int a, int b) {
-        if (rank[a] != rank[b]) return rank[a] < rank[b];
-        return cd[a] > cd[b];
-    });
+                double E0_z1 = SOLVER_POOL[idx_E0].objs[0];
+                double E0_z2 = SOLVER_POOL[idx_E0].objs[1];
+                double E1_z1 = SOLVER_POOL[idx_E1].objs[0];
+                double E1_z2 = SOLVER_POOL[idx_E1].objs[1];
 
-    // Passo 2.4: Trunca para o tamanho original e salva de volta no Pool
-    for (int k = 0; k < pool_size; k++) {
-        SOLVER_POOL[k] = combined[indices[k]];
-    }
+                double v1 = E1_z1 - E0_z1;
+                double v2 = E1_z2 - E0_z2;
+                double v_norm_sq = v1 * v1 + v2 * v2;
 
-    if (debug && rank[N_plus_1 - 1] == 1) { 
-        // Se a nova solução (índice N_plus_1-1 original) entrou na Fronteira 1
-        std::cout << std::format("\nNova solucao Pareto-Otima (T-{} | MH: {})", omp_get_thread_num(), mh);
-    }
-  } // End #pragma omp critical(pool_lock)
+                // Fallback de colapso: Reta nula (Fronteira com apenas 1 ponto válido)
+                if (v_norm_sq < 1e-9) {
+                    if (s.ofv < SOLVER_POOL.back().ofv) {
+                        SOLVER_POOL.back() = s;
+                        std::ranges::sort(SOLVER_POOL, [](const auto& a, const auto& b) { return a.ofv < b.ofv; });
+                    }
+                } 
+                // Fluxo Normal do Método Espacial
+                else {
+                    auto calc_signature = [&](double z1, double z2, double& t, double& d, int& R) {
+                        double u1 = z1 - E0_z1;
+                        double u2 = z2 - E0_z2;
+                        
+                        t = (u1 * v1 + u2 * v2) / v_norm_sq;
+                        t = std::clamp(t, 0.0, 1.0);
+                        
+                        double p1 = E0_z1 + t * v1;
+                        double p2 = E0_z2 + t * v2;
+                        
+                        d = std::sqrt((z1 - p1)*(z1 - p1) + (z2 - p2)*(z2 - p2));
+                        
+                        R = static_cast<int>(t * K);
+                        if (R >= K) R = K - 1; 
+                    };
+
+                    std::vector<double> pool_t(pool_size), pool_d(pool_size);
+                    std::vector<int> pool_R(pool_size);
+                    std::vector<int> count_R(K, 0);
+
+                    for (int i = 0; i < pool_size; i++) {
+                        calc_signature(SOLVER_POOL[i].objs[0], SOLVER_POOL[i].objs[1], pool_t[i], pool_d[i], pool_R[i]);
+                        count_R[pool_R[i]]++;
+                    }
+
+                    double s_t, s_d;
+                    int s_R;
+                    calc_signature(s.objs[0], s.objs[1], s_t, s_d, s_R);
+
+                    bool inserted = false;
+
+                    if (count_R[s_R] >= capacity) {
+                        int worst_idx = -1;
+                        double max_d = -1.0;
+                        for (int i = 0; i < pool_size; i++) {
+                            if (pool_R[i] == s_R && pool_d[i] > max_d) {
+                                max_d = pool_d[i];
+                                worst_idx = i;
+                            }
+                        }
+                        if (worst_idx != -1 && s_d < max_d) {
+                            SOLVER_POOL[worst_idx] = s;
+                            inserted = true;
+                        }
+                    } else {
+                        int max_count = -1;
+                        int crowded_R = -1;
+                        for (int r = 0; r < K; r++) {
+                            if (r != s_R && count_R[r] > max_count) {
+                                max_count = count_R[r];
+                                crowded_R = r;
+                            }
+                        }
+                        if (crowded_R != -1) {
+                            int worst_idx = -1;
+                            double max_d = -1.0;
+                            for (int i = 0; i < pool_size; i++) {
+                                if (pool_R[i] == crowded_R && pool_d[i] > max_d) {
+                                    max_d = pool_d[i];
+                                    worst_idx = i;
+                                }
+                            }
+                            if (worst_idx != -1) {
+                                SOLVER_POOL[worst_idx] = s;
+                                inserted = true;
+                            }
+                        }
+                    }
+
+                    if (inserted) {
+                        std::ranges::sort(SOLVER_POOL, [](const auto& a, const auto& b) { return a.ofv < b.ofv; });
+                        if (debug && s.ofv < SOLVER_POOL[0].ofv) {
+                            std::cout << std::format("\nNovo recorde via Memoria Espacial! (T-{} | MH: {})", omp_get_thread_num(), mh);
+                        }
+                    }
+                } // Fim Else Fluxo Normal
+            }
+        } // Fim IF (!exists && !is_dominated)
+    } // Fim IF (pool_size > 0)
+  } // Fim #pragma omp critical(pool_lock) - Tudo sai por aqui com segurança!
 }
 
 // void UpdatePoolSolutions(TSol s, const char *mh, const int debug) {
@@ -928,8 +1240,18 @@ void readParameters(const std::string &method, int control,
 void LoadYamlLogic(const std::string &paramFile, const char *method, int numPar,
                    std::vector<std::vector<double>> &parameters) {
   try {
-
-    YAML::Node config = YAML::LoadFile(paramFile);
+    YAML::Node config;
+    try {
+      config = YAML::LoadFile(paramFile);
+    } catch (const YAML::BadFile &) {
+      std::string altFile = paramFile;
+      if (altFile.rfind("../", 0) == 0) {
+        altFile = altFile.substr(3); // Remove "../"
+      } else {
+        altFile = "../" + altFile;
+      }
+      config = YAML::LoadFile(altFile);
+    }
 
     // Guard Clause 1: Method does not exist
     if (!config[method]) {

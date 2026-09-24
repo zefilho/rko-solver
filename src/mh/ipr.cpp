@@ -14,6 +14,10 @@ void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   double start_timeMH = get_time_in_seconds(); // start computational time
   double end_timeMH = get_time_in_seconds();   // end computational time
 
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] IPR iniciado." << std::endl;
+  }
+
   // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     TSol atual, guia;
@@ -82,8 +86,10 @@ void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       int numIteration = 0;
 
       while (numIteration < numBlock - 1) {
-        if (SOLVER_SHOULD_STOP)
+        if (SOLVER_SHOULD_STOP) {
+          if (runData.debug > 0) std::cout << "[DEBUG][MH] IPR interrompido via SOLVER_SHOULD_STOP." << std::endl;
           return;
+        }
 
         numIteration++;
         bestBlock = -1;
@@ -144,7 +150,11 @@ void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     currentTime = (float)(end_timeMH - start_timeMH);
 
     // update the SOLVER_POOL of solutions
-    UpdatePoolSolutions(bestPath, method, runData.debug);
+    UpdatePoolSolutions(bestPath, method, runData.debug, runData.poolUpdateMethod);
+  }
+
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] IPR finalizado." << std::endl;
   }
 }
 

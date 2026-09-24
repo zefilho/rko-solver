@@ -121,6 +121,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
 
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of SGA
       if (!S.empty()) {
@@ -130,7 +131,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       }
     }
   }
-  //std::cout << "GA init" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] GA iniciado. sizePop=" << sizePop << ", probCros=" << probCros 
+              << ", probMut=" << probMut << std::endl;
+  }
 
   // initialize population
   Pop.resize(sizePop);
@@ -228,8 +232,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     double bestOFcurrent = INFINITY;
 
     for (int i = 0; i < sizePop - 1; i = i + 2) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] GA interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       PopNew[i] = PopInter[i];
       PopNew[i + 1] = PopInter[i + 1];
@@ -272,14 +278,22 @@ void GA(const TRunData &runData, RkoSolver &solver) {
         bestInd = PopNew[i];
         bestGeneration = numGenerations;
         improv = 1;
-        UpdatePoolSolutions(bestInd, method, runData.debug);
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
+                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+        }
+        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
       }
 
       if (PopNew[i + 1].ofv < bestInd.ofv) {
         bestInd = PopNew[i + 1];
         bestGeneration = numGenerations;
         improv = 1;
-        UpdatePoolSolutions(bestInd, method, runData.debug);
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
+                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+        }
+        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
       }
 
       // set the best offspring
@@ -302,7 +316,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     if (PopNew[pos1].ofv < bestInd.ofv) {
       bestInd = PopNew[pos1];
       bestGeneration = numGenerations;
-      UpdatePoolSolutions(bestInd, method, runData.debug);
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] GA (LS) encontrou novo melhor individuo: ofv=" << bestInd.ofv << std::endl;
+      }
+      UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
     }
 
     // replace the population with offspring
@@ -321,7 +338,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
         delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
         if (std::abs(bestOFcurrent) > math_eps)
-          R = (bestInd.ofv - bestOFcurrent) / (bestOFcurrent + math_eps);
+          R = (bestInd.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + math_eps);
         else
           R = 0;
       }
@@ -335,9 +352,14 @@ void GA(const TRunData &runData, RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -354,7 +376,11 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   Pop.clear();
   PopNew.clear();
   PopInter.clear();
-  //std::cout << "GA end" << std::endl;
+
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] GA finalizado. Geraçoes=" << numGenerations
+              << ", Melhor OFV=" << bestInd.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

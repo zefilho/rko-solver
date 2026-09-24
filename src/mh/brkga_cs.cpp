@@ -404,6 +404,7 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define the initial parameters of the BRGKA
       if (!S.empty()) {
@@ -416,7 +417,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   }
 
   // initialize population
-  //std::cout << "BRKGA-CS init" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] BRKGA-CS iniciado. PopSize=" << p << ", pe=" << pe 
+              << ", pm=" << pm << ", rhoe=" << rhoe << std::endl;
+  }
 
   Pop.clear();
   PopInter.clear();
@@ -502,8 +506,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
     // We'll mate 'P - Pe' pairs
     double bestOFV = INFINITY;
     for (int i = (int)(p * pe); i < p; i++) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       // Parametric uniform crossover with mutation
       PopInter[i] = ParametricUniformCrossover((int)(p * pe), p, pm, rhoe, Pop,
@@ -529,8 +535,13 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
       noImprovBRKGA = 0;
       improv = 1;
 
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] BRKGA-CS encontrou nova melhor solucao na geracao "
+                  << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+      }
+
       // update the SOLVER_POOL of solutions
-      UpdatePoolSolutions(bestInd, method, runData.debug);
+      UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
     }
 
     // -----------------------------------------------------------------
@@ -548,7 +559,7 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
       } else {
         // Protection against division by zero
         if (std::abs(bestOFV) > math_eps)
-          R = (bestInd.ofv - bestOFV) / (bestOFV + math_eps);
+          R = (bestInd.ofv - bestOFV) / (std::abs(bestOFV) + math_eps);
         else
           R = 0;
       }
@@ -562,9 +573,14 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -593,8 +609,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
       // Select candidates from Elite
       int limitElite = (int)(p * pe);
       for (int i = 0; i < limitElite; i++) {
-        if (SOLVER_SHOULD_STOP)
+        if (SOLVER_SHOULD_STOP) {
+          if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
           return;
+        }
 
         // insert the individual index in the promising list
         if (promising[i] == 1) {
@@ -614,8 +632,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
       // Apply LS on promising
       for (unsigned int i = 0; i < promisingSol.size(); i++) {
-        if (SOLVER_SHOULD_STOP)
+        if (SOLVER_SHOULD_STOP) {
+          if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
           return;
+        }
 
         int solIndex = promisingSol[i];
         // local search not influence the evolutionary process
@@ -629,8 +649,12 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
           bestGeneration = numGenerations;
           noImprovBRKGA = 0;
 
+          if (runData.debug > 0) {
+            std::cout << "[DEBUG][MH] BRKGA-CS (LS) encontrou nova melhor solucao: ofv=" << bestInd.ofv << std::endl;
+          }
+
           // update the SOLVER_POOL of solutions
-          UpdatePoolSolutions(bestInd, method, runData.debug);
+          UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
         }
       }
 
@@ -653,7 +677,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   Pop.clear();
   PopInter.clear();
 
-  //std::cout << "BRKGA-CS end" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] BRKGA-CS finalizado. Geraçoes=" << numGenerations
+              << ", Melhor OFV=" << bestInd.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

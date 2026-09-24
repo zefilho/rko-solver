@@ -86,6 +86,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of ILS based on state
       if (!S.empty()) {
@@ -98,14 +99,17 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // number of iterations
   Iter = 0;
 
-  //std::cout << "Debug: ILS started" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] ILS iniciado. betaMin=" << betaMin << ", betaMax=" << betaMax << std::endl;
+  }
+
   // create initial solution
   CreateInitialSolutions(sBest, solver.getProblemDimension());
   solver.decodeSolution(sBest);
 
   // apply local search
   RVND(sBest, solver, runData.strategy, RKorder);
-  UpdatePoolSolutions(sBest, method, runData.debug);
+  UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
 
   // terminate the search process in MAXTIME
   end_timeMH = get_time_in_seconds();
@@ -113,8 +117,10 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
   // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    if (SOLVER_SHOULD_STOP)
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) std::cout << "[DEBUG][MH] ILS interrompido via SOLVER_SHOULD_STOP." << std::endl;
       return;
+    }
 
     // increase the number of ILS iterations
     Iter++;
@@ -164,8 +170,14 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       sBest = sBestLine;
       IterImprov = Iter;
       improv = 1;
+
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] ILS encontrou nova melhor solucao na iteracao " 
+                  << Iter << ": ofv=" << sBest.ofv << std::endl;
+      }
+
       // update the SOLVER_POOL of solutions
-      UpdatePoolSolutions(sBest, method, runData.debug);
+      UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
     }
 
     // Q-Learning Reward Phase (Post-Action)
@@ -178,7 +190,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       } else {
         // Protection against division by zero
         if (std::abs(sBestLine.ofv) > math_eps)
-          R = (sBest.ofv - sBestLine.ofv) / (sBestLine.ofv);
+          R = (sBest.ofv - sBestLine.ofv) / (std::abs(sBestLine.ofv) + math_eps);
         else
           R = 0;
       }
@@ -192,9 +204,14 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -207,6 +224,10 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     currentTime = (float)(end_timeMH - start_timeMH);
   }
 
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] ILS finalizado. Iteracoes=" << Iter
+              << ", Melhor OFV=" << sBest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

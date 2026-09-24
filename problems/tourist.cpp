@@ -27,6 +27,7 @@ public:
   virtual void decode(TSol &sol) const = 0;
   virtual int getDimension() const = 0;
   virtual int getNumObjectives() const = 0;
+  virtual void setDebugMode(int debug) { (void)debug; }
 };
 } // namespace rkolib::core
 
@@ -39,6 +40,7 @@ struct No {
 
 class TouristProblem : public rkolib::core::IProblem {
 private:
+  int debug_mode = 0;
   int nObj;
   int n;
   double M, w0;
@@ -74,12 +76,17 @@ private:
   }
 
 public:
-  TouristProblem() : nObj(2), n(0), M(0.0), w0(0.0), T_dias(0) {}
+  TouristProblem() : debug_mode(0), nObj(2), n(0), M(0.0), w0(0.0), T_dias(0) {}
   ~TouristProblem() override = default;
+
+  void setDebugMode(int debug) override { debug_mode = debug; }
 
   void load(const std::string &nomeArquivo) override {
     std::ifstream file(nomeArquivo);
-    if (!file.is_open()) throw std::runtime_error("Erro abrir: " + nomeArquivo);
+    if (!file.is_open()) {
+      if (debug_mode > 0) std::cerr << "[ERROR][tourist] Falha ao abrir arquivo: " << nomeArquivo << std::endl;
+      throw std::runtime_error("Erro abrir: " + nomeArquivo);
+    }
 
     std::string token, linha;
 
@@ -90,8 +97,14 @@ public:
     file >> token; T_dias = std::stoi(valorApos(token));
 
     // VALIDAÇÃO CRÍTICA DE LIMITES
-    if (n <= 0) n = 1;
-    if (T_dias <= 0) T_dias = 1;
+    if (n <= 0) {
+      if (debug_mode > 0) std::cerr << "[WARNING][tourist] n invalido (" << n << "). Corrigido para 1." << std::endl;
+      n = 1;
+    }
+    if (T_dias <= 0) {
+      if (debug_mode > 0) std::cerr << "[WARNING][tourist] T_dias invalido (" << T_dias << "). Corrigido para 1." << std::endl;
+      T_dias = 1;
+    }
 
     pularAte(file, "LIMITES_ATRACOES_POR_DIA");
     rt.resize(T_dias, 0);
@@ -142,6 +155,13 @@ public:
         int idx = id - 1;
         if (idx >= 0 && idx < n) H[t].push_back(idx); 
       }
+    }
+
+    if (debug_mode > 0) {
+      std::cout << "[DEBUG][tourist] Instancia carregada com sucesso: " << nomeArquivo << std::endl;
+      std::cout << "[DEBUG][tourist] n=" << n << ", T_dias=" << T_dias 
+                << ", M=" << M << ", w0=" << w0 
+                << ", Dimensao do cromossomo=" << getDimension() << std::endl;
     }
   }
 
@@ -203,7 +223,13 @@ public:
   // MÉTODO DECODE (Otimizado com Inserção Híbrida)
   // =======================================================
   void decode(rkolib::core::TSol &s) const override {
-    if (s.rk.size() < static_cast<size_t>(getDimension())) return;
+    if (s.rk.size() < static_cast<size_t>(getDimension())) {
+      if (debug_mode > 0) {
+        std::cerr << "[ERROR][tourist] Tamanho do cromossomo (" << s.rk.size()
+                  << ") menor que a dimensao esperada (" << getDimension() << ")." << std::endl;
+      }
+      return;
+    }
 
     auto clamp_key = [](double k) {
         if (std::isnan(k) || std::isinf(k)) return 0.0;
@@ -314,8 +340,6 @@ public:
           double fator_rcl = clamp_key(s.rk[offset_B]);
           
           // Tamanho da lista = ceil(fator * total_viaveis). Mínimo de 1 candidato.
-          // Se fator_rcl for 0.0 -> rcl_size = 1 (Puramente Guloso)
-          // Se fator_rcl for quase 1.0 -> rcl_size = todas viáveis (Puramente Aleatório)
           int rcl_size = std::max(1, static_cast<int>(std::ceil(fator_rcl * posicoes_viaveis.size())));
           
           // Limita o tamanho máximo por segurança
@@ -340,7 +364,13 @@ public:
       z1_qualidade += resultado.z1_parcial;
       z2_distancia += resultado.z2_parcial;
 
-      if (resultado.visitas < rt[t]) z1_qualidade -= M;
+      if (resultado.visitas < rt[t]) {
+        if (debug_mode > 0) {
+          std::cout << "[WARNING][tourist] Dia " << (t + 1) << ": Visitas (" << resultado.visitas 
+                    << ") abaixo do minimo rt=" << rt[t] << ". Penalizando com M=" << M << std::endl;
+        }
+        z1_qualidade -= M;
+      }
 
       no_atual = resultado.no_final;
     }
@@ -351,6 +381,11 @@ public:
     s.objs[0] = -z1_qualidade;
     // Objetivo 2: Distância (minimizar -> positivo)
     s.objs[1] = z2_distancia;
+
+    if (debug_mode > 0) {
+      std::cout << "[DEBUG][tourist] Decode concluido: Obj1(Qualidade)=" << -s.objs[0] 
+                << ", Obj2(Distancia)=" << s.objs[1] << std::endl;
+    }
   }
 
   // Dimensão reduzida: n + 3T - 1 (era 2n + 2T - 1)

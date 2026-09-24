@@ -125,6 +125,9 @@ private:
   // Global reference points for multiobjective
   std::vector<double> idealPoint_;
   std::vector<double> nadirPoint_; // Added for normalization
+  std::vector<double> userIdealPoint_;
+  std::vector<double> userNadirPoint_;
+  bool fixedIdealPoint_ = false;
   std::vector<double> defaultWeights_;
 
   // Convergence points

@@ -18,6 +18,9 @@ public:
   // Getters essenciais
   virtual int getDimension() const = 0;     // Number of variables
   virtual int getNumObjectives() const = 0; // 1 = Mono, >1 = Multi
+
+  // Define modo de depuração (0: silencioso, 1: debug logs)
+  virtual void setDebugMode(int debug) { (void)debug; }
 };
 
 // // Declaration of a "factory" that user will implement

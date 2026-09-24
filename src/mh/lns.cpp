@@ -123,6 +123,7 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
 
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of LNS based on state
       if (!S.empty()) {
@@ -134,7 +135,10 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
-  //std::cout << "LNS init" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] LNS iniciado. betaMin=" << betaMin << ", betaMax=" << betaMax 
+              << ", T0=" << T0 << ", alphaLNS=" << alphaLNS << std::endl;
+  }
 
   // Create the initial solution with random keys
   CreateInitialSolutions(s, solver.getProblemDimension());
@@ -208,8 +212,10 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
 
         // Testa valores baseados na sequência de Farey
         for (int j = 0; j < (int)F.size() - 1; j++) {
-          if (SOLVER_SHOULD_STOP)
+          if (SOLVER_SHOULD_STOP) {
+            if (runData.debug > 0) std::cout << "[DEBUG][MH] LNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
             return;
+          }
 
           // generate a random value between two intervals of the Farey sequence
           sLine.rk[pos] = randomico(F[j], F[j + 1]);
@@ -242,8 +248,13 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
           delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
           sBest = s;
           improv = 1;
+
+          if (runData.debug > 0) {
+            std::cout << "[DEBUG][MH] LNS encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
+          }
+
           // update the SOLVER_POOL of solutions
-          UpdatePoolSolutions(s, method, runData.debug);
+          UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
         }
       } else {
         double x = randomico(0, 1);
@@ -262,7 +273,7 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
           improv = 0;
         } else {
           if (std::abs(s.ofv) > 1e-9)
-            R = (sBest.ofv - s.ofv) / s.ofv;
+            R = (sBest.ofv - s.ofv) / (std::abs(s.ofv) + 1e-9);
           else
             R = 0;
         }
@@ -276,9 +287,14 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
             S[st].Qa[at] =
                 S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-            if (S[st].Qa[at] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[at];
-              S[st].maxA = at;
+            // Recalculate true maxQ and maxA for state st
+            S[st].maxQ = S[st].Qa[0];
+            S[st].maxA = 0;
+            for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+              if (S[st].Qa[k] > S[st].maxQ) {
+                S[st].maxQ = S[st].Qa[k];
+                S[st].maxA = (int)k;
+              }
             }
           }
           // Define the new current state st
@@ -299,7 +315,9 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     reanneling = 1;
   }
 
-  //std::cout << "LNS end" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] LNS finalizado. Melhor OFV=" << sBest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

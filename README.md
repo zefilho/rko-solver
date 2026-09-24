@@ -98,7 +98,7 @@ scalarization: Tchebycheff
 To solve a new problem, you do not need to touch the core code.
 
 1. Create a new `.cpp` file in `problems/` (e.g., `myproblem.cpp`).
-2. Inherit from `rkolib::core::IProblem` - include `rkolib/core/problem.hpp` - and implement the `load()` and `evaluate(TSol& s)` methods.
+2. Inherit from `rkolib::core::IProblem` - include `rkolib/core/problem.hpp` - and implement the `load()` and `decode(TSol& s)` methods.
 3. Export the factory functions:
 
 ```cpp
