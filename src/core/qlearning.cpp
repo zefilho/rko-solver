@@ -1,6 +1,7 @@
 #include "rkolib/core/qlearning.hpp"
 #include "rkolib/core/method.hpp" // Necessário para randomico() e irandomico()
 
+#include <algorithm>
 #include <omp.h>
 
 namespace rkolib::core {
@@ -260,12 +261,30 @@ void SetQLParameter(float currentTime, int &Ti, int &restartEpsilon,
   // initialy, a higher priority is given to the newly gained information
   // (exploration mode) then, we decrement lf and have a higher priority for the
   // existing information in Q-Table (exploitation mode)
-  lf = 1.0 - (0.9 * currentTime / MAXTIME);
+  lf = std::max(0.01, 1.0 - (0.9 * currentTime / (double)MAXTIME));
 
   // *** define discount rate ***
 
   // we look for a higher, long-term reward
   df = 0.8;
+}
+
+void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME, float currentTime, float delta)
+{
+    // epsilon = 1;
+
+    epsilon = epsilon * (1.0 - delta);
+    
+    // *** define learning rate ***
+
+    // initialy, a higher priority is given to the newly gained information (exploration mode)
+    // then, we decrement lf and have a higher priority for the existing information in Q-Table (exploitation mode)
+    lf = std::max(0.01, 1.0 - (0.9 * (double)currentTime / (double)MAXTIME)); 
+
+    // *** define discount rate ***
+
+    // we look for a higher, long-term reward
+    df = 0.8;
 }
 
 } // namespace rkolib::core

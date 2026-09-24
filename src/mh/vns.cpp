@@ -43,6 +43,8 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -79,8 +81,13 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      // set initial variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of VNS based on initial state
       if (!S.empty()) {
@@ -88,6 +95,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
         betaMin = S[iCurr].par[1];
       }
     }
+  }
+
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] VNS iniciado. kMax=" << kMax << ", betaMin=" << betaMin << std::endl;
   }
 
   // ---------------------------------------------------------------------
@@ -111,13 +122,24 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // Main Loop
   // ---------------------------------------------------------------------
   // run the search process until stop criterion
-  //std::cout << "VNS init" << std::endl;
   while (currentTime < runData.MAXTIME * runData.restart) {
+
+    //best solution found so far
+    double bestOfvStartGen = sBest.ofv;
+
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
+      if (0){
       // set Q-Learning parameters
       SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
                      epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                       currentTime, delta);
+      }
+
+      //set variance
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -135,8 +157,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     // VNS Loop: current neighborhood
     int k = 1;
     while (k <= kMax && currentTime < runData.MAXTIME * runData.restart) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] VNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       Iter++;
 
@@ -167,8 +191,13 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
           IterMelhora = Iter;
           improv = 1;
 
+          if (runData.debug > 0) {
+            std::cout << "[DEBUG][MH] VNS encontrou nova melhor solucao na iteracao " 
+                      << Iter << ": ofv=" << sBest.ofv << std::endl;
+          }
+
           // update the SOLVER_POOL of solutions (Global Method)
-          UpdatePoolSolutions(sBestLine, method, (int)runData.debug);
+          UpdatePoolSolutions(sBestLine, method, (int)runData.debug, runData.poolUpdateMethod);
         }
       } else {
         // next neighborhood structure
@@ -187,10 +216,12 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
+        delta = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
+
       } else {
         // Evita divisão por zero
-        if (std::abs(s.ofv) > 1e-9)
-          R = (sBest.ofv - s.ofv) / s.ofv;
+        if (std::abs(s.ofv) > math_eps)
+          R = (sBest.ofv - s.ofv) / (std::abs(s.ofv) + math_eps);
         else
           R = 0;
       }
@@ -205,9 +236,14 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -216,11 +252,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     }
   }
 
-  //std::cout << "VNS end" << std::endl;
-
-  // print policy (commented in original)
-  // if (runData.debug and runData.control == 1)
-  //     PrintPolicy(S, st);
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] VNS finalizado. Iteracoes=" << Iter
+              << ", Melhor OFV=" << sBest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

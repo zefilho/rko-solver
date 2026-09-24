@@ -45,7 +45,7 @@ RkoSolver::RkoSolver()
       problemInstance_(nullptr), numActiveMethods_(0),
       bestObjective_(std::numeric_limits<double>::infinity()),
       averageObjective_(0.0), bestTime_(0.0), totalTime_(0.0),
-      scalarizer_(std::make_unique<core::TchebycheffScalarizer>()) {
+      scalarizer_(std::make_unique<core::NormalizedWeightedTchebycheff>()) {
   initializeRegistry();
 }
 
@@ -158,7 +158,7 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
   } else if (scalarizationMethod == "Gini_Coefficient") {
     scalarizer_ = std::make_unique<core::GiniScalarizer>();
   } else {
-    scalarizer_ = std::make_unique<core::TchebycheffScalarizer>();
+    scalarizer_ = std::make_unique<core::NormalizedWeightedTchebycheff>();
   }
 
   if (config["default_weights"]) {
@@ -166,6 +166,28 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
     for (const auto &w : config["default_weights"]) {
       defaultWeights_.push_back(w.as<double>());
     }
+  }
+
+  if (config["pool_update_method"]) {
+    runData_.poolUpdateMethod = config["pool_update_method"].as<int>();
+  }
+
+  if (config["ideal_point"]) {
+    userIdealPoint_.clear();
+    for (const auto &v : config["ideal_point"]) {
+      userIdealPoint_.push_back(v.as<double>());
+    }
+  }
+
+  if (config["nadir_point"]) {
+    userNadirPoint_.clear();
+    for (const auto &v : config["nadir_point"]) {
+      userNadirPoint_.push_back(v.as<double>());
+    }
+  }
+
+  if (config["fixed_ideal_point"]) {
+    fixedIdealPoint_ = config["fixed_ideal_point"].as<bool>();
   }
 
   std::cout << "Scalarization Strategy: " << scalarizer_->getName()
@@ -213,6 +235,8 @@ void RkoSolver::loadProblemData() {
 
   problemInstance_ = std::shared_ptr<core::IProblem>(createFunc(), destroyFunc);
 
+  problemInstance_->setDebugMode(runData_.debug);
+
   std::cout << "[Info] Lendo instância: " << instancePath_ << "...\n";
   problemInstance_->load(instancePath_);
 }
@@ -246,13 +270,16 @@ void RkoSolver::run() {
   std::cout << "\n[Info] Instance: " << instancePath_
             << "\n[Info] Methods:  " << numActiveMethods_
             << "\n[Info] Runs:     " << runData_.MAXRUNS
-            << "\n[Info] Time Limit: " << runData_.MAXTIME << "s"
-            << "\n\nProgress: " << std::flush;
+            << "\n[Info] Time Limit: " << runData_.MAXTIME << "s" << std::endl;
+
+  std::cout << "\nProcessing: " << std::flush;
+  char spinner[] = {'|', '/', '-', '\\'};
 
   for (int run = 0; run < runData_.MAXRUNS; ++run) {
-    std::cout << "[" << (run + 1) << "] " << std::flush;
-    executeRun(run);
+      std::cout << "\rProcessing: " << spinner[run % 4] << " [" << (run + 1) << "]" << std::flush;
+      executeRun(run);
   }
+  std::cout << "\rProcessing: Pronto!       \n" << std::endl;
 
   computeFinalStatistics();
   displayResults();
@@ -267,7 +294,13 @@ void RkoSolver::run() {
 
   if (runData_.debug == 0) { 
       utils::WriteSolution(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension);
-      utils::WriteResults(activeAlgorithms, bestObjective_, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+      
+      if(problemInstance_->getNumObjectives() > 1){
+        utils::WriteMultiObjectiveResults(activeAlgorithms, bestObjective_, bestSolutionGlobal_.objs, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+      } else {
+        utils::WriteResults(activeAlgorithms, bestObjective_, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
+      }
+      
   } else {
       auto& ctx = core::SolverContext::instance();
       utils::WriteSolutionScreen(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension, ctx.getPool());
@@ -407,25 +440,34 @@ void RkoSolver::updateStatistics(const core::TSol &runSolution,
                                  double startTime, double endTime) {
   double runTime = endTime - startTime;
 
+  core::TSol validRunSol = runSolution;
+  if (problemInstance_->getNumObjectives() > 1 && scalarizer_) {
+    std::vector<double> weights = defaultWeights_;
+    if (weights.empty() && !validRunSol.objs.empty()) {
+      weights.assign(validRunSol.objs.size(), 1.0 / validRunSol.objs.size());
+    }
+    validRunSol.ofv = scalarizer_->scalarize(validRunSol, weights, idealPoint_, nadirPoint_);
+  }
+
   // 1. Unificação da checagem do Melhor Global (Garante sincronia de estado)
-  if (runSolution.ofv < bestSolutionGlobal_.ofv) {
+  if (validRunSol.ofv < bestSolutionGlobal_.ofv) {
     
-    bestSolutionGlobal_ = runSolution; // Cópia profunda da solução completa
-    bestObjective_ = runSolution.ofv;  // Cache rápido da função objetivo
+    bestSolutionGlobal_ = validRunSol; // Cópia profunda da solução completa
+    bestObjective_ = validRunSol.ofv;  // Cache rápido da função objetivo
     
     // 2. Correção da precisão do tempo
     // Se a struct TSol registrou o momento exato do "achado" (best_time), usamos ele.
     // Caso contrário, fazemos o fallback para o tempo total da rodada.
-    if (runSolution.best_time > 0.0) {
-        bestTime_ = runSolution.best_time; 
+    if (validRunSol.best_time > 0.0) {
+        bestTime_ = validRunSol.best_time; 
     } else {
         bestTime_ = runTime;
     }
   }
 
   // 3. Acumuladores globais para cálculo de média no final
-  averageObjective_ += runSolution.ofv;
-  objectiveValues_.push_back(runSolution.ofv);
+  averageObjective_ += validRunSol.ofv;
+  objectiveValues_.push_back(validRunSol.ofv);
   totalTime_ += runTime; 
 }
 
@@ -485,9 +527,11 @@ void RkoSolver::decodeSolution(core::TSol &sol, const std::vector<double> &lambd
     }
 
     for (size_t k = 0; k < sol.objs.size(); ++k) {
-      // Atualiza Ideal: Queremos a MENOR distância possível
-      if (sol.objs[k] < idealPoint_[k]) { 
-          idealPoint_[k] = sol.objs[k]; 
+      // Atualiza Ideal apenas se fixed_ideal_point for false
+      if (!fixedIdealPoint_) {
+        if (sol.objs[k] < idealPoint_[k]) { 
+            idealPoint_[k] = sol.objs[k]; 
+        }
       }
       // Atualiza Nadir: Captura a PIOR (maior) distância encontrada
       if (sol.objs[k] > nadirPoint_[k]) { 
@@ -508,15 +552,25 @@ int RkoSolver::getProblemDimension() const {
   return problemInstance_->getDimension();
 }
 
+int RkoSolver::getNumObjectives() const {
+  return problemInstance_->getNumObjectives();
+}
+
 void RkoSolver::initReferencePoints(int nObj) {
   if (nObj <= 1)
     return;
 
-  std::cout << "MultiObjetivo - Inicializando Pontos de Referência" << std::endl;
-  idealPoint_.assign(nObj, 1.0e15); 
-  nadirPoint_.assign(nObj, -1.0e15);  
-  
-  std::cout << "[DEBUG TRACE] Pontos de Referência inicializados e alocados. Tamanho idealPoint_: " << idealPoint_.size() << std::endl;
+  if (!userIdealPoint_.empty() && (int)userIdealPoint_.size() == nObj) {
+    idealPoint_ = userIdealPoint_;
+  } else {
+    idealPoint_.assign(nObj, 1.0e15);
+  }
+
+  if (!userNadirPoint_.empty() && (int)userNadirPoint_.size() == nObj) {
+    nadirPoint_ = userNadirPoint_;
+  } else {
+    nadirPoint_.assign(nObj, -1.0e15);
+  }
 }
 
 // -------------------------------------------------------------------------

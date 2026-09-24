@@ -75,6 +75,8 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0;     // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -113,8 +115,13 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of SGA
       if (!S.empty()) {
@@ -124,7 +131,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       }
     }
   }
-  //std::cout << "GA init" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] GA iniciado. sizePop=" << sizePop << ", probCros=" << probCros 
+              << ", probMut=" << probMut << std::endl;
+  }
 
   // initialize population
   Pop.resize(sizePop);
@@ -149,13 +159,24 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     // number of generations
     numGenerations++;
 
+    //best solution found so far
+    double bestOfvStartGen = bestInd.ofv;
+
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      if (0) {
+        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
+                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+          currentTime, delta);
+      }
+
+      //set variance
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -211,8 +232,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     double bestOFcurrent = INFINITY;
 
     for (int i = 0; i < sizePop - 1; i = i + 2) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] GA interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       PopNew[i] = PopInter[i];
       PopNew[i + 1] = PopInter[i + 1];
@@ -255,14 +278,22 @@ void GA(const TRunData &runData, RkoSolver &solver) {
         bestInd = PopNew[i];
         bestGeneration = numGenerations;
         improv = 1;
-        UpdatePoolSolutions(bestInd, method, runData.debug);
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
+                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+        }
+        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
       }
 
       if (PopNew[i + 1].ofv < bestInd.ofv) {
         bestInd = PopNew[i + 1];
         bestGeneration = numGenerations;
         improv = 1;
-        UpdatePoolSolutions(bestInd, method, runData.debug);
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
+                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+        }
+        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
       }
 
       // set the best offspring
@@ -285,7 +316,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     if (PopNew[pos1].ofv < bestInd.ofv) {
       bestInd = PopNew[pos1];
       bestGeneration = numGenerations;
-      UpdatePoolSolutions(bestInd, method, runData.debug);
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] GA (LS) encontrou novo melhor individuo: ofv=" << bestInd.ofv << std::endl;
+      }
+      UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
     }
 
     // replace the population with offspring
@@ -300,9 +334,11 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
+        // update the variance
+        delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
-        if (std::abs(bestOFcurrent) > 1e-9)
-          R = (bestInd.ofv - bestOFcurrent) / bestOFcurrent;
+        if (std::abs(bestOFcurrent) > math_eps)
+          R = (bestInd.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + math_eps);
         else
           R = 0;
       }
@@ -316,9 +352,14 @@ void GA(const TRunData &runData, RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -335,7 +376,11 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   Pop.clear();
   PopNew.clear();
   PopInter.clear();
-  //std::cout << "GA end" << std::endl;
+
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] GA finalizado. Geraçoes=" << numGenerations
+              << ", Melhor OFV=" << bestInd.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

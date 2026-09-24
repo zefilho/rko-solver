@@ -116,6 +116,8 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -156,8 +158,13 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //initial epsilon and delta
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of PSO based on state
       if (!S.empty()) {
@@ -169,8 +176,12 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] PSO iniciado. Psize=" << Psize << ", c1=" << c1 
+              << ", c2=" << c2 << ", w=" << w << std::endl;
+  }
+
   // initialize population
-  //std::cout << "PSO init" << std::endl;
   X.clear();
   Pbest.clear();
   V.clear();
@@ -206,13 +217,24 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     // number of generations
     numGenerations++;
 
+    // best ofv found in the previous generation
+    double bestOfvStartGen = Gbest.ofv;
+
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      if (0) {
+        // set Q-Learning parameters
+        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
+                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        // set Q-Learning parameters
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                      currentTime, delta);
+      }
+
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -242,8 +264,10 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     int currentPsize = (int)X.size();
 
     for (int i = 0; i < currentPsize; i++) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] PSO interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       double probUpdate = 1.0;
 
@@ -287,6 +311,11 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
         Gbest = X[i];
         bestGeneration = numGenerations;
         improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] PSO encontrou novo Gbest na geracao " 
+                    << numGenerations << ": ofv=" << Gbest.ofv << std::endl;
+        }
       }
 
       // media += X[i].ofv;
@@ -303,12 +332,16 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
         Gbest = Pbest[chosen];
         bestGeneration = numGenerations;
         improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] PSO (LS) encontrou novo Gbest: ofv=" << Gbest.ofv << std::endl;
+        }
       }
     }
 
     if (bestGeneration == numGenerations || Gbest.ofv < oldGbest) {
       // update the SOLVER_POOL of solutions
-      UpdatePoolSolutions(Gbest, method, runData.debug);
+      UpdatePoolSolutions(Gbest, method, runData.debug, runData.poolUpdateMethod);
     }
 
     // -----------------------------------------------------------------
@@ -320,9 +353,10 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
+        delta = (bestOfvStartGen - Gbest.ofv) / (bestOfvStartGen + math_eps);
       } else {
         if (std::abs(bestOFcurrent) > 1e-9)
-          R = (Gbest.ofv - bestOFcurrent) / bestOFcurrent;
+          R = (Gbest.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + 1e-9);
         else
           R = 0;
       }
@@ -336,9 +370,14 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -357,7 +396,10 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   V.clear();
   Pbest.clear();
 
-  //std::cout << "PSO end" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] PSO finalizado. Geraçoes=" << numGenerations
+              << ", Melhor OFV=" << Gbest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

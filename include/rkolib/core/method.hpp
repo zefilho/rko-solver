@@ -23,7 +23,7 @@ namespace rkolib::core {
     // -----------------------------------------------------------------------------
     void CreateInitialSolutions(TSol &s, const int n);
     void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool);
-    void UpdatePoolSolutions(TSol s, const char* mh, const int debug);
+    void UpdatePoolSolutions(TSol s, const char* mh, const int debug, int updateMethod);
 
     // -----------------------------------------------------------------------------
     // Local Searches & Metaheuristics Components

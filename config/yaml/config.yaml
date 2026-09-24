@@ -14,7 +14,7 @@ metaheuristics:
 
 # Configurações Gerais de Execução
 execution_settings:
-  max_runs: 2      # Número máximo de execuções
+  max_runs: 1      # Número máximo de execuções
   debug_mode: 0        # 0: teste, 1: debug
   control_mode: 1      # 0: offline tuning, 1: Q-Learning (online)
 
@@ -29,4 +29,16 @@ search_parameters:
 scalarization: "Tchebycheff"
 
 # Pesos padrão (caso o algoritmo não forneça dinamicamente)
-default_weights: [0.5, 0.5]
+default_weights: [0.00, 1.00]
+
+# Ponto de Referência Ideal a priori (opcional - se omitido, calcula dinamicamente)
+#ideal_point: [-110.0, 40.0]
+
+# Ponto de Referência Nadir a priori (opcional - se omitido, calcula dinamicamente)
+# nadir_point: [0.0, 100.0]
+
+# Manter Ponto Ideal fixado na busca (true/false)
+fixed_ideal_point: false
+
+# Método de atualização do pool: 0 = Padrão (CP), 1 = NSGA-II
+poolUpdateMethod: 0

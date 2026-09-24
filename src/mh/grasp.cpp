@@ -200,6 +200,8 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -237,8 +239,13 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //variance and epsilon
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of GRASP
       if (!S.empty()) {
@@ -249,8 +256,12 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] GRASP iniciado. alphaGrasp=" << alphaGrasp << ", hs=" << hs 
+              << ", he=" << he << std::endl;
+  }
+
   // create an initial solution
-  //std::cout << "GRASP init" << std::endl;
   CreateInitialSolutions(s, solver.getProblemDimension());
   solver.decodeSolution(s);
   sBest = s;
@@ -260,9 +271,17 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
   while (currentTime < runData.MAXTIME * runData.restart) {
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
+      if (0) {
       // set Q-Learning parameters
       SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
                      epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                       currentTime, delta);
+      }
+
+      // set variance
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -281,8 +300,10 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     h = hs;
     // noImprov = 0;
     while (h >= he && currentTime < runData.MAXTIME * runData.restart) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] GRASP interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       iter++;
 
@@ -301,11 +322,18 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
 
       // update the best solution found by GRASP
       if (sLineBest.ofv < sBest.ofv) {
+        delta = (sBest.ofv - sLineBest.ofv) / (sBest.ofv + math_eps);
+
         sBest = sLineBest;
         improv = 1;
 
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GRASP encontrou nova melhor solucao na iteracao " 
+                    << iter << ": ofv=" << sBest.ofv << std::endl;
+        }
+
         // update the SOLVER_POOL of solutions
-        UpdatePoolSolutions(sLineBest, method, runData.debug);
+        UpdatePoolSolutions(sLineBest, method, runData.debug, runData.poolUpdateMethod);
       }
       // make grid more dense
       else {
@@ -321,7 +349,7 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
         // Avoid division by zero in time factor
         double timeFactor =
             100.0 -
-            100.0 * (currentTime / (runData.MAXTIME * runData.restart + 1e-9));
+            100.0 * (currentTime / (runData.MAXTIME * runData.restart + math_eps));
         if (timeFactor < 1.0)
           timeFactor = 1.0;
 
@@ -343,8 +371,8 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
         R = 1;
         improv = 0;
       } else {
-        if (std::abs(sLineBest.ofv) > 1e-9)
-          R = (sBest.ofv - sLineBest.ofv) / sLineBest.ofv;
+        if (std::abs(sLineBest.ofv) > math_eps)
+          R = (sBest.ofv - sLineBest.ofv) / (std::abs(sLineBest.ofv) + math_eps);
         else
           R = 0;
       }
@@ -358,9 +386,14 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // define the new current state st
@@ -373,7 +406,10 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     currentTime = (float)(end_timeMH - start_timeMH);
   }
 
-  //std::cout << "GRASP end" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] GRASP finalizado. Iteracoes=" << iter
+              << ", Melhor OFV=" << sBest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

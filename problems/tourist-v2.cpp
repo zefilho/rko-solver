@@ -27,7 +27,6 @@ public:
   virtual void decode(TSol &sol) const = 0;
   virtual int getDimension() const = 0;
   virtual int getNumObjectives() const = 0;
-  virtual void setDebugMode(int debug) { (void)debug; }
 };
 } // namespace rkolib::core
 
@@ -40,7 +39,6 @@ struct No {
 
 class TouristProblem : public rkolib::core::IProblem {
 private:
-  int debug_mode = 0;
   int nObj;
   int n;
   double M, w0;
@@ -76,17 +74,12 @@ private:
   }
 
 public:
-  TouristProblem() : debug_mode(0), nObj(2), n(0), M(0.0), w0(0.0), T_dias(0) {}
+  TouristProblem() : nObj(2), n(0), M(0.0), w0(0.0), T_dias(0) {}
   ~TouristProblem() override = default;
-
-  void setDebugMode(int debug) override { debug_mode = debug; }
 
   void load(const std::string &nomeArquivo) override {
     std::ifstream file(nomeArquivo);
-    if (!file.is_open()) {
-      if (debug_mode > 0) std::cerr << "[ERROR][tourist] Falha ao abrir arquivo: " << nomeArquivo << std::endl;
-      throw std::runtime_error("Erro abrir: " + nomeArquivo);
-    }
+    if (!file.is_open()) throw std::runtime_error("Erro abrir: " + nomeArquivo);
 
     std::string token, linha;
 
@@ -97,14 +90,8 @@ public:
     file >> token; T_dias = std::stoi(valorApos(token));
 
     // VALIDAÇÃO CRÍTICA DE LIMITES
-    if (n <= 0) {
-      if (debug_mode > 0) std::cerr << "[WARNING][tourist] n invalido (" << n << "). Corrigido para 1." << std::endl;
-      n = 1;
-    }
-    if (T_dias <= 0) {
-      if (debug_mode > 0) std::cerr << "[WARNING][tourist] T_dias invalido (" << T_dias << "). Corrigido para 1." << std::endl;
-      T_dias = 1;
-    }
+    if (n <= 0) n = 1;
+    if (T_dias <= 0) T_dias = 1;
 
     pularAte(file, "LIMITES_ATRACOES_POR_DIA");
     rt.resize(T_dias, 0);
@@ -155,13 +142,6 @@ public:
         int idx = id - 1;
         if (idx >= 0 && idx < n) H[t].push_back(idx); 
       }
-    }
-
-    if (debug_mode > 0) {
-      std::cout << "[DEBUG][tourist] Instancia carregada com sucesso: " << nomeArquivo << std::endl;
-      std::cout << "[DEBUG][tourist] n=" << n << ", T_dias=" << T_dias 
-                << ", M=" << M << ", w0=" << w0 
-                << ", Dimensao do cromossomo=" << getDimension() << std::endl;
     }
   }
 
@@ -223,13 +203,7 @@ public:
   // MÉTODO DECODE (Otimizado com Inserção Híbrida)
   // =======================================================
   void decode(rkolib::core::TSol &s) const override {
-    if (s.rk.size() < static_cast<size_t>(getDimension())) {
-      if (debug_mode > 0) {
-        std::cerr << "[ERROR][tourist] Tamanho do cromossomo (" << s.rk.size()
-                  << ") menor que a dimensao esperada (" << getDimension() << ")." << std::endl;
-      }
-      return;
-    }
+    if (s.rk.size() < static_cast<size_t>(getDimension())) return;
 
     auto clamp_key = [](double k) {
         if (std::isnan(k) || std::isinf(k)) return 0.0;
@@ -238,12 +212,12 @@ public:
 
     // --- Layout de Segmentos ---
     // Segmento A (Prioridades):       s.rk[0        .. n-1]
-    // Segmento B (Fator RCL):         s.rk[n]                  -> 1 ÚNICA CHAVE
-    // Segmento C (Restaurantes):      s.rk[n+1      .. n+T]
-    // Segmento D (Hotéis):            s.rk[n+T+1    .. n+2T-1]
+    // Segmento B (Modo Inserção/Dia): s.rk[n        .. n+T-1]
+    // Segmento C (Restaurantes):      s.rk[n+T      .. n+2T-1]
+    // Segmento D (Hotéis):            s.rk[n+2T     .. n+3T-2]
     int offset_B = n;
-    int offset_C = n + 1;
-    int offset_D = n + 1 + T_dias;
+    int offset_C = n + T_dias;
+    int offset_D = n + 2 * T_dias;
 
     // 1. Segmento A: Ordenar atrações por prioridade (crescente de chave)
     std::vector<std::pair<double, int>> prioridade(n);
@@ -290,67 +264,69 @@ public:
     double z2_distancia = 0.0;
     int no_atual = 0; // Nó de partida global (aeroporto/base)
 
-    // Estrutura auxiliar para ordenar as posições viáveis pelo custo
-    struct PosCusto {
-      int pos;
-      double custo;
-      bool operator<(const PosCusto& outro) const {
-        return custo < outro.custo;
-      }
-    };
-
     for (int t = 0; t < T_dias; ++t) {
+      bool modo_guloso = (clamp_key(s.rk[offset_B + t]) < 0.5);
       int visitas_dia = 0;
-      std::vector<PosCusto> posicoes_viaveis;
+
+      std::vector<int> posicoes_viaveis;
       posicoes_viaveis.reserve(n);
 
       // Tentar inserir cada atração na rota do dia (por ordem de prioridade)
       for (const auto &[chave, id_atr] : prioridade) {
         if (visitada[id_atr]) continue;
-        if (visitas_dia >= st[t]) break;
+        if (visitas_dia >= st[t]) break; // Limite máximo do dia atingido
 
+        // Verificar janela de tempo mínima: a atração deve ser aberta no dia t
         if (a[id_atr][t] > b[id_atr][t]) continue;
 
+        // Avaliar inserção em todas as posições possíveis da rota atual
         posicoes_viaveis.clear();
+        int melhor_pos = -1;
+        double melhor_custo = std::numeric_limits<double>::infinity();
+        //std::vector<int> posicoes_viaveis;
+
         const int limite_posicoes = static_cast<int>(rotas[t].size());
 
-        // Avalia TODAS as posições de inserção e calcula o custo
         for (int pos = 0; pos <= limite_posicoes; ++pos) {
+          // Criar rota candidata com a atração inserida na posição 'pos'
+          
+          //código original
+          //std::vector<int> rota_teste = rotas[t];
+          //rota_teste.insert(rota_teste.begin() + pos, id_atr);
+          //SimResult sim = simulateRoute(rota_teste, t, no_atual,
+          //                              restaurantes[t], hoteis[t]);
+
+          //codigo otimizado sem copias
           rotas[t].insert(rotas[t].begin() + pos, id_atr);
           SimResult sim = simulateRoute(rotas[t], t, no_atual,
                                         restaurantes[t], hoteis[t]);
 
           if (sim.viavel) {
-            // Custo de inserção: quanto menor, melhor.
-            double custo = sim.z2_parcial - sim.z1_parcial; 
-            posicoes_viaveis.push_back({pos, custo});
+            if (modo_guloso) {
+              // Guloso: minimiza incremento de distância
+              double custo = sim.z2_parcial - sim.z1_parcial;
+              if (custo < melhor_custo) {
+                melhor_custo = custo;
+                melhor_pos = pos;
+              }
+            } else {
+              // Aleatório: coleta todas as posições viáveis
+              posicoes_viaveis.push_back(pos);
+            }
           }
 
           rotas[t].erase(rotas[t].begin() + pos);
         }
 
+        // Determinar a posição final de inserção
         int pos_final = -1;
-        
-        // --- NOVA LÓGICA: Lista Restrita de Candidatos (RCL) ---
-        if (!posicoes_viaveis.empty()) {
-          // 1. Ordena os candidatos do melhor (menor custo) para o pior
-          std::sort(posicoes_viaveis.begin(), posicoes_viaveis.end());
-
-          // 2. Define o tamanho da lista baseado na única chave do Segmento B
-          double fator_rcl = clamp_key(s.rk[offset_B]);
-          
-          // Tamanho da lista = ceil(fator * total_viaveis). Mínimo de 1 candidato.
-          int rcl_size = std::max(1, static_cast<int>(std::ceil(fator_rcl * posicoes_viaveis.size())));
-          
-          // Limita o tamanho máximo por segurança
-          rcl_size = std::min(rcl_size, static_cast<int>(posicoes_viaveis.size()));
-
-          // 3. Sorteia um candidato APENAS dentre os melhores da lista restrita
-          std::uniform_int_distribution<int> dist(0, rcl_size - 1);
-          pos_final = posicoes_viaveis[dist(local_rng)].pos;
+        if (modo_guloso) {
+          pos_final = melhor_pos;
+        } else if (!posicoes_viaveis.empty()) {
+          std::uniform_int_distribution<int> dist(0, static_cast<int>(posicoes_viaveis.size()) - 1);
+          pos_final = posicoes_viaveis[dist(local_rng)];
         }
 
-        // Insere na posição sorteada da RCL
         if (pos_final >= 0) {
           rotas[t].insert(rotas[t].begin() + pos_final, id_atr);
           visitada[id_atr] = true;
@@ -364,13 +340,8 @@ public:
       z1_qualidade += resultado.z1_parcial;
       z2_distancia += resultado.z2_parcial;
 
-      if (resultado.visitas < rt[t]) {
-        if (debug_mode > 0) {
-          std::cout << "[WARNING][tourist] Dia " << (t + 1) << ": Visitas (" << resultado.visitas 
-                    << ") abaixo do minimo rt=" << rt[t] << ". Penalizando com M=" << M << std::endl;
-        }
-        z1_qualidade -= M;
-      }
+      // Penalidade por mínimo de visitas não atingido
+      if (resultado.visitas < rt[t]) z1_qualidade -= M;
 
       no_atual = resultado.no_final;
     }
@@ -381,11 +352,6 @@ public:
     s.objs[0] = -z1_qualidade;
     // Objetivo 2: Distância (minimizar -> positivo)
     s.objs[1] = z2_distancia;
-
-    if (debug_mode > 0) {
-      std::cout << "[DEBUG][tourist] Decode concluido: Obj1(Qualidade)=" << -s.objs[0] 
-                << ", Obj2(Distancia)=" << s.objs[1] << std::endl;
-    }
   }
 
   // Dimensão reduzida: n + 3T - 1 (era 2n + 2T - 1)

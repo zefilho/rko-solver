@@ -15,7 +15,7 @@ public:
 };
 
 // Strategy 1: Tchebycheff (Minimize the distance to the ideal)
-class TchebycheffScalarizer : public IScalarizer {
+class NormalizedWeightedTchebycheff : public IScalarizer {
 public:
   double scalarize(const TSol &s, const std::vector<double> &lambda,
                    const std::vector<double> &idealPoint, 
@@ -25,11 +25,22 @@ public:
       return 1e15; // Valor ruim
     }
 
+    for (double w : lambda) {
+      if (w < 0.0) {
+        throw std::invalid_argument("Tchebycheff weights must be non-negative");
+      }
+    }
+
     double max_dist = -1.0;
     size_t nObj = s.objs.size();
 
+    if (!lambda.empty() && lambda.size() != nObj) {
+      throw std::invalid_argument("Lambda dimension does not match number of objectives");
+    } 
+
     // Pesos padrão se vetor vazio
-    bool use_default = (lambda.size() != nObj);
+    //bool use_default = (lambda.size() != nObj);
+    bool use_default = lambda.empty();
     double default_w = 1.0 / (double)nObj;
     double sum_dist = 0.0;
 
@@ -49,6 +60,9 @@ public:
       // Normalized distance formula
       double norm_dist = diff / range;
       double val = w * norm_dist;
+
+      // std::cout << "[TRACE CORE] Tchebycheff Scalarizer Avaliacao" << std::endl;
+      // std::cout << "w: " << w << " diff: " << diff << " range: " << range << " norm_dist: " << norm_dist << " val: " << val << std::endl;
       sum_dist += norm_dist;
 
       
@@ -56,6 +70,7 @@ public:
         max_dist = val;
       }
     }
+
     return max_dist + (0.0001 * sum_dist);
   }
   std::string getName() const override { return "Tchebycheff"; }

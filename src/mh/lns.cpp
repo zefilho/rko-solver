@@ -72,6 +72,8 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9;
+  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -115,8 +117,13 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //initial epsilon and delta
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define parameters of LNS based on state
       if (!S.empty()) {
@@ -128,7 +135,10 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
-  //std::cout << "LNS init" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] LNS iniciado. betaMin=" << betaMin << ", betaMax=" << betaMax 
+              << ", T0=" << T0 << ", alphaLNS=" << alphaLNS << std::endl;
+  }
 
   // Create the initial solution with random keys
   CreateInitialSolutions(s, solver.getProblemDimension());
@@ -145,10 +155,18 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
       // Q-Learning Update Phase (Pre-Action)
       if (runData.control == 1 && !S.empty()) {
-        // set Q-Learning parameters
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
-                       epsilon_min, epsilon, lf, df,
-                       (int)(runData.MAXTIME * runData.restart));
+        if (0) {
+          // set Q-Learning parameters
+          SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
+                         epsilon_min, epsilon, lf, df,
+                         (int)(runData.MAXTIME * runData.restart));
+        } else {
+          // set Q-Learning parameters
+          SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                        currentTime, delta);
+        }
+
+        delta = 0.0;
 
         // choose a action at for current state st
         at = ChooseAction(S, st, epsilon);
@@ -194,8 +212,10 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
 
         // Testa valores baseados na sequência de Farey
         for (int j = 0; j < (int)F.size() - 1; j++) {
-          if (SOLVER_SHOULD_STOP)
+          if (SOLVER_SHOULD_STOP) {
+            if (runData.debug > 0) std::cout << "[DEBUG][MH] LNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
             return;
+          }
 
           // generate a random value between two intervals of the Farey sequence
           sLine.rk[pos] = randomico(F[j], F[j + 1]);
@@ -225,11 +245,16 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
         s = sLineBest;
 
         if (s.ofv < sBest.ofv) {
+          delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
           sBest = s;
           improv = 1;
 
+          if (runData.debug > 0) {
+            std::cout << "[DEBUG][MH] LNS encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
+          }
+
           // update the SOLVER_POOL of solutions
-          UpdatePoolSolutions(s, method, runData.debug);
+          UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
         }
       } else {
         double x = randomico(0, 1);
@@ -248,7 +273,7 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
           improv = 0;
         } else {
           if (std::abs(s.ofv) > 1e-9)
-            R = (sBest.ofv - s.ofv) / s.ofv;
+            R = (sBest.ofv - s.ofv) / (std::abs(s.ofv) + 1e-9);
           else
             R = 0;
         }
@@ -262,9 +287,14 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
             S[st].Qa[at] =
                 S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-            if (S[st].Qa[at] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[at];
-              S[st].maxA = at;
+            // Recalculate true maxQ and maxA for state st
+            S[st].maxQ = S[st].Qa[0];
+            S[st].maxA = 0;
+            for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+              if (S[st].Qa[k] > S[st].maxQ) {
+                S[st].maxQ = S[st].Qa[k];
+                S[st].maxA = (int)k;
+              }
             }
           }
           // Define the new current state st
@@ -285,7 +315,9 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     reanneling = 1;
   }
 
-  //std::cout << "LNS end" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] LNS finalizado. Melhor OFV=" << sBest.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

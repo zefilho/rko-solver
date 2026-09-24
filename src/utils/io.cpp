@@ -113,6 +113,58 @@ namespace rkolib::utils {
         file << std::format(",{:.6f},{:.6f},{:.3f},{:.3f}\n", ofv, ofvAverage, timeBest, timeTotal);
     }
 
+    void WriteMultiObjectiveResults(const std::vector<std::string>& algorithms, 
+                                double scalarOfv, 
+                                const std::vector<double>& realObjs, // <-- Adicionado o vetor de objetivos reais
+                                double ofvAverage, 
+                                const std::vector<double>& ofvs, 
+                                double timeBest, double timeTotal, 
+                                const std::string& instance, 
+                                const std::string& outDir) {
+    
+    EnsureDirectoryExists(outDir);
+    // Cria um arquivo separado para não quebrar a formatação das instâncias Mono-objetivo
+    std::string filepath = outDir + "/Results_MO_RKO.csv";
+    
+    bool isNewFile = !std::filesystem::exists(filepath);
+    std::ofstream file(filepath, std::ios::app);
+
+    if (!file.is_open()) {
+        std::cerr << "\n[Erro FATAL] Nao foi possivel abrir o arquivo: " << filepath << "\n";
+        return;
+    }
+
+    // Se o arquivo for novo, injetamos o cabeçalho CSV com a coluna Real_Objectives
+    if (isNewFile) {
+        file << "Instance,Algorithms,Num_Runs,All_Scalar_OFVs,Best_Scalar_OFV,Real_Objectives,Average_Scalar_OFV,Best_Time,Total_Time\n";
+    }
+
+    file << instance << "," << JoinAlgorithms(algorithms) << "," << ofvs.size() << ",";
+    
+    // Concatena todos os resultados das rodadas (OFV Escalarizado)
+    for (size_t i = 0; i < ofvs.size(); ++i) {
+        file << std::format("{:.6f}", ofvs[i]);
+        if (i < ofvs.size() - 1) {
+            file << "|";
+        }
+    }
+
+    // Grava o Melhor OFV Escalarizado
+    file << "," << std::format("{:.6f}", scalarOfv) << ",";
+
+    // Concatena os Objetivos Reais separados por pipe (|)
+    // Exemplo: 120.50|0.45 (Custo | Gini)
+    for (size_t i = 0; i < realObjs.size(); ++i) {
+        file << std::format("{:.6f}", realObjs[i]);
+        if (i < realObjs.size() - 1) {
+            file << "|";
+        }
+    }
+
+    // Finaliza com Média e Tempos
+    file << std::format(",{:.6f},{:.3f},{:.3f}\n", ofvAverage, timeBest, timeTotal);
+}
+
     // Em rkolib::utils
     void WriteConvergenceLog(const std::vector<core::ConvergencePoint>& history, const std::string& outDir) {
         std::cout << "[Info] Escrevendo log de convergencia...\n";

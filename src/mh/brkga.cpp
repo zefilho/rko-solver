@@ -4,6 +4,7 @@
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
 #include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
+#include <cstdlib>
 
 namespace rkolib::mh {
 
@@ -133,6 +134,8 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -172,8 +175,13 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      //variance and epison
+      epsilon = 0.95;
+      delta = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define the initial parameters of the BRGKA
       if (!S.empty()) {
@@ -184,7 +192,10 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
       }
     }
   }
-  //std::cout << "BRKGA init" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] BRKGA iniciado. PopSize=" << p << ", pe=" << pe 
+              << ", pm=" << pm << ", rhoe=" << rhoe << std::endl;
+  }
 
   // initialize population
   Pop.clear();
@@ -215,8 +226,16 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       // set Q-Learning parameters
+      if (0) {
       SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
                      epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
+      } else {
+        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+          currentTime, delta);
+      }
+
+      // 
+      delta = 0.0;
 
       // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
@@ -256,8 +275,10 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     bestOff.ofv = std::numeric_limits<double>::infinity();
 
     for (int i = eliteCount; i < crossoverLimit; i++) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       // Parametric uniform crossover
       PopInter[i] = PUX(eliteCount, p, rhoe, Pop, solver.getProblemDimension());
@@ -275,8 +296,10 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     // Original code index math was ambiguous/overlapping.
     // Now we iterate from 'crossoverLimit' to 'p'.
     for (int i = crossoverLimit; i < p; i++) {
-      if (SOLVER_SHOULD_STOP)
+      if (SOLVER_SHOULD_STOP) {
+        if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
+      }
 
       CreateInitialSolutions(PopInter[i], solver.getProblemDimension());
       solver.decodeSolution(PopInter[i]);
@@ -299,10 +322,18 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     if (Pop[0].ofv < bestInd.ofv) {
       bestGeneration = numGenerations;
       improv = 1;
+
+      delta = (bestInd.ofv - Pop[0].ofv) / (bestInd.ofv + math_eps);
+
       bestInd = Pop[0];
 
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] BRKGA encontrou novo melhor individuo na geracao "
+                  << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+      }
+
       // Update SOLVER_POOL of solutions
-      UpdatePoolSolutions(Pop[0], method, runData.debug);
+      UpdatePoolSolutions(Pop[0], method, runData.debug, runData.poolUpdateMethod);
     }
 
     // -----------------------------------------------------------------
@@ -316,7 +347,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
         improv = 0;
       } else {
         if (std::abs(bestInd.ofv) > 1e-9)
-          R = (bestInd.ofv - bestOff.ofv) / bestInd.ofv;
+          R = (bestInd.ofv - bestOff.ofv) / (std::abs(bestInd.ofv) + 1e-9);
         else
           R = 0;
       }
@@ -330,9 +361,14 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
           S[st].Qa[at] =
               S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-          if (S[st].Qa[at] > S[st].maxQ) {
-            S[st].maxQ = S[st].Qa[at];
-            S[st].maxA = at;
+          // Recalculate true maxQ and maxA for state st
+          S[st].maxQ = S[st].Qa[0];
+          S[st].maxA = 0;
+          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+            if (S[st].Qa[k] > S[st].maxQ) {
+              S[st].maxQ = S[st].Qa[k];
+              S[st].maxA = (int)k;
+            }
           }
         }
         // Define the new current state st
@@ -348,7 +384,11 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
   // free memory of BRKGA components
   Pop.clear();
   PopInter.clear();
-  //std::cout << "BRKGA end" << std::endl;
+
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] BRKGA finalizado. Geraçoes=" << numGenerations
+              << ", Melhor OFV=" << bestInd.ofv << std::endl;
+  }
 }
 
 } // namespace rkolib::mh

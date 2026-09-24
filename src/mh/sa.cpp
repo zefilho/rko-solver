@@ -51,6 +51,8 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // std::vector <std::vector <TQ> > Q; // (Nota: Não utilizado no original)
   // std::vector<int> ai;               // (Nota: Não utilizado no original)
 
+  const double math_eps = 1e-9; // security margin for floating point denominator
+  double delta_q = 0.0;   // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
   int Ti = 1;              // number of epochs performed
@@ -94,8 +96,12 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       // maximum epsilon
       epsilon_max = 1.0;
 
+      epsilon = 0.95;
+      delta_q = 0.0;
+
       // current state
       iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
 
       // define the initial parameters of the SA based on State
       // T0 inicial fixo no código original, mas sobrescrito logo abaixo pelo
@@ -110,6 +116,11 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     }
   }
 
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] SA iniciado. SAmax=" << SAmax << ", alphaSA=" << alphaSA 
+              << ", betaMin=" << betaMin << ", betaMax=" << betaMax << ", T0=" << T0 << std::endl;
+  }
+
   // ---------------------------------------------------------------------
   // Initialization
   // ---------------------------------------------------------------------
@@ -118,7 +129,6 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   solver.decodeSolution(s);
   sBest = s;
 
-  //std::cout << "Debug: SA started" << std::endl;
   // ---------------------------------------------------------------------
   // Main Loop
   // ---------------------------------------------------------------------
@@ -132,12 +142,23 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // Temperature Loop
     while (T > 0.0001 && currentTime < runData.MAXTIME * runData.restart) {
+      
+      double bestOfvStartGen = sBest.ofv;
+      
       // Q-Learning Update (Pre-Action)
       if (runData.control == 1 && !S.empty()) {
-        // set Q-Learning parameters
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
-                       epsilon_min, epsilon, lf, df,
-                       (int)(runData.MAXTIME * runData.restart));
+
+        if(0){
+          // set Q-Learning parameters
+          SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
+                         epsilon_min, epsilon, lf, df,
+                         (int)(runData.MAXTIME * runData.restart));
+        } else {
+          SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                         currentTime, delta_q);
+        }
+        //reset delta
+        delta_q = 0.0;
 
         // choose a action at for current state st
         at = ChooseAction(S, st, epsilon);
@@ -158,8 +179,10 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
       // Metropolis Loop
       while (IterT < SAmax && currentTime < runData.MAXTIME * runData.restart) {
-        if (SOLVER_SHOULD_STOP)
+        if (SOLVER_SHOULD_STOP) {
+          if (runData.debug > 0) std::cout << "[DEBUG][MH] SA interrompido via SOLVER_SHOULD_STOP." << std::endl;
           return;
+        }
 
         IterT++;
 
@@ -187,8 +210,13 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
             sBest = s;
             improv = 1;
 
+            if (runData.debug > 0) {
+              std::cout << "[DEBUG][MH] SA encontrou nova melhor solucao: ofv=" << sBest.ofv 
+                        << " (Temp=" << T << ")" << std::endl;
+            }
+
             // update the SOLVER_POOL of solutions
-            UpdatePoolSolutions(s, method, runData.debug);
+            UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
           }
         } else {
           // metropolis criterion
@@ -205,9 +233,10 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
         if (improv) {
           R = 1;
           improv = 0;
+          delta_q = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
         } else {
-          if (std::abs(bestOFV) > 1e-9)
-            R = (sBest.ofv - bestOFV) / bestOFV;
+          if (std::abs(bestOFV) > math_eps)
+            R = (sBest.ofv - bestOFV) / (std::abs(bestOFV) + math_eps);
           else
             R = 0;
         }
@@ -220,9 +249,14 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
             S[st].Qa[at] =
                 S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-            if (S[st].Qa[at] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[at];
-              S[st].maxA = at;
+            // Recalculate true maxQ and maxA for state st
+            S[st].maxQ = S[st].Qa[0];
+            S[st].maxA = 0;
+            for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+              if (S[st].Qa[k] > S[st].maxQ) {
+                S[st].maxQ = S[st].Qa[k];
+                S[st].maxA = (int)k;
+              }
             }
           }
           // Define the new current state st
@@ -242,8 +276,12 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       if (sViz.ofv < sBest.ofv) {
         sBest = sViz;
 
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] SA (LS) encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
+        }
+
         // update the SOLVER_POOL of solutions
-        UpdatePoolSolutions(sBest, method, runData.debug);
+        UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
       }
 
       // terminate the search process in MAXTIME
@@ -256,7 +294,9 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     reanneling = 1;
   }
 
-  //std::cout << "Debug: SA finished" << std::endl;
+  if (runData.debug > 0) {
+    std::cout << "[DEBUG][MH] SA finalizado. Melhor OFV=" << sBest.ofv << std::endl;
+  }
 
   // print policy
   // if (runData.debug and runData.control == 1)
