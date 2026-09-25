@@ -6,27 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace rkolib::core {
-
-struct TSol {
-  std::vector<double> rk;
-  double ofv = std::numeric_limits<double>::infinity();
-  double best_time = 0.0;
-  std::string nameMH;
-  std::vector<double> objs;
-  TSol() = default;
-};
-
-// The virtual functions must be in exactly the same order as in your problem.hpp file.
-class IProblem {
-public:
-  virtual ~IProblem() = default;
-  virtual void load(const std::string &filename) = 0;
-  virtual void decode(TSol &sol) const = 0;
-  virtual int getDimension() const = 0;
-  virtual int getNumObjectives() const = 0;
-};
-} // namespace rkolib::core
+#include "rkolib/core/problem.hpp"
 
 class TspProblem : public rkolib::core::IProblem {
 private:
@@ -133,26 +113,4 @@ public:
   int getNumObjectives() const override { return nObj; }
 };
 
-// ---------------------------------------------------------
-// EXPORTAÇÃO DO PLUGIN (Contrato C)
-// ---------------------------------------------------------
-extern "C" {
-
-  #ifdef _WIN32
-    __declspec(dllexport) rkolib::core::IProblem *create_problem() {
-      return new TspProblem();
-    }
-    __declspec(dllexport) void destroy_problem(rkolib::core::IProblem *p) {
-      delete p;
-    }
-  #else
-    __attribute__((visibility("default"))) rkolib::core::IProblem *
-    create_problem() {
-      return new TspProblem();
-    }
-    __attribute__((visibility("default"))) void
-    destroy_problem(rkolib::core::IProblem *p) {
-      delete p;
-    }
-  #endif
-}
+REGISTER_RKO_PROBLEM(TspProblem)

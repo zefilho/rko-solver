@@ -41,8 +41,8 @@ This will create the `build/` directory, resolve dependencies (`yaml-cpp`, `CLI1
 To compile a specific problem (e.g., Tourist, Knapsack Problem, or TSP) without recompiling the core, use the agile plugin command:
 ```bash
 make plugin PROB=tourist
-# Or for the Knapsack Problem:
-make plugin PROB=kpproblem
+# Or for the Traveling Salesman Problem:
+make plugin PROB=tspproblem
 ```
 The compiled plugins will be saved in `build/plugins/`.
 
@@ -141,11 +141,8 @@ public:
     int getNumObjectives() const override { return 2; }
 };
 
-// Export plugin factory functions
-extern "C" {
-    EXPORT_PLUGIN rkolib::core::IProblem* create_problem() { return new MyProblem(); }
-    EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem* p) { delete p; }
-}
+// Export plugin factory cleanly using macro
+REGISTER_RKO_PROBLEM(MyProblem)
 ```
 
 3. Build your plugin with:

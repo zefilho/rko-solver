@@ -43,3 +43,14 @@ typedef void (*DestroyProblemFunc)(rkolib::core::IProblem *);
 #else
 #define EXPORT_PLUGIN __attribute__((visibility("default")))
 #endif
+
+// Macro for registering plugin factory functions cleanly
+#define REGISTER_RKO_PROBLEM(ProblemClass) \
+  extern "C" { \
+    EXPORT_PLUGIN rkolib::core::IProblem *create_problem() { \
+      return new ProblemClass(); \
+    } \
+    EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem *p) { \
+      delete p; \
+    } \
+  }

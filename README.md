@@ -1,10 +1,12 @@
 # RKO - Random-Key Optimizer (Modern Plugin Architecture)
 
-This is the modernized C++20 implementation of the RKO framework. 
+This is the modernized C++20 implementation of the **RKO framework**. 
 
-This algorithm has been heavily refactored to support a **Dynamic Plugin Architecture**. The core optimization engine is now completely decoupled from the problem-specific logic. Users no longer need to recompile the solver to test new combinatorial optimization problems; they simply compile their problem as a shared library (`.so` or `.dll`) and inject it into the solver at runtime.
+This algorithm has been heavily refactored to support a **Dynamic Plugin Architecture**. The core optimization engine is now completely decoupled from problem-specific logic. Users no longer need to recompile the solver to test new combinatorial optimization problems; they simply compile their problem as a shared library (`.so` or `.dll`) and inject it into the solver at runtime.
 
 ![RKO_pipeline](https://github.com/user-attachments/assets/bb26650b-b5f0-4fc7-9cb1-55f5ca8b6132)
+
+---
 
 ## References
 
@@ -16,59 +18,66 @@ When using this algorithm in academic studies, please refer to the following wor
 **DOI:** [https://doi.org/10.1007/s10732-025-09568-z](https://doi.org/10.1007/s10732-025-09568-z)  
 **Technical Report:** [https://doi.org/10.48550/arXiv.2411.04293](https://doi.org/10.48550/arXiv.2411.04293)
 
+---
+
 ## Architectural Scope
 
 This framework is split into two major components:
-1. **The Core Engine (`rkosolver`)**: Handles the metaheuristics, OpenMP parallelization, solution pool (with cosine-similarity diversity), and multi-objective scalarization.
+1. **The Core Engine (`rkosolver`)**: Manages OpenMP multi-threading, 10 integrated metaheuristics, online Q-learning parameter control, multi-objective scalarization strategies, and a thread-safe elite solution pool.
 2. **The Problem Plugins (`.so` / `.dll`)**: Independent shared libraries that implement the `IProblem` interface (Decoder and IO).
 
-This code natively supports Single and **Multi-Objective** optimization problems (using Tchebycheff or Weighted Sum scalarization).
+### Key Features
+- **10 Integrated Metaheuristics**: SA, ILS, VNS, BRKGA, BRKGA-CS, PSO, GA, LNS, GRASP, and IPR.
+- **Online Q-Learning Control**: Reinforcement learning engine that dynamically adapts search parameters based on metaheuristic performance (`control_mode: 1`).
+- **Multi-Objective Optimization**: Native support for single- and multi-objective problems with normalized Tchebycheff, Weighted Sum, or Gini Coefficient scalarization.
+- **Reference Point Customization**: Support for dynamic or fixed ideal (`ideal_point`) and nadir (`nadir_point`) reference points.
+- **Elite Solution Pool Management**: Multi-policy pool updates supporting Cosine Similarity diversity verification (`poolUpdateMethod: 0`) and NSGA-II Pareto dominance/crowding distance (`poolUpdateMethod: 1`).
+
+---
 
 ## Building the Project
 
-The project uses **CMake** for the core engine and a highly optimized **Makefile** for rapid plugin development.
+The project uses **CMake** for the core engine and an agile **Makefile** for rapid plugin development.
 
 ### 1. Build the Core Solver
 From the root directory, run:
 ```bash
 make build
 ```
-
-This will create the `build/` directory, resolve dependencies (yaml-cpp, CLI11), and compile the `rkosolver` binary.
+This will create the `build/` directory, resolve dependencies (`yaml-cpp`, `CLI11`), and compile the `rkosolver` binary.
 
 ### 2. Build a Problem Plugin
-
-To compile a specific problem (e.g., the Knapsack Problem or TSP) without recompiling the core, use the agile plugin command:
+To compile a specific problem (e.g., Tourist, Knapsack Problem, or TSP) without recompiling the core, use the plugin command:
 ```bash
-make plugin PROB=kpproblem
+make plugin PROB=tourist
 # Or for the Traveling Salesman Problem:
 make plugin PROB=tspproblem
 ```
+The compiled plugins will be saved in `build/plugins/`.
 
-The compiled plugins will be output to `build/plugins/`.
+---
 
 ## Running the Algorithm
 
-The solver is executed via a robust CLI (Command Line Interface). You must provide the instance, the configuration file, the max time, and the compiled plugin.
+The solver is executed via a robust CLI (Command Line Interface). You must provide the instance file, configuration file, maximum execution time, and compiled plugin path.
 
-Linux:
 ```bash
-cd build
-./bin/rkosolver -i ../instances/kp/kp10.txt -c ../config/yaml/config.yaml -t 10 -p ./plugins/kpproblem.so
+./build/bin/rkosolver -i ./instances/tourist/I1.txt -c ./config/yaml/config.yaml -t 10 -p ./build/plugins/tourist.so
 ```
 
 **CLI Arguments:**
-
 - `-i`, `--instance`: Path to the problem instance file.
 - `-t`, `--time`: Maximum execution time in seconds.
 - `-c`, `--config`: Path to the YAML configuration file.
 - `-p`, `--plugin`: Path to the problem dynamic library (`.so` or `.dll`).
 
-*Note: Results are automatically exported to the `Results/` directory as `Solutions_RKO.txt` and `Results_RKO.csv`.*
+*Note: Results are automatically exported to the `results/` directory.*
 
-## Configuration (config.yaml)
+---
 
-The legacy `.conf` files have been replaced by a modern, readable YAML configuration system.
+## Configuration (`config.yaml`)
+
+The solver is configured using a readable YAML configuration file:
 
 ```yaml
 # Selected Metaheuristics (Each runs in a dedicated OpenMP thread)
@@ -78,41 +87,83 @@ metaheuristics:
   - VNS
   - BRKGA
   - BRKGA-CS
+  - PSO
+  - GA
+  - LNS
+  - GRASP
+  - IPR
 
+# General Execution Settings
 execution_settings:
-  max_runs: 10
-  debug_mode: 0       # 0: File Output (CSV/TXT), 1: Terminal Output
-  control_mode: 1     # 0: Offline Tuning, 1: Online Control (Q-Learning)
+  max_runs: 10         # Maximum number of runs
+  debug_mode: 0        # 0: File Output (CSV/TXT), 1: Terminal Output
+  control_mode: 1      # 0: Offline Tuning, 1: Online Control (Q-Learning)
 
+# Search Parameters
 search_parameters:
-  local_search_strategy: 1
-  restart_threshold: 1.0
-  elite_pool_size: 10
+  local_search_strategy: 1  # 1: First Improvement, 2: Best Improvement
+  restart_threshold: 1.0    # % of max time to trigger restart
+  elite_pool_size: 10       # Size of the elite solution pool
 
-# Multi-objective handling (Tchebycheff or WeightedSum)
-scalarization: Tchebycheff
+# Multi-Objective Scalarization ("Tchebycheff", "WeightedSum", or "Gini_Coefficient")
+scalarization: "Tchebycheff"
+
+# Default weights (if not dynamically assigned by algorithm)
+default_weights: [0.00, 1.00]
+
+# Optional A Priori Reference Points (if omitted, calculated dynamically)
+# ideal_point: [-110.0, 40.0]
+# nadir_point: [0.0, 100.0]
+
+# Freeze ideal point during search (true/false)
+fixed_ideal_point: false
+
+# Pool Update Strategy: 0 = Standard (Cosine Similarity Diversity), 1 = NSGA-II
+poolUpdateMethod: 0
 ```
 
-## Creating a New Problem (Plugin Development)
+---
 
-To solve a new problem, you do not need to touch the core code.
+## Creating a New Problem Plugin
+
+To solve a new problem, you do not need to touch the core code! Follow these steps for Plugin Development:
 
 1. Create a new `.cpp` file in `problems/` (e.g., `myproblem.cpp`).
-2. Inherit from `rkolib::core::IProblem` - include `rkolib/core/problem.hpp` - and implement the `load()` and `decode(TSol& s)` methods.
-3. Export the factory functions:
+2. Include `rkolib/core/problem.hpp`, inherit from `rkolib::core::IProblem`, and implement `load()` and `decode(TSol &sol) const`:
 
 ```cpp
-extern "C" {
-    EXPORT_PLUGIN rkolib::core::IProblem* create_problem() { return new MyProblem(); }
-    EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem* p) { delete p; }
-}
+#include "rkolib/core/problem.hpp"
+
+class MyProblem : public rkolib::core::IProblem {
+public:
+    void load(const std::string &filename) override {
+        // Load problem instance data from file
+    }
+
+    void decode(rkolib::core::TSol &sol) const override {
+        // Transform random-key vector sol.rk into problem solution
+        // Assign target objective values to sol.objs (e.g., sol.objs = {obj1, obj2})
+    }
+
+    int getDimension() const override { return 100; }
+    int getNumObjectives() const override { return 2; }
+};
+
+// Export plugin factory cleanly using macro
+REGISTER_RKO_PROBLEM(MyProblem)
 ```
-Obs: It is necessary to maintain the same signature and sequence of functions so that the solver can find the functions in the plugin.
 
-4. Run `make plugin PROB=myproblem` OR `g++ -O3 -shared -fPIC -std=c++20 ./problems/myproblem.cpp -o ./build/plugins/myproblem.so`.
+3. Build your plugin with:
+```bash
+make plugin PROB=myproblem
+```
+4. Run `rkosolver` with your new plugin:
+```bash
+./build/bin/rkosolver -i ./instances/myproblem/inst1.txt -c ./config/yaml/config.yaml -t 10 -p ./build/plugins/myproblem.so
+```
 
-5. Execute myproblem with `./build/bin/rkosolver -i ../instances/kp/kp10.txt -c ../config/yaml/config.yaml --time 2 -p ./build/plugins/myproblem.so`.
+---
 
-## OpenMP
+## OpenMP Parallel Execution
 
-The code is heavily parallelized using OpenMP directives. In this setup, `#MH` threads are dynamically allocated based on your `config.yaml`. Each thread executes a different metaheuristic independently, sharing elite solutions through a thread-safe, diversity-aware solution pool.
+The code is heavily parallelized using OpenMP directives. In this setup, `#MH` threads are dynamically allocated based on your `config.yaml`. Each thread executes a different metaheuristic independently, sharing elite solutions through a thread-safe solution pool (`#pragma omp critical(pool_lock)`).
