@@ -6,6 +6,7 @@ on:
       - main
       - master
       - 02-correcao-qlearning
+      - sonar-cube-duplicated-lines
 
 permissions:
   contents: write
