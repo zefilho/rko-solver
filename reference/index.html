@@ -1,0 +1,1296 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Random-Key Optimizer Framework with Modern C++20 Dynamic Plugin Architecture">
+      
+      
+      
+        <link rel="canonical" href="https://docs.rkosolver.github.io/reference/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>API Reference - RKOSolver</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-component-reference-rkolib" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="RKOSolver" class="md-header__button md-logo" aria-label="RKOSolver" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RKOSolver
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/zefilho/rko-solver" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zefilho/rko-solver
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RKOSolver" class="md-nav__button md-logo" aria-label="RKOSolver" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RKOSolver
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/zefilho/rko-solver" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zefilho/rko-solver
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-core-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Core Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Core Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibrkosolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::RkoSolver
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="rkolib::RkoSolver">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-public-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Public Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoresolvercontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::SolverContext
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="rkolib::core::SolverContext">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-public-methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Public Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-problem-plugin-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Problem Plugin Interface
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Problem Plugin Interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoreiproblem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::IProblem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-registration-macro-register_rko_problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Registration Macro: REGISTER_RKO_PROBLEM
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-data-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Data Structures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Data Structures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoretsol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::TSol
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoretrundata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::TRunData
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-multi-objective-scalarizers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Multi-Objective Scalarizers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Multi-Objective Scalarizers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoreiscalarizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::IScalarizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-normalizedweightedtchebycheff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. NormalizedWeightedTchebycheff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-weightedsumscalarizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. WeightedSumScalarizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-giniscalarizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. GiniScalarizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-q-learning-control-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Q-Learning Control Engine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Q-Learning Control Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoreqlearningcontrol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::QLearningControl
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-elite-solution-pool-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Elite Solution Pool Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Elite Solution Pool Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-integrated-metaheuristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Integrated Metaheuristics
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-core-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Core Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Core Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibrkosolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::RkoSolver
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="rkolib::RkoSolver">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-public-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Public Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoresolvercontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::SolverContext
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="rkolib::core::SolverContext">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-public-methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Public Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-problem-plugin-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Problem Plugin Interface
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Problem Plugin Interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoreiproblem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::IProblem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-registration-macro-register_rko_problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Registration Macro: REGISTER_RKO_PROBLEM
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-data-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Data Structures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Data Structures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoretsol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::TSol
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoretrundata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::TRunData
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-multi-objective-scalarizers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Multi-Objective Scalarizers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Multi-Objective Scalarizers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoreiscalarizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::IScalarizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-normalizedweightedtchebycheff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. NormalizedWeightedTchebycheff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-weightedsumscalarizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. WeightedSumScalarizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-giniscalarizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. GiniScalarizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-q-learning-control-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Q-Learning Control Engine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Q-Learning Control Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rkolibcoreqlearningcontrol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkolib::core::QLearningControl
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-elite-solution-pool-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Elite Solution Pool Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Elite Solution Pool Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-integrated-metaheuristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Integrated Metaheuristics
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-component-reference-rkolib">API &amp; Component Reference (<code>rkolib</code>)<a class="headerlink" href="#api-component-reference-rkolib" title="Permanent link">&para;</a></h1>
+<p>This document provides a comprehensive technical reference for the core components, data structures, plugin interfaces, scalarizers, and metaheuristics implemented in the <strong>RKO Framework</strong> (<code>rkolib</code>).</p>
+<hr />
+<h2 id="1-core-architecture">1. Core Architecture<a class="headerlink" href="#1-core-architecture" title="Permanent link">&para;</a></h2>
+<h3 id="rkolibrkosolver"><code>rkolib::RkoSolver</code><a class="headerlink" href="#rkolibrkosolver" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/solver.hpp"><code>rkolib/core/solver.hpp</code></a></em></p>
+<p>The central orchestrator class that manages CLI parsing, YAML configuration loading, reference point initialization, parallel OpenMP thread execution, and statistical aggregation.</p>
+<h4 id="key-public-methods">Key Public Methods<a class="headerlink" href="#key-public-methods" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// Parses CLI flags (-i/--instance, -c/--config, -t/--time, -p/--plugin)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kt">void</span><span class="w"> </span><span class="nf">parseArguments</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">argc</span><span class="p">,</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">*</span><span class="n">argv</span><span class="p">[]);</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">// Loads configuration parameters from a YAML file</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kt">void</span><span class="w"> </span><span class="n">loadConfiguration</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="o">&amp;</span><span class="n">configFile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">""</span><span class="p">);</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1">// Executes all MAXRUNS optimization runs</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="kt">void</span><span class="w"> </span><span class="nf">run</span><span class="p">();</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1">// Decodes a random-key solution using the active problem plugin</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="kt">void</span><span class="w"> </span><span class="nf">decodeSolution</span><span class="p">(</span><span class="n">core</span><span class="o">::</span><span class="n">TSol</span><span class="w"> </span><span class="o">&amp;</span><span class="n">sol</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">lambda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1">// Retrieves a thread-safe copy of the best solution found so far</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">core</span><span class="o">::</span><span class="n">TSol</span><span class="w"> </span><span class="nf">getBestSolution</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1">// Returns current reference points</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">getIdealPoint</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">getNadirPoint</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+</code></pre></div>
+<hr />
+<h3 id="rkolibcoresolvercontext"><code>rkolib::core::SolverContext</code><a class="headerlink" href="#rkolibcoresolvercontext" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/context.hpp"><code>rkolib/core/context.hpp</code></a></em></p>
+<p>A thread-safe Singleton that manages global search state across OpenMP threads, including the elite solution pool, thread-isolated Random Number Generators (<code>SOLVER_RNG</code>), thread seeds, and cooperative stop flags.</p>
+<h4 id="key-public-methods_1">Key Public Methods<a class="headerlink" href="#key-public-methods_1" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Returns singleton instance</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">static</span><span class="w"> </span><span class="n">SolverContext</span><span class="w"> </span><span class="o">&amp;</span><span class="nf">instance</span><span class="p">();</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1">// Elite Solution Pool Access</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">TSol</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">getPool</span><span class="p">();</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kt">void</span><span class="w"> </span><span class="nf">initializePool</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">);</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">TSol</span><span class="w"> </span><span class="nf">getBestSolution</span><span class="p">();</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1">// OpenMP Synchronization &amp; Stop Control</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kt">void</span><span class="w"> </span><span class="nf">signalStop</span><span class="p">();</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="kt">bool</span><span class="w"> </span><span class="nf">isStopped</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="kt">void</span><span class="w"> </span><span class="nf">resetStopFlag</span><span class="p">();</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1">// Thread-Safe Random Number Generator</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">std</span><span class="o">::</span><span class="n">mt19937</span><span class="w"> </span><span class="o">&amp;</span><span class="nf">getRng</span><span class="p">();</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setSeed</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">seed</span><span class="p">);</span>
+</code></pre></div>
+<hr />
+<h2 id="2-problem-plugin-interface">2. Problem Plugin Interface<a class="headerlink" href="#2-problem-plugin-interface" title="Permanent link">&para;</a></h2>
+<h3 id="rkolibcoreiproblem"><code>rkolib::core::IProblem</code><a class="headerlink" href="#rkolibcoreiproblem" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/problem.hpp"><code>rkolib/core/problem.hpp</code></a></em></p>
+<p>Abstract base interface that all problem plugins must inherit from to interface with the <code>rkosolver</code> engine.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">namespace</span><span class="w"> </span><span class="nn">rkolib</span><span class="o">::</span><span class="nn">core</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">IProblem</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">public</span><span class="o">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">IProblem</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="c1">// Loads instance data from file</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="o">&amp;</span><span class="n">filename</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="c1">// Transforms random-key vector (sol.rk) into problem solution and populates raw objectives (sol.objs)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="n">TSol</span><span class="w"> </span><span class="o">&amp;</span><span class="n">sol</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span><span class="c1">// Returns number of random keys required by the decoder</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">getDimension</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="c1">// Returns number of target objectives (1 = Single-Objective, &gt;1 = Multi-Objective)</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">getNumObjectives</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="c1">// Sets debug mode (0: silent, 1: detailed terminal output)</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setDebugMode</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">debug</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">debug</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="p">};</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="plugin-registration-macro-register_rko_problem">Plugin Registration Macro: <code>REGISTER_RKO_PROBLEM</code><a class="headerlink" href="#plugin-registration-macro-register_rko_problem" title="Permanent link">&para;</a></h3>
+<p>Export macro that registers the plugin factory functions (<code>create_problem</code> and <code>destroy_problem</code>) using C linkage for dynamic library loading via <code>dlopen</code>/<code>dlsym</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="cp">#define REGISTER_RKO_PROBLEM(ProblemClass) \</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="cp">  extern "C" { \</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="cp">    EXPORT_PLUGIN rkolib::core::IProblem *create_problem() { \</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="cp">      return new ProblemClass(); \</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="cp">    } \</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="cp">    EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem *p) { \</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="cp">      delete p; \</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="cp">    } \</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="cp">  }</span>
+</code></pre></div>
+<hr />
+<h2 id="3-data-structures">3. Data Structures<a class="headerlink" href="#3-data-structures" title="Permanent link">&para;</a></h2>
+<h3 id="rkolibcoretsol"><code>rkolib::core::TSol</code><a class="headerlink" href="#rkolibcoretsol" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/data.hpp"><code>rkolib/core/data.hpp</code></a></em></p>
+<p>Represents a single solution in the Random-Key Optimization domain.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">struct</span><span class="w"> </span><span class="nc">TSol</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="n">rk</span><span class="p">;</span><span class="w">                        </span><span class="c1">// Random-key vector in range [0, 1)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="kt">double</span><span class="w"> </span><span class="n">ofv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;::</span><span class="n">infinity</span><span class="p">();</span><span class="w"> </span><span class="c1">// Scalarized Objective Function Value (Fitness)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="kt">double</span><span class="w"> </span><span class="n">best_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0</span><span class="p">;</span><span class="w">                        </span><span class="c1">// Time (in seconds) when this solution was discovered</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">nameMH</span><span class="p">;</span><span class="w">                            </span><span class="c1">// Name of the metaheuristic that found this solution</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="n">objs</span><span class="p">;</span><span class="w">                      </span><span class="c1">// Raw objective values vector</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="n">TSol</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">};</span>
+</code></pre></div>
+<hr />
+<h3 id="rkolibcoretrundata"><code>rkolib::core::TRunData</code><a class="headerlink" href="#rkolibcoretrundata" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/data.hpp"><code>rkolib/core/data.hpp</code></a></em></p>
+<p>Configuration data structure containing global search parameters.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">struct</span><span class="w"> </span><span class="nc">TRunData</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">strategy</span><span class="p">;</span><span class="w">              </span><span class="c1">// Local search strategy (1 = First Improvement, 2 = Best Improvement)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">control</span><span class="p">;</span><span class="w">               </span><span class="c1">// Parameter control mode (0 = Offline Tuning, 1 = Online Q-Learning)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">MAXTIME</span><span class="p">;</span><span class="w">               </span><span class="c1">// Maximum execution time in seconds</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">MAXRUNS</span><span class="p">;</span><span class="w">               </span><span class="c1">// Maximum number of independent optimization runs</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">debug</span><span class="p">;</span><span class="w">                 </span><span class="c1">// Debug output level (0 = File output, 1 = Terminal logs)</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="kt">float</span><span class="w"> </span><span class="n">restart</span><span class="p">;</span><span class="w">             </span><span class="c1">// Restart threshold multiplier</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">sizePool</span><span class="p">;</span><span class="w">              </span><span class="c1">// Elite solution pool size</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span><span class="kt">int</span><span class="w"> </span><span class="n">poolUpdateMethod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">  </span><span class="c1">// Pool update policy (0 = Standard Cosine Diversity, 1 = NSGA-II)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="p">};</span>
+</code></pre></div>
+<hr />
+<h2 id="4-multi-objective-scalarizers">4. Multi-Objective Scalarizers<a class="headerlink" href="#4-multi-objective-scalarizers" title="Permanent link">&para;</a></h2>
+<h3 id="rkolibcoreiscalarizer"><code>rkolib::core::IScalarizer</code><a class="headerlink" href="#rkolibcoreiscalarizer" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/scalarizer.hpp"><code>rkolib/core/scalarizer.hpp</code></a></em></p>
+<p>Abstract interface for multi-objective scalarization methods.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">IScalarizer</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">public</span><span class="o">:</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">IScalarizer</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="nf">scalarize</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">TSol</span><span class="w"> </span><span class="o">&amp;</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">lambda</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">                           </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idealPoint</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">                           </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">nadirPoint</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="k">virtual</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="nf">getName</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">};</span>
+</code></pre></div>
+<h3 id="implementations">Implementations<a class="headerlink" href="#implementations" title="Permanent link">&para;</a></h3>
+<h4 id="1-normalizedweightedtchebycheff">1. <code>NormalizedWeightedTchebycheff</code><a class="headerlink" href="#1-normalizedweightedtchebycheff" title="Permanent link">&para;</a></h4>
+<p>Computes the normalized Tchebycheff distance to the ideal point $z^<em>$ with an augmented $\epsilon$-term:
+$$F(x) = \max_{k} \left{ w_k \cdot \frac{|z_k^</em> - f_k(x)|}{\text{nadir}_k - z_k^<em>} \right} + \epsilon \sum_{k} \frac{|z_k^</em> - f_k(x)|}{\text{nadir}_k - z_k^*}$$</p>
+<h4 id="2-weightedsumscalarizer">2. <code>WeightedSumScalarizer</code><a class="headerlink" href="#2-weightedsumscalarizer" title="Permanent link">&para;</a></h4>
+<p>Computes the classical weighted linear sum of objective values:
+$$F(x) = \sum_{k} w_k \cdot f_k(x)$$</p>
+<h4 id="3-giniscalarizer">3. <code>GiniScalarizer</code><a class="headerlink" href="#3-giniscalarizer" title="Permanent link">&para;</a></h4>
+<p>Minimizes equity inequality across objective components using the Gini Coefficient:
+$$G = \frac{\sum_{i} \sum_{j} |f_i(x) - f_j(x)|}{2 n^2 \mu}$$</p>
+<hr />
+<h2 id="5-q-learning-control-engine">5. Q-Learning Control Engine<a class="headerlink" href="#5-q-learning-control-engine" title="Permanent link">&para;</a></h2>
+<h3 id="rkolibcoreqlearningcontrol"><code>rkolib::core::QLearningControl</code><a class="headerlink" href="#rkolibcoreqlearningcontrol" title="Permanent link">&para;</a></h3>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/qlearning.hpp"><code>rkolib/core/qlearning.hpp</code></a></em></p>
+<p>Reinforcement learning engine that adaptively tunes search parameters during execution.</p>
+<ul>
+<li><strong>Quality Matrix $Q(s, a)$</strong>: Stores quality values for discrete state-action pairs.</li>
+<li><strong>State Definition ($s$)</strong>: Discretized performance state based on objective improvements.</li>
+<li><strong>Reward Function ($R$)</strong>: Computed based on relative percentage fitness improvement $\Delta f / f_{\text{best}}$.</li>
+<li><strong>Action Selection ($a$)</strong>: $\epsilon$-greedy policy balancing exploration and exploitation.</li>
+</ul>
+<hr />
+<h2 id="6-elite-solution-pool-management">6. Elite Solution Pool Management<a class="headerlink" href="#6-elite-solution-pool-management" title="Permanent link">&para;</a></h2>
+<p><em>Header: <a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/include/rkolib/core/method.hpp"><code>rkolib/core/method.hpp</code></a></em></p>
+<h3 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>CreatePoolSolutions(solver, sizePool)</code></strong>: Generates and decodes the initial solution pool in two passes to ensure stable reference points before sorting by fitness.</li>
+<li><strong><code>UpdatePoolSolutions(solver, candidateSol)</code></strong>: Evaluates candidate solutions for entry into the elite pool.</li>
+<li><strong><code>CosineSimilarity(vecA, vecB)</code></strong>: Calculates diversity between random-key vectors to prevent clone saturation in the pool.</li>
+</ul>
+<hr />
+<h2 id="7-integrated-metaheuristics">7. Integrated Metaheuristics<a class="headerlink" href="#7-integrated-metaheuristics" title="Permanent link">&para;</a></h2>
+<p>All metaheuristics conform to the standard function signature:
+<code>std::function&lt;void(const core::TRunData &amp;, RkoSolver &amp;)&gt;</code></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Metaheuristic</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: left;">File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong><code>SA</code></strong></td>
+<td style="text-align: left;">Simulated Annealing with geometric cooling schedule</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/sa.cpp"><code>src/mh/sa.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>ILS</code></strong></td>
+<td style="text-align: left;">Iterated Local Search with adaptive perturbation</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/ils.cpp"><code>src/mh/ils.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>VNS</code></strong></td>
+<td style="text-align: left;">Variable Neighborhood Search with neighborhood switching</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/vns.cpp"><code>src/mh/vns.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>BRKGA</code></strong></td>
+<td style="text-align: left;">Biased Random-Key Genetic Algorithm</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/brkga.cpp"><code>src/mh/brkga.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>BRKGA-CS</code></strong></td>
+<td style="text-align: left;">BRKGA with integrated local search phases</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/brkga_cs.cpp"><code>src/mh/brkga_cs.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>PSO</code></strong></td>
+<td style="text-align: left;">Particle Swarm Optimization adapted to continuous random keys</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/pso.cpp"><code>src/mh/pso.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>GA</code></strong></td>
+<td style="text-align: left;">Standard Genetic Algorithm with uniform crossover</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/ga.cpp"><code>src/mh/ga.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>LNS</code></strong></td>
+<td style="text-align: left;">Large Neighborhood Search with destroy and repair operators</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/lns.cpp"><code>src/mh/lns.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>GRASP</code></strong></td>
+<td style="text-align: left;">Greedy Randomized Adaptive Search Procedure</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/grasp.cpp"><code>src/mh/grasp.cpp</code></a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>IPR</code></strong></td>
+<td style="text-align: left;">Iterative Path Relinking exploring trajectories between elite solutions</td>
+<td style="text-align: left;"><a href="file:///home/jose-lopes/pessoais/01-projetos/posdoc/rko-solver/src/mh/ipr.cpp"><code>src/mh/ipr.cpp</code></a></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
