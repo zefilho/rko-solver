@@ -7,8 +7,9 @@ repo_name: zefilho/rko-solver
 theme:
   name: material
   features:
-    - navigation.tabs
+    - navigation.sections
     - navigation.top
+    - navigation.tracking
     - search.suggest
     - search.highlight
     - content.code.copy
