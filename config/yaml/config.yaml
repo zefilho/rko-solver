@@ -29,6 +29,7 @@ search_parameters:
 scalarization: "Tchebycheff"
 
 # Pesos padrão (caso o algoritmo não forneça dinamicamente)
+# defautl para Tchebycheff, ignorado para Gini e WeightedSum
 default_weights: [0.00, 1.00]
 
 # Ponto de Referência Ideal a priori (opcional - se omitido, calcula dinamicamente)

@@ -507,7 +507,12 @@ void RkoSolver::decodeSolution(core::TSol &sol, const std::vector<double> &lambd
 
   problemInstance_->decode(sol);
 
-  if (problemInstance_->getNumObjectives() <= 1) return;
+  if (problemInstance_->getNumObjectives() <= 1) {
+    if (!sol.objs.empty()) {
+      sol.ofv = sol.objs[0];
+    }
+    return;
+  }
 
   std::vector<double> activeLambda = lambda;
   if (activeLambda.empty()) {
