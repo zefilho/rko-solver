@@ -25,11 +25,14 @@ search_parameters:
   elite_pool_size: 10       # Tamanho do pool de soluções de elite
 
 # Se o problema carregado for multi-objetivo, qual técnica usar?
-# Opções: "Tchebycheff", "WeightedSum", "Gini_Coefficient"
+# Opções: "Tchebycheff", "WeightedSum", "Gini_Coefficient", "Lexicographic_MinMax"
 scalarization: "Tchebycheff"
 
+# Fator de decaimento para Lexicographic_MinMax (padrão 0.05)
+# lexicographic_decay: 0.05
+
 # Pesos padrão (caso o algoritmo não forneça dinamicamente)
-# defautl para Tchebycheff, ignorado para Gini e WeightedSum
+# default para Tchebycheff e Lexicographic_MinMax, ignorado para Gini e WeightedSum
 default_weights: [0.00, 1.00]
 
 # Ponto de Referência Ideal a priori (opcional - se omitido, calcula dinamicamente)
@@ -40,6 +43,9 @@ default_weights: [0.00, 1.00]
 
 # Manter Ponto Ideal fixado na busca (true/false)
 fixed_ideal_point: false
+
+# Manter Ponto Nadir fixado na busca (true/false)
+fixed_nadir_point: false
 
 # Método de atualização do pool: 0 = Padrão (CP), 1 = NSGA-II
 poolUpdateMethod: 0
