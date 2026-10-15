@@ -347,7 +347,8 @@ void RkoSolver::executeRun(int runIndex) {
           : static_cast<unsigned int>(
                 std::chrono::steady_clock::now().time_since_epoch().count());
 
-  ctx.setSeed(seed);
+  int max_threads = std::max(omp_get_max_threads(), numActiveMethods_);
+  ctx.setSeed(seed, max_threads);
 
   int nObj = problemInstance_->getNumObjectives();
   initReferencePoints(nObj);
@@ -714,21 +715,10 @@ void RkoSolver::syncReferencePointsAndPool(core::TSol *bestRunSol) {
     weights.assign(nObj, 1.0 / static_cast<double>(nObj));
   }
 
-  for (auto &s : pool) {
-    if (!s.objs.empty()) {
-      s.ofv = scalarizer_->scalarize(s, weights, idealPoint_, nadirPoint_);
-    }
-  }
+  // 3. Re-escalariza todo o Pool e reordena (garantindo que pool_[0] seja o verdadeiro líder!)
+  ctx.rescalarizePool(*scalarizer_, weights, idealPoint_, nadirPoint_);
 
-  std::sort(pool.begin(), pool.end(), core::sortByFitness);
-
-  // Re-sincroniza a melhor solução dentro do SolverContext
-  core::TSol ctxBest = ctx.getBestSolution();
-  if (!ctxBest.objs.empty()) {
-    ctxBest.ofv = scalarizer_->scalarize(ctxBest, weights, idealPoint_, nadirPoint_);
-  }
-
-  // Re-sincroniza o bestRunSol se fornecido
+  // 4. Re-escalariza também o bestSolutionRun para comparação justa no #pragma omp single
   if (bestRunSol != nullptr && !bestRunSol->objs.empty()) {
     bestRunSol->ofv = scalarizer_->scalarize(*bestRunSol, weights, idealPoint_, nadirPoint_);
   }

@@ -6,19 +6,27 @@
 #pragma once
 
 #include "rkolib/core/data.hpp"
+#include "rkolib/core/scalarizer.hpp" // Para IScalarizer
+#include <algorithm>
 #include <atomic>
 #include <omp.h>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 namespace rkolib {
 namespace core {
 
 /**
+ * @brief Wrapper alinhado em 64 bytes (Cache Line) para evitar False Sharing
+ * entre threads OpenMP que sorteiam chaves aleatórias simultaneamente.
+ */
+struct alignas(64) PaddedRng {
+  std::mt19937 engine;
+};
+
+/**
  * @brief Thread-safe singleton that holds shared solver state
- *
- * Replaces global variables (rng, stop_execution, pool) with a
- * centralized context accessible via SolverContext::instance()
  */
 class SolverContext {
 public:
@@ -30,7 +38,6 @@ public:
     return instance;
   }
 
-  // Delete copy/move constructors
   SolverContext(const SolverContext &) = delete;
   SolverContext &operator=(const SolverContext &) = delete;
   SolverContext(SolverContext &&) = delete;
@@ -43,46 +50,41 @@ public:
   std::mt19937 &getRng() {
     int thread_id = omp_get_thread_num();
 
-    // Protection: if the vector was not initialized or thread_id is strange
-    if (thread_id >= (int)rngs_.size()) {
-      return rngs_[0]; // Fallback to the master thread
+    // Agora rngs_ é dimensionado com folga em setSeed, evitando fallback concorrente em rngs_[0]
+    if (thread_id >= 0 && thread_id < static_cast<int>(rngs_.size())) {
+      return rngs_[thread_id].engine;
     }
-    return rngs_[thread_id];
+    return rngs_[0].engine;
   }
 
-  void setSeed(unsigned int baseSeed) {
-    int max_threads = omp_get_max_threads();
+  void setSeed(unsigned int baseSeed, int min_threads = 32) {
+    // Garante cobertura mesmo se omp_set_num_threads(numActiveMethods_)
+    // for maior que omp_get_max_threads()
+    int max_threads = std::max(omp_get_max_threads(), min_threads);
 
-    // Ensures we have enough RNGs
-    if (rngs_.size() < (size_t)max_threads) {
+    if (rngs_.size() < static_cast<size_t>(max_threads)) {
       rngs_.resize(max_threads);
     }
 
-    // Seeds each generator with a different value to avoid
-    // that all threads generate the same sequence
     for (int i = 0; i < max_threads; ++i) {
-      // baseSeed + i guarantees diversity
-      // (baseSeed + i * 1000) separates the seeds more if preferred
-      rngs_[i].seed(baseSeed + i);
+      // Multiplicador primo afasta as sequências de Mersenne Twister entre MHs
+      rngs_[i].engine.seed(baseSeed + static_cast<unsigned int>(i * 104729));
     }
   }
 
   std::atomic<bool> &getStopFlag() { return stopExecution_; }
 
   std::vector<TSol> &getPool() { return pool_; }
+  const std::vector<TSol> &getPool() const { return pool_; }
 
-  // void setSeed(unsigned int seed) { rng_.seed(seed); }
+  void resetStopFlag() { stopExecution_.store(false, std::memory_order_relaxed); }
 
-  void resetStopFlag() { stopExecution_.store(false); }
+  void signalStop() { stopExecution_.store(true, std::memory_order_relaxed); }
 
-  void signalStop() { stopExecution_.store(true); }
-
-  bool shouldStop() const { return stopExecution_.load(); }
-
-  const std::vector<TSol>& getPool() const { return pool_; }
+  bool shouldStop() const { return stopExecution_.load(std::memory_order_relaxed); }
 
   // -------------------------------------------------------------------------
-  // POOL MANAGEMENT
+  // POOL MANAGEMENT & MULTI-OBJECTIVE RESCALARIZATION
   // -------------------------------------------------------------------------
 
   void initializePool(size_t size) {
@@ -92,25 +94,48 @@ public:
 
   void clearPool() { pool_.clear(); }
 
+  // Ordena o Pool garantindo o invariante: pool_[0] é sempre a melhor solução (menor ofv)
+  void sortPool() {
+    std::sort(pool_.begin(), pool_.end(),
+              [](const TSol &a, const TSol &b) { return a.ofv < b.ofv; });
+  }
+
+  // Re-avalia todo o Pool com o novo Ideal/Nadir sem re-executar o Decoder
+  // e já reordena para que pool_[0] reflita o verdadeiro líder na nova régua!
+  void rescalarizePool(IScalarizer &scalarizer,
+                       const std::vector<double> &lambda,
+                       const std::vector<double> &idealPoint,
+                       const std::vector<double> &nadirPoint) {
+    if (pool_.empty()) {
+      return;
+    }
+
+    for (auto &s : pool_) {
+      if (!s.objs.empty()) {
+        s.ofv = scalarizer.scalarize(s, lambda, idealPoint, nadirPoint);
+      }
+    }
+    sortPool();
+  }
+
   TSol getBestSolution() const {
-    if (pool_.empty())
+    if (pool_.empty()) {
       throw std::runtime_error("Pool vazio!");
+    }
     return pool_[0];
   }
 
 private:
   SolverContext() : stopExecution_(false) {}
-
   ~SolverContext() = default;
 
-  // Shared state
-  std::vector<std::mt19937> rngs_;
+  std::vector<PaddedRng> rngs_;
   std::atomic<bool> stopExecution_;
   std::vector<TSol> pool_;
 };
 
 // -------------------------------------------------------------------------
-// CONVENIENCE MACROS (Optional - for backward compatibility)
+// CONVENIENCE MACROS (Backward compatibility)
 // -------------------------------------------------------------------------
 #define SOLVER_RNG rkolib::core::SolverContext::instance().getRng()
 #define SOLVER_STOP rkolib::core::SolverContext::instance().getStopFlag()
