@@ -1,5 +1,6 @@
 #pragma once
 #include "rkolib/core/data.hpp"
+#include <memory>
 
 namespace rkolib::core {
 
@@ -48,9 +49,9 @@ typedef void (*DestroyProblemFunc)(rkolib::core::IProblem *);
 #define REGISTER_RKO_PROBLEM(ProblemClass) \
   extern "C" { \
     EXPORT_PLUGIN rkolib::core::IProblem *create_problem() { \
-      return new ProblemClass(); \
+      return std::make_unique<ProblemClass>().release(); \
     } \
     EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem *p) { \
-      delete p; \
+      const std::unique_ptr<rkolib::core::IProblem> deleter(p); \
     } \
   }

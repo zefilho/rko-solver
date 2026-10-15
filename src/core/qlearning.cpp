@@ -287,4 +287,27 @@ void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME, float 
     df = 0.8;
 }
 
+void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf, double df) {
+  if (st < 0 || st >= static_cast<int>(S.size())) return;
+  if (at < 0 || at >= static_cast<int>(S[st].Ai.size())) return;
+
+  int st_1 = S[st].Ai[at];
+  if (at >= static_cast<int>(S[st].Qa.size())) return;
+
+  S[st].Qa[at] += lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
+
+  // Recalculate true maxQ and maxA for state st
+  S[st].maxQ = S[st].Qa[0];
+  S[st].maxA = 0;
+  for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+    if (S[st].Qa[k] > S[st].maxQ) {
+      S[st].maxQ = S[st].Qa[k];
+      S[st].maxA = static_cast<int>(k);
+    }
+  }
+
+  // Define the new current state st
+  st = st_1;
+}
+
 } // namespace rkolib::core

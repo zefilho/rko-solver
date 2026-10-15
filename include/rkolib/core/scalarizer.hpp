@@ -51,7 +51,8 @@ public:
       // double val = w * diff;
       // if (val > max_dist)
       //   max_dist = val;
-      double diff = std::abs(idealPoint[k] - s.objs[k]);
+      //double diff = std::abs(idealPoint[k] - s.objs[k]);
+      double diff = std::max(0.0, s.objs[k] - idealPoint[k]);
       double range = std::abs(nadirPoint[k] - idealPoint[k]);
       
       // Evita divisão por zero se Ideal e Nadir forem iguais

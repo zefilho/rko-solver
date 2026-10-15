@@ -13,56 +13,46 @@ using namespace rkolib::core;
 // -------------------------------------------------------------------------
 static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF,
                        RkoSolver &solver) {
-  // find the best solution in line
   bestZ = 0;
   bestF = INFINITY;
 
-  // generate k as possible random keys for position i, k = rk_i * tau | tau =
-  // {0, 1, -1, 2, -2, ...}
   double tau = 0;
   std::vector<double> rk;
-  rk.reserve((int)(1.0 / h) + 2); // Pre-allocate memory
+  rk.reserve((int)(1.0 / h) + 2);
 
-  // Add base point
   rk.push_back(s.rk[i] + tau * h);
 
-  // Add neighbors
   int steps = (int)(1.0 / h) + 1;
   for (int j = 0; j < steps; j += 2) {
     tau++;
 
     double val_pos = s.rk[i] + tau * h;
-    if (val_pos >= 0.0 && val_pos < 1.0)
+    if (val_pos >= 0.0 && val_pos < 1.0) {
       rk.push_back(val_pos);
+    }
 
     double val_neg = s.rk[i] - tau * h;
-    if (val_neg >= 0.0 && val_neg < 1.0)
+    if (val_neg >= 0.0 && val_neg < 1.0) {
       rk.push_back(val_neg);
+    }
   }
 
-  // (sample greedy)
-  // q < m possible insertions (chosen uniformly at random).
-  // Avoid log2(0) or negative
   int q = 1;
   if (h > 1e-9) {
     q = (int)ceil(log2(1.0 / h)) + 1;
   }
 
-  if (q > (int)rk.size())
+  if (q > (int)rk.size()) {
     q = (int)rk.size();
+  }
 
-  // choose a subset with q rks to calculate the decoder
-  // Nota: Idealmente usaríamos o 'SOLVER_RNG' do contexto, mas aqui usamos
-  // random_device local para manter compatibilidade com a lógica interna da
-  // função original sem passar 'SOLVER_RNG' por toda cadeia. Se possível,
-  // refatorar para receber 'SOLVER_RNG'.
   static std::mt19937 local_rng(std::random_device{}());
   std::shuffle(rk.begin(), rk.end(), local_rng);
 
-  // calculate the quality of solution s with rk j
   for (int j = 0; j < q; j++) {
-    if (SOLVER_SHOULD_STOP)
+    if (SOLVER_SHOULD_STOP) {
       return;
+    }
 
     s.rk[i] = rk[j];
     solver.decodeSolution(s);
@@ -80,50 +70,34 @@ static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF,
 // -------------------------------------------------------------------------
 static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
                                         RkoSolver &solver) {
-  std::vector<int> UnFixed(
-      solver.getProblemDimension()); // store the random-keys not yet fixed
-  std::vector<int>
-      chosenRK; // store the random-keys that will be search in the line search
-  std::vector<double> z(
-      solver.getProblemDimension()); // store the best value of the random-key i
-  std::vector<double> g(
-      solver.getProblemDimension(),
-      INFINITY); // store the value of the ofv with a random-key z_i
+  std::vector<int> UnFixed(solver.getProblemDimension());
+  std::vector<int> chosenRK;
+  std::vector<double> z(solver.getProblemDimension());
+  std::vector<double> g(solver.getProblemDimension(), INFINITY);
 
-  double min; // Removed unused 'max'
+  double min;
+  double betaMin = 0.3;
+  double betaMax = 0.7;
 
-  // minimum and maximum intensity of the construction phase
-  double betaMin = 0.3, betaMax = 0.7;
-
-  // initialize the points of the solution that can be changed
   std::iota(UnFixed.begin(), UnFixed.end(), 0);
-
-  // construct a solution by perturbing the current solution and choosing one of
-  // the best
   double intensity = randomico(betaMin, betaMax);
-
-  // index of the random key to be set
   int kBest = 0;
 
   int limit = (int)(solver.getProblemDimension() * intensity);
   for (int j = 0; j < limit; j++) {
-    if (SOLVER_SHOULD_STOP)
+    if (SOLVER_SHOULD_STOP) {
       return;
+    }
 
-    // create a list of candidate solutions by perturbing a (not yet 'fixed') rk
-    // of the current solution
     min = INFINITY;
-    // max = -INFINITY; // Unused
-
-    // choose the subset of random keys that will be searched
     chosenRK.clear();
 
     int kMax = (int)(UnFixed.size() * 0.1);
-    if (kMax < 2)
+    if (kMax < 2) {
       kMax = (int)UnFixed.size();
+    }
 
     chosenRK = UnFixed;
-    // 'SOLVER_RNG' vem de Methods.hpp (extern)
     std::shuffle(chosenRK.begin(), chosenRK.end(), SOLVER_RNG);
     if (kMax < (int)chosenRK.size()) {
       chosenRK.resize(kMax);
@@ -131,25 +105,19 @@ static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
 
     for (int k = 0; k < kMax; k++) {
       int i = chosenRK[k];
-
       TSol sAux = s;
 
       LineSearch(sAux, h, i, z[i], g[i], solver);
 
-      // store the best g[i] and the rk that found this g
       if (min > g[i]) {
         min = g[i];
         kBest = i;
       }
     }
 
-    // select the best candidate to continue building
-
-    // update the current solution
     s.rk[kBest] = z[kBest];
     s.ofv = g[kBest];
 
-    // remove rk k from the UnFixed set
     for (int i = 0; i < (int)UnFixed.size(); i++) {
       if (UnFixed[i] == kBest) {
         UnFixed.erase(UnFixed.begin() + i);
@@ -158,8 +126,63 @@ static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
     }
   }
 
-  // update the solution found in the constructive phase
   solver.decodeSolution(s);
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: GraspInnerStep
+// -------------------------------------------------------------------------
+static bool GraspInnerStep(TSol &s, TSol &sBest, float &h, float alphaGrasp,
+                           int &iter, int &improv, double &delta,
+                           const double math_eps, float currentTime,
+                           std::vector<int> &RKorder, RkoSolver &solver,
+                           const TRunData &runData, const char *method,
+                           TSol &sLineBest) {
+  if (SOLVER_SHOULD_STOP) {
+    if (runData.debug > 0) {
+      std::cout << "[DEBUG][MH] GRASP interrompido via SOLVER_SHOULD_STOP." << std::endl;
+    }
+    return false;
+  }
+
+  iter++;
+
+  TSol sLine = s;
+  ConstrutiveGreedyRandomized(sLine, h, alphaGrasp, solver);
+
+  sLineBest = sLine;
+  RVND(sLineBest, solver, runData.strategy, RKorder);
+
+  if (sLineBest.ofv < sBest.ofv) {
+    delta = (sBest.ofv - sLineBest.ofv) / (sBest.ofv + math_eps);
+    sBest = sLineBest;
+    improv = 1;
+
+    if (runData.debug > 0) {
+      std::cout << "[DEBUG][MH] GRASP encontrou nova melhor solucao na iteracao " 
+                << iter << ": ofv=" << sBest.ofv << std::endl;
+    }
+
+    UpdatePoolSolutions(sLineBest, method, runData.debug, runData.poolUpdateMethod);
+  } else {
+    h = h / 2.0f;
+  }
+
+  if (sLineBest.ofv < s.ofv) {
+    s = sLineBest;
+  } else {
+    double x = randomico(0.0, 1.0);
+    double timeFactor = 100.0 - 100.0 * (currentTime / (runData.MAXTIME * runData.restart + math_eps));
+    if (timeFactor < 1.0) {
+      timeFactor = 1.0;
+    }
+
+    if (x < exp(-(sLineBest.ofv - s.ofv) / timeFactor)) {
+      s = sLineBest;
+    }
+  }
+
+  return true;
 }
 
 // -------------------------------------------------------------------------
@@ -167,49 +190,41 @@ static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
 // -------------------------------------------------------------------------
 void GRASP(const TRunData &runData, RkoSolver &solver) {
   const char *method = "GRASP";
-  // GRASP parameters
   TSol s;         // current solution
-  TSol sLine;     // constructive solution
   TSol sLineBest; // local search solution
   TSol sBest;     // best solution of GRASP
 
   float currentTime = 0; // computational time of the search process
   int improv = 0;        // improvement flag
 
-  double start_timeMH = get_time_in_seconds(); // start computational time
-  double end_timeMH = get_time_in_seconds();   // end computational time
+  double start_timeMH = get_time_in_seconds();
+  double end_timeMH = get_time_in_seconds();
 
-  std::vector<int> RKorder(
-      solver.getProblemDimension()); // define a order for the neighors
+  std::vector<int> RKorder(solver.getProblemDimension());
   std::iota(RKorder.begin(), RKorder.end(), 0);
 
-  float alphaGrasp = 0.1; // greedy rate
-  float h = 0;            // grid dense
-  float hs = 0;           // start grid dense
-  float he = 0;           // end grid dense
+  float alphaGrasp = 0.1f;
+  float h = 0;
+  float hs = 0;
+  float he = 0;
 
   // ---------------------------------------------------------------------
   // Q-Learning parameters
   // ---------------------------------------------------------------------
-  std::vector<TState> S; // finite state space
-  int numPar = 0;        // number of parameters
-  int numStates = 0;     // number of states
-  int iCurr = 0;         // current (initial) state
-  double epsilon = 0;    // greed choice possibility
-  double lf = 0;         // learning factor
-  double df = 0;         // discount factor
-  double R = 0;          // reward
+  std::vector<TState> S;
+  int numPar = 0;
+  int numStates = 0;
+  int iCurr = 0;
+  double epsilon = 0;
+  double lf = 0;
+  double df = 0;
+  double R = 0;
 
-  const double math_eps = 1e-9; // security margin for floating point denominator
-  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
-  float epsilon_max = 1.0; // maximum epsilon
-  float epsilon_min = 0.1; // minimum epsilon
-  int Ti = 1;              // number of epochs performed
-  int restartEpsilon = 1;  // number of restart epsilon
-  int st = 0;              // current state
-  int at = 0;              // current action
+  const double math_eps = 1e-9;
+  double delta = 0.0;
+  int st = 0;
+  int at = 0;
 
-  // ** read file with parameter values
   numPar = 3;
   std::vector<std::vector<double>> parameters;
   parameters.resize(numPar);
@@ -218,41 +233,21 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
 
   // offline control
   if (runData.control == 0) {
-    // define parameters of GRASP
-    if (!parameters[0].empty())
-      alphaGrasp = (float)parameters[0][0];
-    if (!parameters[1].empty())
-      hs = (float)parameters[1][0];
-    if (!parameters[2].empty())
-      he = (float)parameters[2][0];
-  }
+    if (!parameters[0].empty()) { alphaGrasp = (float)parameters[0][0]; }
+    if (!parameters[1].empty()) { hs = (float)parameters[1][0]; }
+    if (!parameters[2].empty()) { he = (float)parameters[2][0]; }
+  } else if (runData.control == 1) {
+    CreateStates(parameters, numStates, numPar, S);
+    epsilon = 0.95;
+    delta = 0.0;
 
-  // online control
-  else {
-    if (runData.control == 1) {
-      // create possible states of the Markov chain
-      CreateStates(parameters, numStates, numPar, S);
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
-
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      //variance and epsilon
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define parameters of GRASP
-      if (!S.empty()) {
-        alphaGrasp = (float)S[iCurr].par[0];
-        hs = (float)S[iCurr].par[1];
-        he = (float)S[iCurr].par[2];
-      }
+    if (!S.empty()) {
+      alphaGrasp = (float)S[iCurr].par[0];
+      hs = (float)S[iCurr].par[1];
+      he = (float)S[iCurr].par[2];
     }
   }
 
@@ -261,36 +256,21 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
               << ", he=" << he << std::endl;
   }
 
-  // create an initial solution
   CreateInitialSolutions(s, solver.getProblemDimension());
   solver.decodeSolution(s);
   sBest = s;
 
   int iter = 0;
-  // run the search process until stop criterion (maxTime)
+
   while (currentTime < runData.MAXTIME * runData.restart) {
-    // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
-      if (0) {
-      // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
-      } else {
-        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                       currentTime, delta);
-      }
-
-      // set variance
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
       delta = 0.0;
-
-      // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
 
-      // execute action at of st
       if (at >= 0 && at < (int)S[st].Ai.size()) {
         iCurr = S[st].Ai[at];
-
-        // define the parameters according of the current state
         alphaGrasp = (float)S[iCurr].par[0];
         hs = (float)S[iCurr].par[1];
         he = (float)S[iCurr].par[2];
@@ -298,110 +278,32 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     }
 
     h = hs;
-    // noImprov = 0;
     while (h >= he && currentTime < runData.MAXTIME * runData.restart) {
-      if (SOLVER_SHOULD_STOP) {
-        if (runData.debug > 0) std::cout << "[DEBUG][MH] GRASP interrompido via SOLVER_SHOULD_STOP." << std::endl;
-        return;
-      }
-
-      iter++;
-
-      // offline control
       if (runData.control == 0) {
         alphaGrasp = (float)randomico(0.1, 0.9);
       }
 
-      // construct a greedy randomized solution
-      sLine = s;
-      ConstrutiveGreedyRandomized(sLine, h, alphaGrasp, solver);
-
-      // apply local search in current solution
-      sLineBest = sLine;
-      RVND(sLineBest, solver, runData.strategy, RKorder);
-
-      // update the best solution found by GRASP
-      if (sLineBest.ofv < sBest.ofv) {
-        delta = (sBest.ofv - sLineBest.ofv) / (sBest.ofv + math_eps);
-
-        sBest = sLineBest;
-        improv = 1;
-
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] GRASP encontrou nova melhor solucao na iteracao " 
-                    << iter << ": ofv=" << sBest.ofv << std::endl;
-        }
-
-        // update the SOLVER_POOL of solutions
-        UpdatePoolSolutions(sLineBest, method, runData.debug, runData.poolUpdateMethod);
-      }
-      // make grid more dense
-      else {
-        h = h / 2.0f;
+      if (!GraspInnerStep(s, sBest, h, alphaGrasp, iter, improv, delta,
+                          math_eps, currentTime, RKorder, solver, runData,
+                          method, sLineBest)) {
+        return;
       }
 
-      // accept criterion
-      if (sLineBest.ofv < s.ofv) {
-        s = sLineBest;
-      } else {
-        // Metropolis criterion
-        double x = randomico(0.0, 1.0);
-        // Avoid division by zero in time factor
-        double timeFactor =
-            100.0 -
-            100.0 * (currentTime / (runData.MAXTIME * runData.restart + math_eps));
-        if (timeFactor < 1.0)
-          timeFactor = 1.0;
-
-        if (x < (exp(-(sLineBest.ofv - s.ofv) / timeFactor))) {
-          s = sLineBest;
-        }
-      }
-
-      // terminate the search process in MAXTIME
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
     }
 
-    // Q-Learning Reward Phase (Post-Action)
     if (runData.control == 1 && !S.empty()) {
-      // The reward function is based on improvement of the current best fitness
-      // and binary reward
       if (improv) {
         R = 1;
         improv = 0;
       } else {
-        if (std::abs(sLineBest.ofv) > math_eps)
-          R = (sBest.ofv - sLineBest.ofv) / (std::abs(sLineBest.ofv) + math_eps);
-        else
-          R = 0;
+        R = (std::abs(sLineBest.ofv) > math_eps) ? (sBest.ofv - sLineBest.ofv) / (std::abs(sLineBest.ofv) + math_eps) : 0;
       }
 
-      // index of the next state
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
-        int st_1 = S[st].Ai[at];
-
-        // update the Q-Table value
-        if (at < (int)S[st].Qa.size()) {
-          S[st].Qa[at] =
-              S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-          // Recalculate true maxQ and maxA for state st
-          S[st].maxQ = S[st].Qa[0];
-          S[st].maxA = 0;
-          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-            if (S[st].Qa[k] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[k];
-              S[st].maxA = (int)k;
-            }
-          }
-        }
-        // define the new current state st
-        st = st_1;
-      }
+      UpdateQValue(S, st, at, R, lf, df);
     }
 
-    // terminate the search process in MAXTIME
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }

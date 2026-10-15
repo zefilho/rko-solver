@@ -10,29 +10,127 @@ using namespace rkolib::core;
 
 // -------------------------------------------------------------------------
 // Helper Function: UpdatePopulation (Internal)
-// Description: update the size of the population according to the current state
 // -------------------------------------------------------------------------
 static void UpdatePopulation(int sizePop, std::vector<TSol> &Pop,
                              RkoSolver &solver) {
-  // size of the current population
   int oldPsize = (int)Pop.size();
 
-  // pruning
   if (oldPsize > sizePop) {
-    // define new size of Pop (vector keeps capacity, just changes size)
     Pop.resize(sizePop);
-  }
-
-  // generate new chromosomes
-  else if (oldPsize < sizePop) {
-    // define new size of Pop
+  } else if (oldPsize < sizePop) {
     Pop.resize(sizePop);
-
     for (int k = oldPsize; k < sizePop; k++) {
       CreateInitialSolutions(Pop[k], solver.getProblemDimension());
       solver.decodeSolution(Pop[k]);
     }
   }
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: TournamentSelection
+// -------------------------------------------------------------------------
+static void TournamentSelection(const std::vector<TSol> &pop,
+                                std::vector<TSol> &popInter, int sizePop) {
+  for (int j = 0; j < sizePop; j++) {
+    int p1, p2, p3;
+    do {
+      p1 = irandomico(0, sizePop - 1);
+      p2 = irandomico(0, sizePop - 1);
+      p3 = irandomico(0, sizePop - 1);
+    } while (p1 == p2 || p1 == p3 || p2 == p3);
+
+    int melhor = p1;
+    if (pop[p2].ofv < pop[melhor].ofv) {
+      melhor = p2;
+    }
+    if (pop[p3].ofv < pop[melhor].ofv) {
+      melhor = p3;
+    }
+    popInter[j] = pop[melhor];
+  }
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: CrossAndMutatePair
+// -------------------------------------------------------------------------
+static void CrossAndMutatePair(TSol &child1, TSol &child2,
+                               const TSol &parent1, const TSol &parent2,
+                               float probCros, float probMut,
+                               RkoSolver &solver) {
+  child1 = parent1;
+  child2 = parent2;
+
+  if (randomico(0, 1) >= probCros) {
+    return;
+  }
+
+  int dim = solver.getProblemDimension();
+  for (int j = 0; j < dim; j++) {
+    if (randomico(0, 1) < 0.5) {
+      child1.rk[j] = parent2.rk[j];
+    }
+    if (randomico(0, 1) < 0.5) {
+      child2.rk[j] = parent1.rk[j];
+    }
+    if (randomico(0, 1) <= probMut) {
+      child1.rk[j] = randomico(0, 1);
+    }
+    if (randomico(0, 1) <= probMut) {
+      child2.rk[j] = randomico(0, 1);
+    }
+  }
+
+  solver.decodeSolution(child1);
+  solver.decodeSolution(child2);
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: EvaluateOffspring
+// -------------------------------------------------------------------------
+static void EvaluateOffspring(TSol &child, TSol &bestInd, double &bestOFcurrent,
+                              int &bestGeneration, int numGenerations,
+                              int &improv, const char *method,
+                              const TRunData &runData) {
+  if (child.ofv < bestInd.ofv) {
+    bestInd = child;
+    bestGeneration = numGenerations;
+    improv = 1;
+    if (runData.debug > 0) {
+      std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
+                << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+    }
+    UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
+  }
+
+  if (child.ofv < bestOFcurrent) {
+    bestOFcurrent = child.ofv;
+  }
+}
+// -------------------------------------------------------------------------
+// Helper Function: ReproduceGeneration
+// -------------------------------------------------------------------------
+static bool ReproduceGeneration(int sizePop, std::vector<TSol> &PopNew,
+                                const std::vector<TSol> &PopInter, TSol &bestInd,
+                                double &bestOFcurrent, int &bestGeneration,
+                                int numGenerations, int &improv, float probCros,
+                                float probMut, RkoSolver &solver,
+                                const TRunData &runData, const char *method) {
+  for (int i = 0; i < sizePop - 1; i += 2) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] GA interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return false;
+    }
+
+    CrossAndMutatePair(PopNew[i], PopNew[i + 1], PopInter[i], PopInter[i + 1],
+                       probCros, probMut, solver);
+    EvaluateOffspring(PopNew[i], bestInd, bestOFcurrent, bestGeneration,
+                      numGenerations, improv, method, runData);
+    EvaluateOffspring(PopNew[i + 1], bestInd, bestOFcurrent, bestGeneration,
+                      numGenerations, improv, method, runData);
+  }
+  return true;
 }
 
 // -------------------------------------------------------------------------
@@ -50,7 +148,6 @@ void GA(const TRunData &runData, RkoSolver &solver) {
 
   TSol bestInd; // best solution found in SGA
 
-  // useful local variables
   int numGenerations = 0; // number of generations
   float currentTime = 0;  // computational time of the search process
   int bestGeneration = 0; // generation in which found the best solution
@@ -59,8 +156,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   double start_timeMH = get_time_in_seconds(); // start computational time
   double end_timeMH = get_time_in_seconds();   // end computational time
 
-  std::vector<int> RKorder(
-      solver.getProblemDimension()); // define a order for the neighors
+  std::vector<int> RKorder(solver.getProblemDimension());
   std::iota(RKorder.begin(), RKorder.end(), 0);
 
   // ---------------------------------------------------------------------
@@ -75,16 +171,11 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
-  const double math_eps = 1e-9; // security margin for floating point denominator
-  double delta = 0.0;     // variance used to update the parameters of the Q-Learning method
-  float epsilon_max = 1.0; // maximum epsilon
-  float epsilon_min = 0.1; // minimum epsilon
-  int Ti = 1;              // number of epochs performed
-  int restartEpsilon = 1;  // number of restart epsilon
-  int st = 0;              // current state
-  int at = 0;              // current action
+  const double math_eps = 1e-9;
+  double delta = 0.0;
+  int st = 0;
+  int at = 0;
 
-  // ** read file with parameter values
   numPar = 3;
   std::vector<std::vector<double>> parameters;
   parameters.resize(numPar);
@@ -93,44 +184,24 @@ void GA(const TRunData &runData, RkoSolver &solver) {
 
   // offline control
   if (runData.control == 0) {
-    // define parameters of SGA
-    if (!parameters[0].empty())
-      sizePop = (int)parameters[0][0];
-    if (!parameters[1].empty())
-      probCros = (float)parameters[1][0];
-    if (!parameters[2].empty())
-      probMut = (float)parameters[2][0];
-  }
+    if (!parameters[0].empty()) { sizePop = (int)parameters[0][0]; }
+    if (!parameters[1].empty()) { probCros = (float)parameters[1][0]; }
+    if (!parameters[2].empty()) { probMut = (float)parameters[2][0]; }
+  } else if (runData.control == 1) {
+    CreateStates(parameters, numStates, numPar, S);
+    epsilon = 0.95;
+    delta = 0.0;
 
-  // online control
-  else {
-    // Q-Learning
-    if (runData.control == 1) {
-      // create possible states of the Markov chain
-      CreateStates(parameters, numStates, numPar, S);
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
-
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      //variance and epsilon
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define parameters of SGA
-      if (!S.empty()) {
-        sizePop = (int)S[iCurr].par[0];
-        probCros = (float)S[iCurr].par[1];
-        probMut = (float)S[iCurr].par[2];
-      }
+    if (!S.empty()) {
+      sizePop = (int)S[iCurr].par[0];
+      probCros = (float)S[iCurr].par[1];
+      probMut = (float)S[iCurr].par[2];
     }
   }
+
   if (runData.debug > 0) {
     std::cout << "[DEBUG][MH] GA iniciado. sizePop=" << sizePop << ", probCros=" << probCros 
               << ", probMut=" << probMut << std::endl;
@@ -141,51 +212,33 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   PopNew.resize(sizePop);
   PopInter.resize(sizePop);
 
-  // Create the initial chromosomes with random keys
-  // Uso de INFINITY ao invés de magic number
   bestInd.ofv = std::numeric_limits<double>::infinity();
 
   for (int i = 0; i < sizePop; i++) {
     CreateInitialSolutions(Pop[i], solver.getProblemDimension());
     solver.decodeSolution(Pop[i]);
 
-    // set the best individual
-    if (Pop[i].ofv < bestInd.ofv)
+    if (Pop[i].ofv < bestInd.ofv) {
       bestInd = Pop[i];
+    }
   }
 
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    // number of generations
     numGenerations++;
-
-    //best solution found so far
     double bestOfvStartGen = bestInd.ofv;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      // set Q-Learning parameters
-      if (0) {
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
-      } else {
-        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-          currentTime, delta);
-      }
-
-      //set variance
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
       delta = 0.0;
-
-      // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
 
-      // execute action at of st
       if (at >= 0 && at < (int)S[st].Ai.size()) {
         iCurr = S[st].Ai[at];
-
-        // define the parameters according of the current state
         sizePop = (int)S[iCurr].par[0];
         probCros = (float)S[iCurr].par[1];
         probMut = (float)S[iCurr].par[2];
@@ -194,125 +247,35 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       }
     }
 
-    // Garante que vetores auxiliares acompanhem o tamanho (caso
-    // UpdatePopulation tenha alterado)
-    if ((int)PopNew.size() != sizePop)
+    if ((int)PopNew.size() != sizePop) {
       PopNew.resize(sizePop);
-    if ((int)PopInter.size() != sizePop)
+    }
+    if ((int)PopInter.size() != sizePop) {
       PopInter.resize(sizePop);
+    }
 
     // -----------------------------------------------------------------
     // Selection (Tournament)
     // -----------------------------------------------------------------
-    for (int j = 0; j < sizePop; j++) {
-      int p1, p2, p3, melhor;
-
-      do {
-        p1 = irandomico(0, sizePop - 1);
-        p2 = irandomico(0, sizePop - 1);
-        p3 = irandomico(0, sizePop - 1);
-      } while (p1 == p2 || p1 == p3 || p2 == p3);
-
-      if ((Pop[p1].ofv < Pop[p2].ofv) && (Pop[p1].ofv < Pop[p3].ofv))
-        melhor = p1;
-      else if (Pop[p2].ofv < Pop[p3].ofv)
-        melhor = p2;
-      else
-        melhor = p3;
-
-      // insert the best individual into the intermediate population
-      PopInter[j] = Pop[melhor];
-    }
+    TournamentSelection(Pop, PopInter, sizePop);
 
     // -----------------------------------------------------------------
     // Crossover & Mutation
     // -----------------------------------------------------------------
-    // perform uniform crossover between the selected pairs of parents
-    // double avrgOff = 0.0;
     double bestOFcurrent = INFINITY;
 
-    for (int i = 0; i < sizePop - 1; i = i + 2) {
-      if (SOLVER_SHOULD_STOP) {
-        if (runData.debug > 0) std::cout << "[DEBUG][MH] GA interrompido via SOLVER_SHOULD_STOP." << std::endl;
-        return;
-      }
-
-      PopNew[i] = PopInter[i];
-      PopNew[i + 1] = PopInter[i + 1];
-
-      // check the probability of crossover
-      if (randomico(0, 1) < probCros) {
-        for (int j = 0; j < solver.getProblemDimension(); j++) {
-          // swap the alleles of offspring i
-          if (randomico(0, 1) < 0.5) {
-            PopNew[i].rk[j] = PopInter[i + 1].rk[j];
-          }
-
-          // swap the alleles of offspring i+1
-          if (randomico(0, 1) < 0.5) {
-            PopNew[i + 1].rk[j] = PopInter[i].rk[j];
-          }
-
-          // check the probability of making a mutation in each gene of
-          // offspring i
-          if (randomico(0, 1) <= probMut) {
-            PopNew[i].rk[j] = randomico(0, 1);
-          }
-
-          // check the probability of making a mutation in each gene of
-          // offspring i+1
-          if (randomico(0, 1) <= probMut) {
-            PopNew[i + 1].rk[j] = randomico(0, 1);
-          }
-        }
-
-        // calculate fitness
-        solver.decodeSolution(PopNew[i]);
-        solver.decodeSolution(PopNew[i + 1]);
-      }
-
-      // avrgOff += PopNew[i].ofv + PopNew[i+1].ofv;
-
-      // set the best individual
-      if (PopNew[i].ofv < bestInd.ofv) {
-        bestInd = PopNew[i];
-        bestGeneration = numGenerations;
-        improv = 1;
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
-                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
-        }
-        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
-      }
-
-      if (PopNew[i + 1].ofv < bestInd.ofv) {
-        bestInd = PopNew[i + 1];
-        bestGeneration = numGenerations;
-        improv = 1;
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] GA encontrou novo melhor individuo na geracao " 
-                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
-        }
-        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
-      }
-
-      // set the best offspring
-      if (PopNew[i].ofv < bestOFcurrent) {
-        bestOFcurrent = PopNew[i].ofv;
-      }
-      if (PopNew[i + 1].ofv < bestOFcurrent) {
-        bestOFcurrent = PopNew[i + 1].ofv;
-      }
+    if (!ReproduceGeneration(sizePop, PopNew, PopInter, bestInd, bestOFcurrent,
+                            bestGeneration, numGenerations, improv, probCros,
+                            probMut, solver, runData, method)) {
+      return;
     }
 
     // -----------------------------------------------------------------
     // Local Search
     // -----------------------------------------------------------------
-    // Apply local search in randomly selected solution and assigning it in Pop
     int pos1 = irandomico(0, sizePop - 1);
     NelderMeadSearch(PopNew[pos1], solver);
 
-    // set the best individual
     if (PopNew[pos1].ofv < bestInd.ofv) {
       bestInd = PopNew[pos1];
       bestGeneration = numGenerations;
@@ -329,50 +292,21 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     // Q-Learning Reward Phase (Post-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      // The reward function is based on improvement of the current best fitness
-      // and binary reward
       if (improv) {
         R = 1;
         improv = 0;
-        // update the variance
         delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
-        if (std::abs(bestOFcurrent) > math_eps)
-          R = (bestInd.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + math_eps);
-        else
-          R = 0;
+        R = (std::abs(bestOFcurrent) > math_eps) ? (bestInd.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + math_eps) : 0;
       }
 
-      // index of the next state
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
-        int st_1 = S[st].Ai[at];
-
-        // Update the Q-Table value
-        if (at < (int)S[st].Qa.size()) {
-          S[st].Qa[at] =
-              S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-          // Recalculate true maxQ and maxA for state st
-          S[st].maxQ = S[st].Qa[0];
-          S[st].maxA = 0;
-          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-            if (S[st].Qa[k] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[k];
-              S[st].maxA = (int)k;
-            }
-          }
-        }
-        // Define the new current state st
-        st = st_1;
-      }
+      UpdateQValue(S, st, at, R, lf, df);
     }
 
-    // terminate the evolutionary process in MAXTIME
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }
 
-  // Vectors clean up automatically, explicit clear is just for clarity
   Pop.clear();
   PopNew.clear();
   PopInter.clear();

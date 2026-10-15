@@ -60,43 +60,29 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   readParametersYaml(method, runData.control, parameters, numPar);
 
   // offline control
+  // offline control
   if (runData.control == 0) {
-    if (!parameters[0].empty())
+    if (!parameters[0].empty()) {
       betaMin = parameters[0][0];
-    if (!parameters[1].empty())
+    }
+    if (!parameters[1].empty()) {
       betaMax = parameters[1][0];
-  }
-
-  // online control
-  else {
+    }
+  } else if (runData.control == 1) {
     // Q-Learning
-    if (runData.control == 1) {
-      // create possible states of the Markov chain
-      CreateStates(parameters, numStates, numPar, S);
+    CreateStates(parameters, numStates, numPar, S);
+    epsilon = 0.95;
+    delta = 0.0;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      // set initial variance and epsilon
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define parameters of ILS based on state
-      if (!S.empty()) {
-        betaMin = S[iCurr].par[0];
-        betaMax = S[iCurr].par[1];
-      }
+    if (!S.empty()) {
+      betaMin = S[iCurr].par[0];
+      betaMax = S[iCurr].par[1];
     }
   }
 
-  // number of iterations
   Iter = 0;
 
   if (runData.debug > 0) {
@@ -122,28 +108,17 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       return;
     }
 
-    // increase the number of ILS iterations
     Iter++;
 
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
-      if (0){
-      // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
-      } else {
-        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                       currentTime, delta);
-      }
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
+      delta = 0.0;
 
-      // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
-
-      // execute action at of st
       if (at >= 0 && at < (int)S[st].Ai.size()) {
         iCurr = S[st].Ai[at];
-
-        // define the parameters according of the current state
         betaMin = S[iCurr].par[0];
         betaMax = S[iCurr].par[1];
       }
@@ -154,8 +129,6 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // Shake the current solution
     ShakeSolution(sLine, betaMin, betaMax, solver.getProblemDimension());
-
-    // calculate the OFV
     solver.decodeSolution(sLine);
 
     // s*' <- local search (s')
@@ -164,9 +137,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // s* <- acceptance criterion (s*, s*', historico)
     if (sBestLine.ofv < sBest.ofv) {
-      //update variance
       delta = (sBest.ofv - sBestLine.ofv) / (sBest.ofv + math_eps);
-      
       sBest = sBestLine;
       IterImprov = Iter;
       improv = 1;
@@ -176,50 +147,21 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
                   << Iter << ": ofv=" << sBest.ofv << std::endl;
       }
 
-      // update the SOLVER_POOL of solutions
       UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
     }
 
     // Q-Learning Reward Phase (Post-Action)
     if (runData.control == 1 && !S.empty()) {
-      // The reward function is based on improvement of the current best fitness
-      // and binary reward
       if (improv) {
         R = 1;
         improv = 0;
       } else {
-        // Protection against division by zero
-        if (std::abs(sBestLine.ofv) > math_eps)
-          R = (sBest.ofv - sBestLine.ofv) / (std::abs(sBestLine.ofv) + math_eps);
-        else
-          R = 0;
+        R = (std::abs(sBestLine.ofv) > math_eps) ? ((sBest.ofv - sBestLine.ofv) / (std::abs(sBestLine.ofv) + math_eps)) : 0.0;
       }
 
-      // index of the next state
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
-        int st_1 = S[st].Ai[at];
-
-        // Update the Q-Table value
-        if (at < (int)S[st].Qa.size()) {
-          S[st].Qa[at] =
-              S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-          // Recalculate true maxQ and maxA for state st
-          S[st].maxQ = S[st].Qa[0];
-          S[st].maxA = 0;
-          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-            if (S[st].Qa[k] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[k];
-              S[st].maxA = (int)k;
-            }
-          }
-        }
-        // Define the new current state st
-        st = st_1;
-      }
+      UpdateQValue(S, st, at, R, lf, df);
     }
 
-    // terminate the search process in MAXTIME
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }
