@@ -20,7 +20,7 @@ namespace rkolib::utils {
                        double timeTotal, 
                        const std::string& instance, 
                        int dimension, 
-                       const std::string& outDir = "../results");
+                       const std::string& outDir = "results");
 
     // Salva a linha de estatísticas consolidadas em CSV
     void WriteResults(const std::vector<std::string>& algorithms, 
@@ -30,7 +30,7 @@ namespace rkolib::utils {
                       double timeBest, 
                       double timeTotal, 
                       const std::string& instance, 
-                      const std::string& outDir = "../results");
+                      const std::string& outDir = "results");
 
     void WriteMultiObjectiveResults(const std::vector<std::string>& algorithms, 
                                 double scalarOfv, 
@@ -39,7 +39,7 @@ namespace rkolib::utils {
                                 const std::vector<double>& ofvs, 
                                 double timeBest, double timeTotal, 
                                 const std::string& instance, 
-                                const std::string& outDir = "../results");
+                                const std::string& outDir = "results");
 
     // Imprime o Pool de Soluções detalhado no terminal
     void PrintPoolSolutions(const std::vector<core::TSol>& pool, int dimension);
@@ -49,8 +49,8 @@ namespace rkolib::utils {
                             const std::vector<core::TSol>& pool,
                             const std::string& instance,
                             int dimension,
-                            const std::string& outDir = "../results");
+                            const std::string& outDir = "results");
 
-    void WriteConvergenceLog(const std::vector<core::ConvergencePoint>& history, const std::string& outDir);
+    void WriteConvergenceLog(const std::vector<core::ConvergencePoint>& history, const std::string& outDir = "results");
 
 } // namespace rkolib::utils

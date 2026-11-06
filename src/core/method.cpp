@@ -918,8 +918,8 @@ void readParametersYaml(const char *method, int control,
                         std::vector<std::vector<double>> &parameters,
                         int numPar) {
   // Define o nome do arquivo fora da área crítica (operação leve)
-  std::string paramFile = (control == 0) ? "../config/yaml/param-offline.yaml"
-                                         : "../config/yaml/param-online.yaml";
+  std::string paramFile = (control == 0) ? "config/yaml/param-offline.yaml"
+                                         : "config/yaml/param-online.yaml";
 
 #pragma omp critical
   {

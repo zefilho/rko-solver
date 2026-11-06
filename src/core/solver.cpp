@@ -323,7 +323,7 @@ void RkoSolver::run() {
       utils::WriteSolutionScreen(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension, ctx.getPool());
   }
 
-  utils::WriteConvergenceLog(convergenceHistory_, "../results");
+  utils::WriteConvergenceLog(convergenceHistory_, "results");
 }
 
 void RkoSolver::validateConfiguration() {
