@@ -33,7 +33,6 @@ public:
   // -------------------------------------------------------------------------
   // ACCESSORS
   // -------------------------------------------------------------------------
-  // const core::TSol &getBestSolution() const { return bestSolutionGlobal_; }
   core::TSol getBestSolution() const {
     core::TSol copy;
     

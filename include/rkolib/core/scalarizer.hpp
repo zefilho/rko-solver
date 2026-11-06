@@ -21,7 +21,6 @@ public:
                    const std::vector<double> &idealPoint, 
                    const std::vector<double> &nadirPoint) override {
     if (s.objs.empty()){
-      //fprintf(stderr, "[TRACE CORE] Fim de scalarize. OFV:%f %d \n", s.ofv, s.objs.size());
       return 1e15; // Valor ruim
     }
 
@@ -39,19 +38,12 @@ public:
     } 
 
     // Pesos padrão se vetor vazio
-    //bool use_default = (lambda.size() != nObj);
     bool use_default = lambda.empty();
     double default_w = 1.0 / (double)nObj;
     double sum_dist = 0.0;
 
     for (size_t k = 0; k < nObj; ++k) {
       double w = use_default ? default_w : lambda[k];
-      // // | z* - f(x) |
-      // double diff = std::abs(idealPoint[k] - s.objs[k]);
-      // double val = w * diff;
-      // if (val > max_dist)
-      //   max_dist = val;
-      //double diff = std::abs(idealPoint[k] - s.objs[k]);
       double diff = std::max(0.0, s.objs[k] - idealPoint[k]);
       double range = std::abs(nadirPoint[k] - idealPoint[k]);
       
@@ -62,8 +54,6 @@ public:
       double norm_dist = diff / range;
       double val = w * norm_dist;
 
-      // std::cout << "[TRACE CORE] Tchebycheff Scalarizer Avaliacao" << std::endl;
-      // std::cout << "w: " << w << " diff: " << diff << " range: " << range << " norm_dist: " << norm_dist << " val: " << val << std::endl;
       sum_dist += norm_dist;
 
       

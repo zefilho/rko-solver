@@ -24,9 +24,6 @@ public:
   virtual void setDebugMode(int debug) { (void)debug; }
 };
 
-// // Declaration of a "factory" that user will implement
-// std::shared_ptr<IProblem> createProblem();
-
 } // namespace rkolib::core
 
 extern "C" {

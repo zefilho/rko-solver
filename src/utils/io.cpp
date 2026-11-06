@@ -25,9 +25,80 @@ namespace rkolib::utils {
         }
     }
 
+    void PrintPoolSolutions(const std::vector<core::TSol>& pool, int dimension) {
+        std::cout << "\n╔════════════════════════════════════════════════════════╗\n"
+                  << "║                 POOL SOLUTIONS (ELITE)                 ║\n"
+                  << "╚════════════════════════════════════════════════════════╝\n";
+        std::cout << "Pool Size: " << pool.size() << "\n";
+
+        for (size_t idx = 0; idx < pool.size(); ++idx) {
+            const auto& sol = pool[idx];
+            std::string mh = sol.nameMH.empty() ? "Init" : sol.nameMH;
+
+            std::cout << std::format("\n[#{:02d}] OFV: {:.6f} | MH: {} | Best time: {:.3f}s\n",
+                                     idx + 1, sol.ofv, mh, sol.best_time);
+
+            std::cout << "  Objs: [ ";
+            for (double val : sol.objs) {
+                std::cout << std::format("{:.6f} ", val);
+            }
+            std::cout << "]\n";
+
+            std::cout << "  RK:   ";
+            int rkLimit = std::min(dimension, static_cast<int>(sol.rk.size()));
+            for (int i = 0; i < rkLimit; ++i) {
+                std::cout << std::format("{:.3f} ", sol.rk[i]);
+            }
+            std::cout << "\n";
+        }
+        std::cout << "══════════════════════════════════════════════════════════\n";
+    }
+
+    void WritePoolSolutions(const std::vector<std::string>& algorithms,
+                            const std::vector<core::TSol>& pool,
+                            const std::string& instance,
+                            int dimension,
+                            const std::string& outDir) {
+        EnsureDirectoryExists(outDir);
+        std::string filepath = outDir + "/Pool_Solutions_RKO.txt";
+
+        std::ofstream poolFile(filepath, std::ios::app);
+        if (!poolFile.is_open()) {
+            std::cerr << "\n[Erro FATAL] Nao foi possivel abrir o arquivo: " << filepath << "\n";
+            return;
+        }
+
+        poolFile << "\n\n==========================================================\n";
+        poolFile << "Instance: " << instance << "\n";
+        poolFile << "RKO: " << JoinAlgorithms(algorithms) << "\n";
+        poolFile << "Pool Size: " << pool.size() << "\n";
+        poolFile << "----------------------------------------------------------\n";
+
+        for (size_t idx = 0; idx < pool.size(); ++idx) {
+            const auto& sol = pool[idx];
+            std::string mh = sol.nameMH.empty() ? "Init" : sol.nameMH;
+
+            poolFile << std::format("[#{:02d}] OFV: {:.6f} | MH: {} | Best time: {:.3f}s\n",
+                                    idx + 1, sol.ofv, mh, sol.best_time);
+
+            poolFile << "Objs: [ ";
+            for (double val : sol.objs) {
+                poolFile << std::format("{:.6f} ", val);
+            }
+            poolFile << "]\n";
+
+            poolFile << "RK: ";
+            int rkLimit = std::min(dimension, static_cast<int>(sol.rk.size()));
+            for (int i = 0; i < rkLimit; ++i) {
+                poolFile << std::format("{:.3f} ", sol.rk[i]);
+            }
+            poolFile << "\n----------------------------------------------------------\n";
+        }
+    }
+
     void WriteSolutionScreen(const std::vector<std::string>& algorithms, const core::TSol& s, 
                              double timeBest, double timeTotal, const std::string& instance, 
-                             int dimension, const std::vector<core::TSol>& pool) {
+                             int dimension, [[maybe_unused]] const std::vector<core::TSol>& pool) {
         
         std::cout << "\n\n========================================\n";
         std::cout << "RKO: " << JoinAlgorithms(algorithms) << "\n";
@@ -42,11 +113,6 @@ namespace rkolib::utils {
         std::cout << std::format("\nOFV: {:.5f}", s.ofv);
         std::cout << std::format("\nTotal time: {:.3f}s", timeTotal);
         std::cout << std::format("\nBest time: {:.3f}s\n", timeBest);
-
-        std::cout << "\nSolution Pool (Top Elite):\n";
-        for (const auto& sol : pool) {
-            std::cout << std::format("{:.5f} [{}]\n", sol.ofv, sol.nameMH);
-        }
         std::cout << "========================================\n\n";
     }
 

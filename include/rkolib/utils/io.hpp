@@ -41,6 +41,16 @@ namespace rkolib::utils {
                                 const std::string& instance, 
                                 const std::string& outDir = "../results");
 
+    // Imprime o Pool de Soluções detalhado no terminal
+    void PrintPoolSolutions(const std::vector<core::TSol>& pool, int dimension);
+
+    // Salva o Pool de Soluções detalhado em arquivo dedicado
+    void WritePoolSolutions(const std::vector<std::string>& algorithms,
+                            const std::vector<core::TSol>& pool,
+                            const std::string& instance,
+                            int dimension,
+                            const std::string& outDir = "../results");
+
     void WriteConvergenceLog(const std::vector<core::ConvergencePoint>& history, const std::string& outDir);
 
 } // namespace rkolib::utils

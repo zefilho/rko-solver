@@ -83,6 +83,9 @@ public:
 
   bool shouldStop() const { return stopExecution_.load(std::memory_order_relaxed); }
 
+  void setRunStartTime(double t) { runStartTime_ = t; }
+  double getRunStartTime() const { return runStartTime_; }
+
   // -------------------------------------------------------------------------
   // POOL MANAGEMENT & MULTI-OBJECTIVE RESCALARIZATION
   // -------------------------------------------------------------------------
@@ -132,6 +135,7 @@ private:
   std::vector<PaddedRng> rngs_;
   std::atomic<bool> stopExecution_;
   std::vector<TSol> pool_;
+  double runStartTime_ = 0.0;
 };
 
 // -------------------------------------------------------------------------

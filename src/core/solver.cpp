@@ -307,9 +307,11 @@ void RkoSolver::run() {
   }
 
   int dimension = getProblemDimension();
+  auto& ctx = core::SolverContext::instance();
 
   if (runData_.debug == 0) { 
       utils::WriteSolution(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension);
+      utils::WritePoolSolutions(activeAlgorithms, ctx.getPool(), instancePath_, dimension);
       
       if(problemInstance_->getNumObjectives() > 1){
         utils::WriteMultiObjectiveResults(activeAlgorithms, bestObjective_, bestSolutionGlobal_.objs, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
@@ -318,7 +320,6 @@ void RkoSolver::run() {
       }
       
   } else {
-      auto& ctx = core::SolverContext::instance();
       utils::WriteSolutionScreen(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension, ctx.getPool());
   }
 
@@ -357,6 +358,7 @@ void RkoSolver::executeRun(int runIndex) {
   bestSolutionRun.ofv = std::numeric_limits<double>::infinity();
 
   double startTime = omp_get_wtime();
+  ctx.setRunStartTime(core::get_time_in_seconds());
 
   ctx.resetStopFlag();
 
@@ -527,16 +529,18 @@ void RkoSolver::displayResults() {
     std::cout << "Best Objective:    " << std::abs(bestObjective_) << "\n"
               << "Average Objective: " << std::abs(averageObjective_) << "\n"
               << "Avg Run Time:      " << totalTime_ << "s\n";
-    return;
+  } else {
+    std::cout << "Scalarized Fitness (Dist): " << bestObjective_ << " (Minimization)\n";
+    std::cout << "Real Objectives Values:    [ ";
+    for (double val : bestSolutionGlobal_.objs) { std::cout << val << " "; }
+    std::cout << "]\nAvg Run Time:              " << totalTime_ << "s\n";
+    std::cout << "Ideal Point Found:         [ ";
+    for (double v : idealPoint_) std::cout << v << " ";
+    std::cout << "]\n";
   }
 
-  std::cout << "Scalarized Fitness (Dist): " << bestObjective_ << " (Minimization)\n";
-  std::cout << "Real Objectives Values:    [ ";
-  for (double val : bestSolutionGlobal_.objs) { std::cout << val << " "; }
-  std::cout << "]\nAvg Run Time:              " << totalTime_ << "s\n";
-  std::cout << "Ideal Point Found:         [ ";
-  for (double v : idealPoint_) std::cout << v << " ";
-  std::cout << "]\n";
+  auto &ctx = core::SolverContext::instance();
+  utils::PrintPoolSolutions(ctx.getPool(), getProblemDimension());
 }
 
 void RkoSolver::cleanup() {}
@@ -545,8 +549,6 @@ void RkoSolver::cleanup() {}
 // EVALUATION CORE 
 // -------------------------------------------------------------------------
 void RkoSolver::decodeSolution(core::TSol &sol, const std::vector<double> &lambda) {
- // fprintf(stderr, "[TRACE CORE] Inicio de decodeSolution. OFV: \n");
-
   problemInstance_->decode(sol);
 
   if (problemInstance_->getNumObjectives() <= 1) {
