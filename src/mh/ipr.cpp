@@ -132,7 +132,7 @@ void IPR(const TRunData &runData, RkoSolver &solver) {
     TSol guia;
     bool pool_ok = false;
 
-    #pragma omp critical
+    #pragma omp critical(pool_lock)
     {
       if (SOLVER_POOL.size() >= 2) {
         int k1, k2;

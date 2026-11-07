@@ -60,7 +60,7 @@ void CreatePoolSolutions(rkolib::RkoSolver &solver, const int sizePool) {
       actualSizePool = sizePool * 2;
   }
 
-  #pragma omp critical
+  #pragma omp critical(pool_lock)
   {
     auto &ctx = SolverContext::instance();
     if (ctx.getPool().size() != (size_t)actualSizePool) {
@@ -506,7 +506,7 @@ void NelderMeadSearch(TSol &x1, rkolib::RkoSolver &solver) {
   // =================================================================
   // VACINA 1: LEITURA PROTEGIDA DO POOL
   // =================================================================
-  #pragma omp critical
+  #pragma omp critical(pool_lock)
   {
     poolSize = (int)SOLVER_POOL.size();
     
