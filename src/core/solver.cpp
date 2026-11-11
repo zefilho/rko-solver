@@ -4,6 +4,7 @@
 
 #include "rkolib/core/solver.hpp"
 #include "rkolib/core/context.hpp"
+#include "rkolib/core/method.hpp"
 #include "rkolib/utils/io.hpp"
 
 // Includes das Meta-heurísticas
@@ -40,9 +41,10 @@ namespace rkolib {
 // -------------------------------------------------------------------------
 RkoSolver::RkoSolver()
     : instancePath_(""), configPath_("config/yaml/config.yaml"),
+      problemInstance_(nullptr),
       problemLibPath_(""), // Path to the plugin
       libHandle_(nullptr), // Handle of the plugin in memory
-      problemInstance_(nullptr), numActiveMethods_(0),
+      numActiveMethods_(0),
       bestObjective_(std::numeric_limits<double>::infinity()),
       averageObjective_(0.0), bestTime_(0.0), totalTime_(0.0),
       scalarizer_(std::make_unique<core::NormalizedWeightedTchebycheff>()) {
@@ -101,6 +103,24 @@ void RkoSolver::parseArguments(int argc, char *argv[]) {
   }
 }
 
+static std::unique_ptr<core::IScalarizer> createScalarizerFromConfig(
+    const std::string &method, const YAML::Node &config) {
+  if (method == "WeightedSum") {
+    return std::make_unique<core::WeightedSumScalarizer>();
+  }
+  if (method == "Gini_Coefficient") {
+    return std::make_unique<core::GiniScalarizer>();
+  }
+  if (method == "Lexicographic_MinMax") {
+    double decay = 0.05;
+    if (config["lexicographic_decay"]) {
+      decay = config["lexicographic_decay"].as<double>(0.05);
+    }
+    return std::make_unique<core::LexicographicMinMaxScalarizer>(decay);
+  }
+  return std::make_unique<core::NormalizedWeightedTchebycheff>();
+}
+
 // -------------------------------------------------------------------------
 // CONFIGURATION LOADING
 // -------------------------------------------------------------------------
@@ -120,16 +140,15 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
   if (config["metaheuristics"]) {
     for (const auto &mh_node : config["metaheuristics"]) {
       std::string name = mh_node.as<std::string>();
-      bool found = false;
-      for (size_t i = 0; i < algorithmRegistry_.size(); ++i) {
-        if (name == algorithmRegistry_[i].name) {
-          activateMethods_.push_back(static_cast<int>(i));
-          numActiveMethods_++;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
+      auto it = std::find_if(algorithmRegistry_.begin(), algorithmRegistry_.end(),
+                             [&name](const AlgorithmEntry &entry) {
+                               return entry.name == name;
+                             });
+      if (it != algorithmRegistry_.end()) {
+        activateMethods_.push_back(
+            static_cast<int>(std::distance(algorithmRegistry_.begin(), it)));
+        numActiveMethods_++;
+      } else {
         std::cerr << "[Warning] Algoritmo desconhecido no YAML: " << name
                   << std::endl;
       }
@@ -152,14 +171,7 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
   if (config["scalarization"]) {
     scalarizationMethod = config["scalarization"].as<std::string>();
   }
-
-  if (scalarizationMethod == "WeightedSum") {
-    scalarizer_ = std::make_unique<core::WeightedSumScalarizer>();
-  } else if (scalarizationMethod == "Gini_Coefficient") {
-    scalarizer_ = std::make_unique<core::GiniScalarizer>();
-  } else {
-    scalarizer_ = std::make_unique<core::NormalizedWeightedTchebycheff>();
-  }
+  scalarizer_ = createScalarizerFromConfig(scalarizationMethod, config);
 
   if (config["default_weights"]) {
     defaultWeights_.clear();
@@ -188,6 +200,10 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
 
   if (config["fixed_ideal_point"]) {
     fixedIdealPoint_ = config["fixed_ideal_point"].as<bool>();
+  }
+
+  if (config["fixed_nadir_point"]) {
+    fixedNadirPoint_ = config["fixed_nadir_point"].as<bool>(false);
   }
 
   std::cout << "Scalarization Strategy: " << scalarizer_->getName()
@@ -291,9 +307,11 @@ void RkoSolver::run() {
   }
 
   int dimension = getProblemDimension();
+  auto& ctx = core::SolverContext::instance();
 
   if (runData_.debug == 0) { 
       utils::WriteSolution(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension);
+      utils::WritePoolSolutions(activeAlgorithms, ctx.getPool(), instancePath_, dimension);
       
       if(problemInstance_->getNumObjectives() > 1){
         utils::WriteMultiObjectiveResults(activeAlgorithms, bestObjective_, bestSolutionGlobal_.objs, averageObjective_, objectiveValues_, bestTime_, totalTime_, instancePath_);
@@ -302,11 +320,10 @@ void RkoSolver::run() {
       }
       
   } else {
-      auto& ctx = core::SolverContext::instance();
       utils::WriteSolutionScreen(activeAlgorithms, bestSolutionGlobal_, bestTime_, totalTime_, instancePath_, dimension, ctx.getPool());
   }
 
-  utils::WriteConvergenceLog(convergenceHistory_, "../results");
+  utils::WriteConvergenceLog(convergenceHistory_, "results");
 }
 
 void RkoSolver::validateConfiguration() {
@@ -331,7 +348,8 @@ void RkoSolver::executeRun(int runIndex) {
           : static_cast<unsigned int>(
                 std::chrono::steady_clock::now().time_since_epoch().count());
 
-  ctx.setSeed(seed);
+  int max_threads = std::max(omp_get_max_threads(), numActiveMethods_);
+  ctx.setSeed(seed, max_threads);
 
   int nObj = problemInstance_->getNumObjectives();
   initReferencePoints(nObj);
@@ -340,11 +358,16 @@ void RkoSolver::executeRun(int runIndex) {
   bestSolutionRun.ofv = std::numeric_limits<double>::infinity();
 
   double startTime = omp_get_wtime();
+  ctx.setRunStartTime(core::get_time_in_seconds());
 
   ctx.resetStopFlag();
 
   ctx.initializePool(runData_.sizePool);
   core::CreatePoolSolutions(*this, runData_.sizePool);
+
+  // CRÍTICO: Após criar o Pool inicial, recalcula todos os OFVs do Pool
+  // usando o Ideal/Nadir real do Pool (elimina o falso ofv = 0.0 da 1ª solução!)
+  syncReferencePointsAndPool(nullptr);
 
   bestSolutionRun = ctx.getBestSolution();
 
@@ -401,6 +424,10 @@ void RkoSolver::executeParallelMethods(double startTime,
       // 4. Only one thread updates the global best of the round
       #pragma omp single
       {
+        // 1. Antes de comparar quem ganhou a rodada, sincroniza a régua (Ideal/Nadir)
+        // e re-escalariza tanto o ctxBest quanto o bestSolutionRun na mesma régua!
+        syncReferencePointsAndPool(&bestSolutionRun);
+
         core::TSol ctxBest = ctx.getBestSolution();
         if (ctxBest.ofv < bestSolutionRun.ofv) {
           bestSolutionRun = ctxBest;
@@ -411,6 +438,7 @@ void RkoSolver::executeParallelMethods(double startTime,
 
         if ((omp_get_wtime() - startTime) < runData_.MAXTIME) {
           core::CreatePoolSolutions(*this, runData_.sizePool);
+          syncReferencePointsAndPool(&bestSolutionRun);
         }
       }
       // No thread advances while the update does not finish
@@ -444,9 +472,25 @@ void RkoSolver::updateStatistics(const core::TSol &runSolution,
   if (problemInstance_->getNumObjectives() > 1 && scalarizer_) {
     std::vector<double> weights = defaultWeights_;
     if (weights.empty() && !validRunSol.objs.empty()) {
-      weights.assign(validRunSol.objs.size(), 1.0 / validRunSol.objs.size());
+      weights.assign(validRunSol.objs.size(), 1.0 / static_cast<double>(validRunSol.objs.size()));
     }
+
+    // Garante que o Ideal/Nadir global incorpore os melhores limites desta Run
+    for (size_t k = 0; k < validRunSol.objs.size(); ++k) {
+      if (!fixedIdealPoint_ && validRunSol.objs[k] < idealPoint_[k]) {
+        idealPoint_[k] = validRunSol.objs[k];
+      }
+    }
+
     validRunSol.ofv = scalarizer_->scalarize(validRunSol, weights, idealPoint_, nadirPoint_);
+
+    // CRÍTICO: Re-avalia o bestSolutionGlobal_ na mesma régua (idealPoint_/nadirPoint_)
+    // antes da comparação entre Runs!
+    if (!bestSolutionGlobal_.objs.empty()) {
+      bestSolutionGlobal_.ofv =
+          scalarizer_->scalarize(bestSolutionGlobal_, weights, idealPoint_, nadirPoint_);
+      bestObjective_ = bestSolutionGlobal_.ofv;
+    }
   }
 
   // 1. Unificação da checagem do Melhor Global (Garante sincronia de estado)
@@ -485,16 +529,18 @@ void RkoSolver::displayResults() {
     std::cout << "Best Objective:    " << std::abs(bestObjective_) << "\n"
               << "Average Objective: " << std::abs(averageObjective_) << "\n"
               << "Avg Run Time:      " << totalTime_ << "s\n";
-    return;
+  } else {
+    std::cout << "Scalarized Fitness (Dist): " << bestObjective_ << " (Minimization)\n";
+    std::cout << "Real Objectives Values:    [ ";
+    for (double val : bestSolutionGlobal_.objs) { std::cout << val << " "; }
+    std::cout << "]\nAvg Run Time:              " << totalTime_ << "s\n";
+    std::cout << "Ideal Point Found:         [ ";
+    for (double v : idealPoint_) std::cout << v << " ";
+    std::cout << "]\n";
   }
 
-  std::cout << "Scalarized Fitness (Dist): " << bestObjective_ << " (Minimization)\n";
-  std::cout << "Real Objectives Values:    [ ";
-  for (double val : bestSolutionGlobal_.objs) { std::cout << val << " "; }
-  std::cout << "]\nAvg Run Time:              " << totalTime_ << "s\n";
-  std::cout << "Ideal Point Found:         [ ";
-  for (double v : idealPoint_) std::cout << v << " ";
-  std::cout << "]\n";
+  auto &ctx = core::SolverContext::instance();
+  utils::PrintPoolSolutions(ctx.getPool(), getProblemDimension());
 }
 
 void RkoSolver::cleanup() {}
@@ -503,8 +549,6 @@ void RkoSolver::cleanup() {}
 // EVALUATION CORE 
 // -------------------------------------------------------------------------
 void RkoSolver::decodeSolution(core::TSol &sol, const std::vector<double> &lambda) {
- // fprintf(stderr, "[TRACE CORE] Inicio de decodeSolution. OFV: \n");
-
   problemInstance_->decode(sol);
 
   if (problemInstance_->getNumObjectives() <= 1) {
@@ -516,40 +560,49 @@ void RkoSolver::decodeSolution(core::TSol &sol, const std::vector<double> &lambd
 
   std::vector<double> activeLambda = lambda;
   if (activeLambda.empty()) {
-    if (!defaultWeights_.empty()) { 
-        activeLambda = defaultWeights_; 
-    } else { 
-        activeLambda.assign(sol.objs.size(), 1.0 / sol.objs.size()); 
+    if (!defaultWeights_.empty()) {
+      activeLambda = defaultWeights_;
+    } else {
+      activeLambda.assign(sol.objs.size(), 1.0 / static_cast<double>(sol.objs.size()));
     }
   }
 
   #pragma omp critical(scalarization_lock)
   {
-    
-    if (sol.objs.size() > idealPoint_.size()) {
-        idealPoint_.resize(sol.objs.size(), 1.0e15);
-        nadirPoint_.resize(sol.objs.size(), -1.0e15);
+    const size_t m = sol.objs.size();
+    if (m > idealPoint_.size()) {
+      idealPoint_.resize(m, 1.0e15);
+      candIdealPoint_.resize(m, 1.0e15);
+      nadirPoint_.resize(m, -1.0e15);
     }
 
-    for (size_t k = 0; k < sol.objs.size(); ++k) {
-      // Atualiza Ideal apenas se fixed_ideal_point for false
-      if (!fixedIdealPoint_) {
-        if (sol.objs[k] < idealPoint_[k]) { 
-            idealPoint_[k] = sol.objs[k]; 
+    for (size_t k = 0; k < m; ++k) {
+      // Registra candidato a Ideal
+      if (!fixedIdealPoint_ && sol.objs[k] < candIdealPoint_[k]) {
+        candIdealPoint_[k] = sol.objs[k];
+        // Na fase de aquecimento (CreatePoolSolutions), já reflete no idealPoint_
+        if (!boundsInitialized_ && sol.objs[k] < idealPoint_[k]) {
+          idealPoint_[k] = sol.objs[k];
         }
       }
-      // Atualiza Nadir: Captura a PIOR (maior) distância encontrada
-      if (sol.objs[k] > nadirPoint_[k]) { 
-          nadirPoint_[k] = sol.objs[k]; 
+
+      // ATENÇÃO: Só expande nadirPoint_ diretamente durante o aquecimento inicial (!boundsInitialized_)
+      // e ignorando soluções penalizadas (ex: > 1e12). Após o Pool existir, syncReferencePointsAndPool cuida do Nadir!
+      if (!fixedNadirPoint_ && !boundsInitialized_ && sol.objs[k] < 1.0e12) {
+        if (sol.objs[k] > nadirPoint_[k]) {
+          nadirPoint_[k] = sol.objs[k];
+        }
+      }
+
+      // Proteção contra a armadilha da 1ª solução (Ideal == Nadir):
+      // Se ainda não há amplitude conhecida para o objetivo k, garante um range base proporcional
+      if (nadirPoint_[k] <= idealPoint_[k] + 1e-7) {
+        nadirPoint_[k] = idealPoint_[k] + std::max(1.0, std::abs(idealPoint_[k]) * 0.1);
       }
     }
 
-    //fprintf(stderr, "[TRACE CORE] Inicio de scalarize. OFV:%f %d \n", sol.ofv, sol.objs.size());
-    // Calcula o OFV com segurança total de memória
     sol.ofv = scalarizer_->scalarize(sol, activeLambda, idealPoint_, nadirPoint_);
   }
-
-  //fprintf(stderr, "[TRACE CORE] Fim de decodeSolution. OFV: \n");
 }
 
 
@@ -565,16 +618,111 @@ void RkoSolver::initReferencePoints(int nObj) {
   if (nObj <= 1)
     return;
 
-  if (!userIdealPoint_.empty() && (int)userIdealPoint_.size() == nObj) {
+  candIdealPoint_.assign(nObj, 1.0e15);
+  boundsInitialized_ = false;
+
+  if (!userIdealPoint_.empty() && static_cast<int>(userIdealPoint_.size()) == nObj) {
     idealPoint_ = userIdealPoint_;
+    candIdealPoint_ = userIdealPoint_;
   } else {
     idealPoint_.assign(nObj, 1.0e15);
   }
 
-  if (!userNadirPoint_.empty() && (int)userNadirPoint_.size() == nObj) {
+  if (!userNadirPoint_.empty() && static_cast<int>(userNadirPoint_.size()) == nObj) {
     nadirPoint_ = userNadirPoint_;
+    boundsInitialized_ = true;
   } else {
     nadirPoint_.assign(nObj, -1.0e15);
+  }
+}
+
+static void extractPoolNadir(const std::vector<core::TSol> &pool, int nObj,
+                             std::vector<double> &poolNadir, bool &validPool) {
+  for (const auto &s : pool) {
+    if (static_cast<int>(s.objs.size()) != nObj) {
+      continue;
+    }
+    validPool = true;
+    for (int k = 0; k < nObj; ++k) {
+      poolNadir[k] = std::max(poolNadir[k], s.objs[k]);
+    }
+  }
+}
+
+static bool updateNadirFromElitePool(const std::vector<core::TSol> &pool, int nObj,
+                                    const std::vector<double> &idealPoint,
+                                    std::vector<double> &nadirPoint,
+                                    bool &boundsInitialized) {
+  if (pool.empty()) {
+    return false;
+  }
+
+  std::vector<double> poolNadir(nObj, -1.0e15);
+  bool validPool = false;
+  extractPoolNadir(pool, nObj, poolNadir, validPool);
+  if (!validPool) {
+    return false;
+  }
+
+  bool changed = false;
+  for (int k = 0; k < nObj; ++k) {
+    if (poolNadir[k] <= idealPoint[k] + 1e-6) {
+      poolNadir[k] = idealPoint[k] + 1.0;
+    }
+    double range = std::max(1e-9, std::abs(nadirPoint[k] - idealPoint[k]));
+    if (!boundsInitialized || (std::abs(poolNadir[k] - nadirPoint[k]) / range) > 0.005) {
+      nadirPoint[k] = boundsInitialized
+                          ? (0.8 * nadirPoint[k] + 0.2 * poolNadir[k])
+                          : poolNadir[k];
+      changed = true;
+    }
+  }
+  boundsInitialized = true;
+  return changed;
+}
+
+void RkoSolver::syncReferencePointsAndPool(core::TSol *bestRunSol) {
+  int nObj = problemInstance_->getNumObjectives();
+  if (nObj <= 1 || !scalarizer_)
+    return;
+
+  auto &ctx = core::SolverContext::instance();
+  auto &pool = ctx.getPool();
+
+  bool boundsChanged = false;
+
+  // 1. Atualiza o IdealPoint com o melhor visto pelas threads até agora
+  if (!fixedIdealPoint_) {
+    for (int k = 0; k < nObj; ++k) {
+      if (candIdealPoint_[k] < idealPoint_[k] - 1e-7) {
+        idealPoint_[k] = candIdealPoint_[k];
+        boundsChanged = true;
+      }
+    }
+  }
+
+  // 2. Calcula o NadirPoint a partir do Pool de Elite (Evita contaminação por soluções lixo!)
+  if (!fixedNadirPoint_ &&
+      updateNadirFromElitePool(pool, nObj, idealPoint_, nadirPoint_, boundsInitialized_)) {
+    boundsChanged = true;
+  }
+
+  if (!boundsChanged)
+    return;
+
+  // 3. Se a régua mudou, RE-ESCALARIZA todo o Pool e os Incumbentes na MESMA régua!
+  // Isso elimina 100% do bug da 1ª solução com ofv = 0.0 e o Fitness Drift.
+  std::vector<double> weights = defaultWeights_;
+  if (weights.empty()) {
+    weights.assign(nObj, 1.0 / static_cast<double>(nObj));
+  }
+
+  // 3. Re-escalariza todo o Pool e reordena (garantindo que pool_[0] seja o verdadeiro líder!)
+  ctx.rescalarizePool(*scalarizer_, weights, idealPoint_, nadirPoint_);
+
+  // 4. Re-escalariza também o bestSolutionRun para comparação justa no #pragma omp single
+  if (bestRunSol != nullptr && !bestRunSol->objs.empty()) {
+    bestRunSol->ofv = scalarizer_->scalarize(*bestRunSol, weights, idealPoint_, nadirPoint_);
   }
 }
 

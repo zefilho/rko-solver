@@ -1,32 +1,138 @@
 #include "rkolib/mh/ipr.hpp"
 
+#include <algorithm>
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/solver.hpp"
 
 namespace rkolib::mh {
 
-void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
-  using namespace rkolib::core;
+using namespace rkolib::core;
 
+// -------------------------------------------------------------------------
+// Helper: SubstituteBlock
+// -------------------------------------------------------------------------
+static void SubstituteBlock(TSol &sViz, const TSol &guia, int initialBlock,
+                            int finalBlock, int dim, int direction) {
+  for (int k = initialBlock; k < finalBlock && k < dim; k++) {
+    if (direction == 1) {
+      sViz.rk[k] = guia.rk[k];
+    } else if (direction == -1) {
+      sViz.rk[k] = std::clamp(1.0 - guia.rk[k], 0.0, 0.999999);
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// Helper: EvaluateCandidateBlocks
+// -------------------------------------------------------------------------
+static void EvaluateCandidateBlocks(const TSol &sCurrent, const TSol &guia,
+                                    const std::vector<int> &fixedBlock,
+                                    int numBlock, int blockSize, int dim,
+                                    int direction, RkoSolver &solver,
+                                    TSol &bestIteration, int &bestBlock) {
+  for (int i = 0; i < numBlock; i++) {
+    if (fixedBlock[i] != 0) {
+      continue;
+    }
+
+    int initialBlock = i * blockSize;
+    int finalBlock = initialBlock + blockSize;
+
+    TSol sViz = sCurrent;
+    SubstituteBlock(sViz, guia, initialBlock, finalBlock, dim, direction);
+    solver.decodeSolution(sViz);
+
+    if (sViz.ofv < bestIteration.ofv) {
+      bestIteration = sViz;
+      bestBlock = i;
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// Helper: PathRelink
+// -------------------------------------------------------------------------
+static TSol PathRelink(const TSol &atual, const TSol &guia, RkoSolver &solver,
+                       const TRunData &runData) {
+  TSol bestPath = atual;
+  TSol sCurrent = atual;
+
+  int direction = 1;
+  int dim = solver.getProblemDimension();
+  int blockSize = std::max(1, (int)(dim * 0.10));
+  int numBlock = dim / blockSize;
+
+  std::vector<int> fixedBlock(numBlock, 1);
+  int dist = 0;
+
+  for (int i = 0; i < dim; i++) {
+    if (std::abs(atual.rk[i] - guia.rk[i]) > 1e-9) {
+      int blockIdx = i % numBlock;
+      if (fixedBlock[blockIdx] != 0) {
+        fixedBlock[blockIdx] = 0;
+        dist++;
+      }
+    }
+  }
+
+  if (dist == 0) {
+    return bestPath;
+  }
+
+  bestPath.ofv = std::numeric_limits<double>::infinity();
+  int numIteration = 0;
+
+  while (numIteration < numBlock - 1) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] IPR interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return bestPath;
+    }
+
+    numIteration++;
+    int bestBlock = -1;
+    TSol bestIteration = sCurrent;
+    bestIteration.ofv = std::numeric_limits<double>::infinity();
+
+    EvaluateCandidateBlocks(sCurrent, guia, fixedBlock, numBlock, blockSize,
+                            dim, direction, solver, bestIteration, bestBlock);
+
+    if (bestIteration.ofv < bestPath.ofv) {
+      bestPath = bestIteration;
+    }
+
+    if (bestBlock < 0) {
+      break;
+    }
+
+    sCurrent = bestIteration;
+    fixedBlock[bestBlock] = 1;
+  }
+
+  return bestPath;
+}
+
+// -------------------------------------------------------------------------
+// Main Algorithm: IPR
+// -------------------------------------------------------------------------
+void IPR(const TRunData &runData, RkoSolver &solver) {
   const char *method = "IPR";
 
-  float currentTime = 0; // computational time of the search process
-  double start_timeMH = get_time_in_seconds(); // start computational time
-  double end_timeMH = get_time_in_seconds();   // end computational time
+  float currentTime = 0;
+  double start_timeMH = get_time_in_seconds();
+  double end_timeMH = get_time_in_seconds();
 
   if (runData.debug > 0) {
     std::cout << "[DEBUG][MH] IPR iniciado." << std::endl;
   }
 
-  // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    TSol atual, guia;
+    TSol atual;
+    TSol guia;
     bool pool_ok = false;
 
-    // =================================================================
-    // VACINA: LEITURA PROTEGIDA DO POOL
-    // =================================================================
-    #pragma omp critical
+    #pragma omp critical(pool_lock)
     {
       if (SOLVER_POOL.size() >= 2) {
         int k1, k2;
@@ -35,121 +141,24 @@ void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
           k2 = irandomico(0, (int)SOLVER_POOL.size() - 1);
         } while (k1 == k2);
 
-        // Copia os dados com segurança enquanto as outras threads esperam
         atual = SOLVER_POOL[k1];
         guia = SOLVER_POOL[k2];
         pool_ok = true;
       }
     }
 
-    if (!pool_ok) break;
-
-    // Loop scope: variables are reset at each iteration of the while loop
-    // TSol atual = SOLVER_POOL[k1];
-    // TSol guia = SOLVER_POOL[k2];
-
-    TSol bestPath = atual;
-    TSol bestIteration = atual;
-    TSol sCurrent = atual;
-    TSol sViz = atual;
-
-    int direction = 1; // internal (1) or external (-1) IPR
-
-    // Ensure that blocksize is never 0
-    int blockSize = std::max(1, (int)(solver.getProblemDimension() * 0.10));
-    int numBlock = solver.getProblemDimension() / blockSize;
-
-    std::vector<int> fixedBlock(
-        numBlock, 1); // binary vector: 1 = not swapped, 0 = swap candidate
-    int dist = 0;     // number of different rk blocks
-
-    // calculates the difference between the solutions (measured by the number
-    // of different blocks)
-    for (int i = 0; i < solver.getProblemDimension(); i++) {
-      if (std::abs(atual.rk[i] - guia.rk[i]) > 1e-9) {
-        // Block index protection
-        int blockIdx = i % numBlock;
-        if (fixedBlock[blockIdx] != 0) {
-          fixedBlock[blockIdx] = 0; // Marks the block as different
-          dist++;
-        }
-      }
+    if (!pool_ok) {
+      break;
     }
 
-    // if there is a difference between the solutions
-    if (dist > 0) {
-      // 'zero out' the best solution on the path and carry out the search
-      bestPath.ofv = std::numeric_limits<double>::infinity();
-      int bestBlock = -1;
-
-      // continue as long as there are blocks to exchange
-      int numIteration = 0;
-
-      while (numIteration < numBlock - 1) {
-        if (SOLVER_SHOULD_STOP) {
-          if (runData.debug > 0) std::cout << "[DEBUG][MH] IPR interrompido via SOLVER_SHOULD_STOP." << std::endl;
-          return;
-        }
-
-        numIteration++;
-        bestBlock = -1;
-        bestIteration.ofv = std::numeric_limits<double>::infinity();
-
-        // examine all possible blocks in a IPR iteration
-        for (int i = 0; i < numBlock; i++) {
-          if (fixedBlock[i] == 0) {
-            int initialBlock = i * blockSize;
-            int finalBlock = initialBlock + blockSize;
-
-            // generate a neighbor of the current solution
-            sViz = sCurrent;
-            for (int k = initialBlock;
-                 k < finalBlock && k < solver.getProblemDimension(); k++) {
-              // internal PR
-              if (direction == 1) {
-                sViz.rk[k] = guia.rk[k];
-              }
-
-              // external PR
-              else if (direction == -1) {
-                sViz.rk[k] =
-                    std::max(0.0, std::min(1.0 - guia.rk[k], 0.999999));
-              }
-            }
-
-            solver.decodeSolution(sViz);
-
-            // check if it is the best solution of the iteration
-            if (sViz.ofv < bestIteration.ofv) {
-              bestIteration = sViz;
-              bestBlock = i;
-            }
-          }
-        }
-
-        // check if it is the best solution for the path
-        if (bestIteration.ofv < bestPath.ofv) {
-          bestPath = bestIteration;
-        }
-
-        if (bestBlock >= 0) {
-          // continue the search from the best solution of the iteration
-          sCurrent = bestIteration;
-
-          // fixed the index of the block changed in this iteration
-          fixedBlock[bestBlock] = 1;
-        } else {
-          // Se nenhum bloco melhorou ou foi encontrado, para a busca
-          break;
-        }
-      }
+    TSol bestPath = PathRelink(atual, guia, solver, runData);
+    if (SOLVER_SHOULD_STOP) {
+      return;
     }
 
-    // terminate the search process in MAXTIME
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
 
-    // update the SOLVER_POOL of solutions
     UpdatePoolSolutions(bestPath, method, runData.debug, runData.poolUpdateMethod);
   }
 

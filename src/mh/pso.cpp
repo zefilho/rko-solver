@@ -9,6 +9,31 @@ namespace rkolib::mh {
 using namespace rkolib::core;
 
 // -------------------------------------------------------------------------
+// Helper Function: UpdateParticleVelocityAndPosition
+// -------------------------------------------------------------------------
+static void UpdateParticleVelocityAndPosition(TSol &x, const TSol &pBest,
+                                              const TSol &gBest,
+                                              std::vector<float> &v, float c1,
+                                              float c2, float w, int dim) {
+  for (int j = 0; j < dim; j++) {
+    float r1 = (float)randomico(0, 1);
+    float r2 = (float)randomico(0, 1);
+
+    v[j] = w * (v[j] +
+                (c1 * r1 * ((float)pBest.rk[j] - (float)x.rk[j])) +
+                (c2 * r2 * ((float)gBest.rk[j] - (float)x.rk[j])));
+
+    double oldrk = x.rk[j];
+    x.rk[j] = x.rk[j] + v[j];
+
+    if (x.rk[j] < 0.0 || x.rk[j] >= 1.0) {
+      x.rk[j] = oldrk;
+      v[j] = 0;
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
 // Helper Function: UpdateParticleSize
 // Description: Internal logic to resize population based on Q-Learning
 // -------------------------------------------------------------------------
@@ -16,62 +41,107 @@ static void UpdateParticleSize(std::vector<TSol> &X, std::vector<TSol> &Pbest,
                                std::vector<std::vector<float>> &V,
                                const TSol &Gbest, int Psize, float c1, float c2,
                                float w, RkoSolver &solver) {
-  // size of the current population
   int oldPsize = (int)X.size();
+  if (oldPsize == Psize) {
+    return;
+  }
 
-  // pruning
   if (oldPsize > Psize) {
     X.resize(Psize);
     Pbest.resize(Psize);
     V.resize(Psize);
+    return;
   }
 
-  // generate new particles
-  else if (oldPsize < Psize) {
-    X.resize(Psize);
-    Pbest.resize(Psize);
-    // Resize V and ensure new inner vectors are sized correctly
-    V.resize(Psize, std::vector<float>(solver.getProblemDimension()));
+  X.resize(Psize);
+  Pbest.resize(Psize);
+  V.resize(Psize, std::vector<float>(solver.getProblemDimension()));
 
-    // Create the initial particles with random keys
-    for (int i = oldPsize; i < Psize; i++) {
-      // initialize X[i]
-      CreateInitialSolutions(X[i], solver.getProblemDimension());
+  int dim = solver.getProblemDimension();
+  for (int i = oldPsize; i < Psize; i++) {
+    CreateInitialSolutions(X[i], dim);
+    Pbest[i] = X[i];
 
-      // initialize Pbest
-      Pbest[i] = X[i];
+    for (int j = 0; j < dim; j++) {
+      V[i][j] = (float)randomico(0, 1);
+    }
 
-      // initialize V[i][j]
-      for (int j = 0; j < solver.getProblemDimension(); j++)
-        V[i][j] = (float)randomico(0, 1);
+    UpdateParticleVelocityAndPosition(X[i], Pbest[i], Gbest, V[i], c1, c2, w, dim);
+    solver.decodeSolution(X[i]);
+    Pbest[i] = X[i];
+  }
+}
 
-      for (int j = 0; j < solver.getProblemDimension(); j++) {
-        float r1 = (float)randomico(0, 1);
-        float r2 = (float)randomico(0, 1);
+// -------------------------------------------------------------------------
+// Helper Function: ApplyPsoLocalSearch
+// -------------------------------------------------------------------------
+static void ApplyPsoLocalSearch(std::vector<TSol> &Pbest, TSol &Gbest,
+                                int &bestGeneration, int numGenerations,
+                                int &improv, RkoSolver &solver,
+                                const TRunData &runData) {
+  int currentPsize = (int)Pbest.size();
+  if (currentPsize <= 0) {
+    return;
+  }
 
-        // update v[i][j] logic (using constriction-like formula from original
-        // code)
-        V[i][j] = w * (V[i][j] +
-                       (c1 * r1 * ((float)Pbest[i].rk[j] - (float)X[i].rk[j])) +
-                       (c2 * r2 * ((float)Gbest.rk[j] - (float)X[i].rk[j])));
+  int chosen = irandomico(0, currentPsize - 1);
+  NelderMeadSearch(Pbest[chosen], solver);
 
-        // update X[i][j]
-        double oldrk = X[i].rk[j];
-        X[i].rk[j] = X[i].rk[j] + V[i][j];
+  if (Pbest[chosen].ofv < Gbest.ofv) {
+    Gbest = Pbest[chosen];
+    bestGeneration = numGenerations;
+    improv = 1;
 
-        if (X[i].rk[j] < 0.0 || X[i].rk[j] >= 1.0) {
-          X[i].rk[j] = oldrk;
-          V[i][j] = 0;
-        }
-      }
-
-      // fitness of X[i]
-      solver.decodeSolution(X[i]);
-
-      // update Pbest (initial)
-      Pbest[i] = X[i];
+    if (runData.debug > 0) {
+      std::cout << "[DEBUG][MH] PSO (LS) encontrou novo Gbest: ofv="
+                << Gbest.ofv << std::endl;
     }
   }
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: EvolveParticles
+// -------------------------------------------------------------------------
+static bool EvolveParticles(std::vector<TSol> &X, std::vector<TSol> &Pbest,
+                            std::vector<std::vector<float>> &V, TSol &Gbest,
+                            double &bestOFcurrent, int &bestGeneration,
+                            int numGenerations, float c1, float c2, float w,
+                            RkoSolver &solver, const TRunData &runData) {
+  int currentPsize = (int)X.size();
+  bool improved = false;
+  int dim = solver.getProblemDimension();
+
+  for (int i = 0; i < currentPsize; i++) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] PSO interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return improved;
+    }
+
+    UpdateParticleVelocityAndPosition(X[i], Pbest[i], Gbest, V[i], c1, c2, w, dim);
+    solver.decodeSolution(X[i]);
+
+    if (X[i].ofv < bestOFcurrent) {
+      bestOFcurrent = X[i].ofv;
+    }
+
+    if (X[i].ofv < Pbest[i].ofv) {
+      Pbest[i] = X[i];
+    }
+
+    if (X[i].ofv < Gbest.ofv) {
+      Gbest = X[i];
+      bestGeneration = numGenerations;
+      improved = true;
+
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] PSO encontrou novo Gbest na geracao " 
+                  << numGenerations << ": ofv=" << Gbest.ofv << std::endl;
+      }
+    }
+  }
+  return improved;
 }
 
 // -------------------------------------------------------------------------
@@ -91,7 +161,6 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   TSol Gbest;               // global best solution
   double bestOFcurrent = 0; // best ofv found in the current generation
 
-  // local variables
   int numGenerations = 0; // number of generations
   float currentTime = 0;  // computational time of the search process
   int bestGeneration = 0; // number of generation that found the best solution
@@ -100,8 +169,7 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   double start_timeMH = get_time_in_seconds(); // start computational time
   double end_timeMH = get_time_in_seconds();   // end computational time
 
-  std::vector<int> RKorder(
-      solver.getProblemDimension()); // define a order for the neighors
+  std::vector<int> RKorder(solver.getProblemDimension());
   std::iota(RKorder.begin(), RKorder.end(), 0);
 
   // ---------------------------------------------------------------------
@@ -116,16 +184,11 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
-  const double math_eps = 1e-9; // security margin for floating point denominator
-  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
-  float epsilon_max = 1.0; // maximum epsilon
-  float epsilon_min = 0.1; // minimum epsilon
-  int Ti = 1;              // number of epochs performed
-  int restartEpsilon = 1;  // number of restart epsilon
-  int st = 0;              // current state
-  int at = 0;              // current action
+  const double math_eps = 1e-9;
+  double delta = 0.0;
+  int st = 0;
+  int at = 0;
 
-  // ** read file with parameter values
   numPar = 4;
   std::vector<std::vector<double>> parameters;
   parameters.resize(numPar);
@@ -134,45 +197,23 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
 
   // offline control
   if (runData.control == 0) {
-    // define parameters of PSO (offline)
-    if (!parameters[0].empty())
-      Psize = (int)parameters[0][0];
-    if (!parameters[1].empty())
-      c1 = (float)parameters[1][0];
-    if (!parameters[2].empty())
-      c2 = (float)parameters[2][0];
-    if (!parameters[3].empty())
-      w = (float)parameters[3][0];
-  }
+    if (!parameters[0].empty()) { Psize = (int)parameters[0][0]; }
+    if (!parameters[1].empty()) { c1 = (float)parameters[1][0]; }
+    if (!parameters[2].empty()) { c2 = (float)parameters[2][0]; }
+    if (!parameters[3].empty()) { w = (float)parameters[3][0]; }
+  } else if (runData.control == 1) {
+    CreateStates(parameters, numStates, numPar, S);
+    epsilon = 0.95;
+    delta = 0.0;
 
-  // online control
-  else {
-    // Q-Learning
-    if (runData.control == 1) {
-      // create possible states of the Markov chain
-      CreateStates(parameters, numStates, numPar, S);
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
-
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      //initial epsilon and delta
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define parameters of PSO based on state
-      if (!S.empty()) {
-        Psize = (int)S[iCurr].par[0];
-        c1 = (float)S[iCurr].par[1];
-        c2 = (float)S[iCurr].par[2];
-        w = (float)S[iCurr].par[3];
-      }
+    if (!S.empty()) {
+      Psize = (int)S[iCurr].par[0];
+      c1 = (float)S[iCurr].par[1];
+      c2 = (float)S[iCurr].par[2];
+      w = (float)S[iCurr].par[3];
     }
   }
 
@@ -190,66 +231,43 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   Pbest.resize(Psize);
   V.resize(Psize, std::vector<float>(solver.getProblemDimension()));
 
-  // Create the initial particles with random keys
   Gbest.ofv = INFINITY;
 
   for (int i = 0; i < Psize; i++) {
-    // initialize X[i]
     CreateInitialSolutions(X[i], solver.getProblemDimension());
-
-    // fitness of X[i]
     solver.decodeSolution(X[i]);
 
-    // initialize V[i][j]
-    for (int j = 0; j < solver.getProblemDimension(); j++)
+    for (int j = 0; j < solver.getProblemDimension(); j++) {
       V[i][j] = (float)randomico(0, 1);
+    }
 
-    // initialize Gbest
-    if (X[i].ofv < Gbest.ofv)
+    if (X[i].ofv < Gbest.ofv) {
       Gbest = X[i];
-
-    // initialize Pbest
+    }
     Pbest[i] = X[i];
   }
 
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    // number of generations
     numGenerations++;
-
-    // best ofv found in the previous generation
     double bestOfvStartGen = Gbest.ofv;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      if (0) {
-        // set Q-Learning parameters
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
-      } else {
-        // set Q-Learning parameters
-        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                      currentTime, delta);
-      }
-
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
       delta = 0.0;
-
-      // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
 
-      // execute action at of st (Bounds Check)
       if (at >= 0 && at < (int)S[st].Ai.size()) {
         iCurr = S[st].Ai[at];
-
-        // define the parameters according of the current state
         Psize = (int)S[iCurr].par[0];
         c1 = (float)S[iCurr].par[1];
         c2 = (float)S[iCurr].par[2];
         w = (float)S[iCurr].par[3];
 
-        // Update population size based on new parameters
         UpdateParticleSize(X, Pbest, V, Gbest, Psize, c1, c2, w, solver);
       }
     }
@@ -258,89 +276,20 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     // PSO Evolution Phase
     // -----------------------------------------------------------------
     bestOFcurrent = INFINITY;
-    // double media = 0; // Unused in logic, removed to avoid warning
 
-    // Garante que loop respeite tamanho atual (que pode ter mudado)
-    int currentPsize = (int)X.size();
-
-    for (int i = 0; i < currentPsize; i++) {
-      if (SOLVER_SHOULD_STOP) {
-        if (runData.debug > 0) std::cout << "[DEBUG][MH] PSO interrompido via SOLVER_SHOULD_STOP." << std::endl;
-        return;
-      }
-
-      double probUpdate = 1.0;
-
-      // update particles X[i]
-      for (int j = 0; j < solver.getProblemDimension(); j++) {
-        float r1 = (float)randomico(0, 1);
-        float r2 = (float)randomico(0, 1);
-
-        // update v[i][j] com fator de constricao (logica original)
-        V[i][j] = w * (V[i][j] +
-                       (c1 * r1 * ((float)Pbest[i].rk[j] - (float)X[i].rk[j])) +
-                       (c2 * r2 * ((float)Gbest.rk[j] - (float)X[i].rk[j])));
-
-        if (randomico(0, 1) < probUpdate) {
-          // update X[i][j]
-          double oldrk = X[i].rk[j];
-          X[i].rk[j] = X[i].rk[j] + V[i][j];
-
-          if (X[i].rk[j] < 0.0 || X[i].rk[j] >= 1.0) {
-            X[i].rk[j] = oldrk;
-            V[i][j] = 0;
-          }
-        }
-      }
-
-      // fitness
-      solver.decodeSolution(X[i]);
-
-      // set the best ofv found in this generation
-      if (X[i].ofv < bestOFcurrent) {
-        bestOFcurrent = X[i].ofv;
-      }
-
-      // set Pbest
-      if (X[i].ofv < Pbest[i].ofv) {
-        Pbest[i] = X[i];
-      }
-
-      // set Gbest
-      if (X[i].ofv < Gbest.ofv) {
-        Gbest = X[i];
-        bestGeneration = numGenerations;
-        improv = 1;
-
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] PSO encontrou novo Gbest na geracao " 
-                    << numGenerations << ": ofv=" << Gbest.ofv << std::endl;
-        }
-      }
-
-      // media += X[i].ofv;
+    if (EvolveParticles(X, Pbest, V, Gbest, bestOFcurrent, bestGeneration,
+                        numGenerations, c1, c2, w, solver, runData)) {
+      improv = 1;
     }
 
-    // local search
+    if (SOLVER_SHOULD_STOP) {
+      return;
+    }
+
     double oldGbest = Gbest.ofv;
-    if (currentPsize > 0) {
-      int chosen = irandomico(0, currentPsize - 1);
-      NelderMeadSearch(Pbest[chosen], solver);
-
-      // update global best particle from LS result
-      if (Pbest[chosen].ofv < Gbest.ofv) {
-        Gbest = Pbest[chosen];
-        bestGeneration = numGenerations;
-        improv = 1;
-
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] PSO (LS) encontrou novo Gbest: ofv=" << Gbest.ofv << std::endl;
-        }
-      }
-    }
+    ApplyPsoLocalSearch(Pbest, Gbest, bestGeneration, numGenerations, improv, solver, runData);
 
     if (bestGeneration == numGenerations || Gbest.ofv < oldGbest) {
-      // update the SOLVER_POOL of solutions
       UpdatePoolSolutions(Gbest, method, runData.debug, runData.poolUpdateMethod);
     }
 
@@ -348,50 +297,21 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     // Q-Learning Reward Phase (Post-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      // The reward function is based on improvement of the current best fitness
-      // and binary reward
       if (improv) {
         R = 1;
         improv = 0;
         delta = (bestOfvStartGen - Gbest.ofv) / (bestOfvStartGen + math_eps);
       } else {
-        if (std::abs(bestOFcurrent) > 1e-9)
-          R = (Gbest.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + 1e-9);
-        else
-          R = 0;
+        R = (std::abs(bestOFcurrent) > 1e-9) ? (Gbest.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + 1e-9) : 0;
       }
 
-      // index of the next state
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
-        int st_1 = S[st].Ai[at];
-
-        // Update the Q-Table value
-        if (at < (int)S[st].Qa.size()) {
-          S[st].Qa[at] =
-              S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-          // Recalculate true maxQ and maxA for state st
-          S[st].maxQ = S[st].Qa[0];
-          S[st].maxA = 0;
-          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-            if (S[st].Qa[k] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[k];
-              S[st].maxA = (int)k;
-            }
-          }
-        }
-        // Define the new current state st
-        st = st_1;
-      }
+      UpdateQValue(S, st, at, R, lf, df);
     }
 
-    // terminate the evolutionary process in MAXTIME
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }
 
-  // free memory of PSO components
-  // Vectors clean themselves in C++, but clear() is fine
   X.clear();
   V.clear();
   Pbest.clear();

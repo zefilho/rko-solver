@@ -1,5 +1,6 @@
 #include "rkolib/mh/lns.hpp"
 
+#include <algorithm>
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
 #include "rkolib/core/solver.hpp"
@@ -10,7 +11,6 @@ using namespace rkolib::core;
 
 // -------------------------------------------------------------------------
 // Helper Function: fareySequence
-// Description: generate the farey sequence F of order num (Internal use)
 // -------------------------------------------------------------------------
 static void fareySequence(int num, std::vector<double> &F) {
   int a = 0, b = 1, c = 1, d = num;
@@ -34,6 +34,146 @@ static void fareySequence(int num, std::vector<double> &F) {
 }
 
 // -------------------------------------------------------------------------
+// Helper Function: FindBestFareyInterval
+// -------------------------------------------------------------------------
+static bool FindBestFareyInterval(TSol &sLine, int pos, const std::vector<double> &F,
+                                  double &OFVbest, double &rkBest,
+                                  RkoSolver &solver, const TRunData &runData) {
+  for (int j = 0; j < (int)F.size() - 1; j++) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] LNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return false;
+    }
+
+    sLine.rk[pos] = randomico(F[j], F[j + 1]);
+    solver.decodeSolution(sLine);
+
+    if (sLine.ofv < OFVbest) {
+      OFVbest = sLine.ofv;
+      rkBest = sLine.rk[pos];
+    }
+  }
+  return true;
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: RepairSolution
+// -------------------------------------------------------------------------
+static bool RepairSolution(TSol &sLine, int intensity,
+                           const std::vector<int> &RKorder,
+                           const std::vector<double> &F,
+                           RkoSolver &solver, const TRunData &runData) {
+  for (int k = 0; k < intensity; k++) {
+    int pos = RKorder[k];
+    double OFVbest = INFINITY;
+    double rkBest = 0;
+
+    if (!FindBestFareyInterval(sLine, pos, F, OFVbest, rkBest, solver, runData)) {
+      return false;
+    }
+
+    sLine.ofv = OFVbest;
+    sLine.rk[pos] = rkBest;
+  }
+  return true;
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: AcceptLnsSolution
+// -------------------------------------------------------------------------
+static void AcceptLnsSolution(TSol &s, TSol &sBest, const TSol &sLineBest,
+                              double T, int &improv, double &delta,
+                              const double math_eps, const TRunData &runData,
+                              const char *method) {
+  double diff = sLineBest.ofv - s.ofv;
+  if (diff <= 0) {
+    s = sLineBest;
+
+    if (s.ofv < sBest.ofv) {
+      delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
+      sBest = s;
+      improv = 1;
+
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] LNS encontrou nova melhor solucao: ofv=" 
+                  << sBest.ofv << std::endl;
+      }
+
+      UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
+    }
+  } else {
+    double x = randomico(0, 1);
+    if (x < std::exp(-diff / T)) {
+      s = sLineBest;
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// Helper Function: RunLnsCoolingCycle
+// -------------------------------------------------------------------------
+static bool RunLnsCoolingCycle(TSol &s, TSol &sBest, double &T, double alphaLNS,
+                               float betaMin, float betaMax,
+                               std::vector<int> &RKorder, const std::vector<double> &F,
+                               int &improv, double &delta, int &st, int &at,
+                               std::vector<TState> &S, double &epsilon, double lf,
+                               double df, float &currentTime, double start_timeMH,
+                               const double math_eps, RkoSolver &solver,
+                               const TRunData &runData, const char *method) {
+  while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
+    if (runData.control == 1 && !S.empty()) {
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
+      delta = 0.0;
+      at = ChooseAction(S, st, epsilon);
+
+      if (at >= 0 && at < (int)S[st].Ai.size()) {
+        int iCurr = S[st].Ai[at];
+        betaMin = S[iCurr].par[0];
+        betaMax = S[iCurr].par[1];
+        alphaLNS = S[iCurr].par[3];
+      }
+    }
+
+    TSol sLine = s;
+    int intensity = irandomico((int)(betaMin * solver.getProblemDimension()),
+                               (int)(betaMax * solver.getProblemDimension()));
+    intensity = std::clamp(intensity, 1, solver.getProblemDimension());
+
+    std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
+
+    if (!RepairSolution(sLine, intensity, RKorder, F, solver, runData)) {
+      return false;
+    }
+
+    TSol sLineBest = sLine;
+    NelderMeadSearch(sLineBest, solver);
+
+    AcceptLnsSolution(s, sBest, sLineBest, T, improv, delta, math_eps, runData, method);
+
+    if (runData.control == 1 && !S.empty()) {
+      double R = 0.0;
+      if (improv) {
+        R = 1;
+        improv = 0;
+      } else {
+        R = (std::abs(s.ofv) > 1e-9) ? (sBest.ofv - s.ofv) / (std::abs(s.ofv) + 1e-9) : 0;
+      }
+
+      UpdateQValue(S, st, at, R, lf, df);
+    }
+
+    T = T * alphaLNS;
+
+    double end_timeMH = get_time_in_seconds();
+    currentTime = (float)(end_timeMH - start_timeMH);
+  }
+  return true;
+}
+
+// -------------------------------------------------------------------------
 // Main Algorithm: LNS
 // -------------------------------------------------------------------------
 void LNS(const TRunData &runData, RkoSolver &solver) {
@@ -45,93 +185,60 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
   double betaMax = 0.0; // maximum perturbation
   int reanneling = 0;   // reanneling flag
 
-  TSol sLine,    // neighborhood solution
-      sLineBest, // best neighborhood solution
-      s,         // current solution
-      sBest;     // best solution of LNS
+  TSol s, sBest;
 
-  float currentTime = 0; // computational time of the search process
-  int improv = 0;        // improvement flag
+  float currentTime = 0;
+  int improv = 0;
 
-  double start_timeMH = get_time_in_seconds(); // start computational time
-  double end_timeMH = get_time_in_seconds();   // end computational time
+  double start_timeMH = get_time_in_seconds();
 
-  std::vector<int> RKorder(
-      solver.getProblemDimension()); // define a order for the neighors
+  std::vector<int> RKorder(solver.getProblemDimension());
   std::iota(RKorder.begin(), RKorder.end(), 0);
 
   // ---------------------------------------------------------------------
   // Q-Learning parameters
   // ---------------------------------------------------------------------
-  std::vector<TState> S; // finite state space
-  int numPar = 0;        // number of parameters
-  int numStates = 0;     // number of states
-  int iCurr = 0;         // current (initial) state
-  double epsilon = 0;    // greed choice possibility
-  double lf = 0;         // learning factor
-  double df = 0;         // discount factor
-  double R = 0;          // reward
+  std::vector<TState> S;
+  int numPar = 0;
+  int numStates = 0;
+  int iCurr = 0;
+  double epsilon = 0;
+  double lf = 0;
+  double df = 0;
 
   const double math_eps = 1e-9;
-  double delta = 0.0; // variance used to update the parameters of the Q-Learning method
-  float epsilon_max = 1.0; // maximum epsilon
-  float epsilon_min = 0.1; // minimum epsilon
-  int Ti = 1;              // number of epochs performed
-  int restartEpsilon = 1;  // number of restart epsilon
-  int st = 0;              // current state
-  int at = 0;              // current action
+  double delta = 0.0;
+  int st = 0;
+  int at = 0;
 
-  // ** read file with parameter values
   numPar = 4;
   std::vector<std::vector<double>> parameters;
   parameters.resize(numPar);
 
   readParametersYaml(method, runData.control, parameters, numPar);
 
-  // create a Farey sequence for the Repair operator
   std::vector<double> F;
   fareySequence(7, F);
 
   // offline control
   if (runData.control == 0) {
-    if (!parameters[0].empty())
-      betaMin = parameters[0][0];
-    if (!parameters[1].empty())
-      betaMax = parameters[1][0];
-    if (!parameters[2].empty())
-      T0 = parameters[2][0];
-    if (!parameters[3].empty())
-      alphaLNS = parameters[3][0];
-  }
+    if (!parameters[0].empty()) { betaMin = parameters[0][0]; }
+    if (!parameters[1].empty()) { betaMax = parameters[1][0]; }
+    if (!parameters[2].empty()) { T0 = parameters[2][0]; }
+    if (!parameters[3].empty()) { alphaLNS = parameters[3][0]; }
+  } else if (runData.control == 1) {
+    CreateStates(parameters, numStates, numPar, S);
+    epsilon = 0.95;
+    delta = 0.0;
 
-  // online control
-  else {
-    // Q-Learning
-    if (runData.control == 1) {
-      // create possible states of the Markov chain
-      CreateStates(parameters, numStates, numPar, S);
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
-
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      //initial epsilon and delta
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define parameters of LNS based on state
-      if (!S.empty()) {
-        betaMin = S[iCurr].par[0];
-        betaMax = S[iCurr].par[1];
-        T0 = S[iCurr].par[2];
-        alphaLNS = S[iCurr].par[3];
-      }
+    if (!S.empty()) {
+      betaMin = S[iCurr].par[0];
+      betaMax = S[iCurr].par[1];
+      T0 = S[iCurr].par[2];
+      alphaLNS = S[iCurr].par[3];
     }
   }
 
@@ -140,178 +247,20 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
               << ", T0=" << T0 << ", alphaLNS=" << alphaLNS << std::endl;
   }
 
-  // Create the initial solution with random keys
   CreateInitialSolutions(s, solver.getProblemDimension());
   solver.decodeSolution(s);
   sBest = s;
 
-  // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    if (!reanneling)
-      T = T0;
-    else
-      T = T0 * 0.3;
+    T = (!reanneling) ? T0 : (T0 * 0.3);
 
-    while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
-      // Q-Learning Update Phase (Pre-Action)
-      if (runData.control == 1 && !S.empty()) {
-        if (0) {
-          // set Q-Learning parameters
-          SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max,
-                         epsilon_min, epsilon, lf, df,
-                         (int)(runData.MAXTIME * runData.restart));
-        } else {
-          // set Q-Learning parameters
-          SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                        currentTime, delta);
-        }
+    if (!RunLnsCoolingCycle(s, sBest, T, alphaLNS, betaMin, betaMax, RKorder,
+                            F, improv, delta, st, at, S, epsilon, lf, df,
+                            currentTime, start_timeMH, math_eps, solver,
+                            runData, method)) {
+      return;
+    }
 
-        delta = 0.0;
-
-        // choose a action at for current state st
-        at = ChooseAction(S, st, epsilon);
-
-        // execute action at of st
-        if (at >= 0 && at < (int)S[st].Ai.size()) {
-          iCurr = S[st].Ai[at];
-
-          // define the parameters according of the current state
-          betaMin = S[iCurr].par[0];
-          betaMax = S[iCurr].par[1];
-          T0 = S[iCurr].par[2];
-          alphaLNS = S[iCurr].par[3];
-        }
-      }
-
-      // -------------------------------------------------------------
-      // LNS DESTRUCTION PHASE (Ruina)
-      // -------------------------------------------------------------
-      sLine = s;
-      int intensity = irandomico((int)(betaMin * solver.getProblemDimension()),
-                                 (int)(betaMax * solver.getProblemDimension()));
-      if (intensity < 1)
-        intensity = 1; // Segurança mínima
-
-      // Segurança máxima (A FIX)
-      if (intensity > solver.getProblemDimension()) {
-        intensity = solver.getProblemDimension();
-      }
-
-      // define which rk will be deleted - Random Removal
-      // 'SOLVER_RNG' vem de Methods.hpp (extern)
-      std::shuffle(RKorder.begin(), RKorder.end(), SOLVER_RNG);
-
-      // -------------------------------------------------------------
-      // LNS REPAIR PHASE (Reconstrução)
-      // -------------------------------------------------------------
-      // Repair the current solution using Farey intervals
-      for (int k = 0; k < intensity; k++) {
-        int pos = RKorder[k];
-        double OFVbest = INFINITY;
-        double rkBest = 0;
-
-        // Testa valores baseados na sequência de Farey
-        for (int j = 0; j < (int)F.size() - 1; j++) {
-          if (SOLVER_SHOULD_STOP) {
-            if (runData.debug > 0) std::cout << "[DEBUG][MH] LNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
-            return;
-          }
-
-          // generate a random value between two intervals of the Farey sequence
-          sLine.rk[pos] = randomico(F[j], F[j + 1]);
-          solver.decodeSolution(sLine);
-
-          if (sLine.ofv < OFVbest) {
-            OFVbest = sLine.ofv;
-            rkBest = sLine.rk[pos];
-          }
-        }
-
-        // continue the search from the best random key value found for the rk
-        // pos
-        sLine.ofv = OFVbest;
-        sLine.rk[pos] = rkBest;
-      }
-
-      // local search to improve the repaired solution
-      sLineBest = sLine;
-      NelderMeadSearch(sLineBest, solver);
-
-      // calculate delta
-      double delta = sLineBest.ofv - s.ofv;
-
-      // acceptance criterion (Metropolis-like)
-      if (delta <= 0) {
-        s = sLineBest;
-
-        if (s.ofv < sBest.ofv) {
-          delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
-          sBest = s;
-          improv = 1;
-
-          if (runData.debug > 0) {
-            std::cout << "[DEBUG][MH] LNS encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
-          }
-
-          // update the SOLVER_POOL of solutions
-          UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
-        }
-      } else {
-        double x = randomico(0, 1);
-        if (x < (std::exp(-delta / T)))
-          s = sLineBest;
-      }
-
-      // -------------------------------------------------------------
-      // Q-Learning Reward Phase (Post-Action)
-      // -------------------------------------------------------------
-      if (runData.control == 1 && !S.empty()) {
-        // The reward function is based on improvement of the current best
-        // fitness and binary reward
-        if (improv) {
-          R = 1;
-          improv = 0;
-        } else {
-          if (std::abs(s.ofv) > 1e-9)
-            R = (sBest.ofv - s.ofv) / (std::abs(s.ofv) + 1e-9);
-          else
-            R = 0;
-        }
-
-        // index of the next state
-        if (at >= 0 && at < (int)S[st].Ai.size()) {
-          int st_1 = S[st].Ai[at];
-
-          // Update the Q-Table value
-          if (at < (int)S[st].Qa.size()) {
-            S[st].Qa[at] =
-                S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-            // Recalculate true maxQ and maxA for state st
-            S[st].maxQ = S[st].Qa[0];
-            S[st].maxA = 0;
-            for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-              if (S[st].Qa[k] > S[st].maxQ) {
-                S[st].maxQ = S[st].Qa[k];
-                S[st].maxA = (int)k;
-              }
-            }
-          }
-          // Define the new current state st
-          st = st_1;
-        }
-      }
-
-      // Cooling schedule
-      T = T * alphaLNS;
-
-      // terminate the search process in MAXTIME
-      end_timeMH = get_time_in_seconds();
-      currentTime = (float)(end_timeMH - start_timeMH);
-
-    } // Fim-T
-
-    // reanneling
     reanneling = 1;
   }
 

@@ -1,4 +1,11 @@
-#include "rkolib/core/solver.hpp"
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <vector>
+
+#include "rkolib/core/problem.hpp"
 
 using namespace rkolib::core;
 
@@ -71,37 +78,7 @@ public:
     }
   }
 
-  // void decode(TSol &s) const override {
-  //     double totalW = 0.0;
 
-  //     // Garante tamanho do vetor
-  //     if (s.objs.size() != (size_t)nObj) s.objs.assign(nObj, 0.0);
-  //     else std::fill(s.objs.begin(), s.objs.end(), 0.0);
-
-  //     for (int i = 0; i < nItems; i++) {
-  //         if (s.rk[i] > 0.5) {
-  //             totalW += w[i];
-  //             if (nObj > 1) {
-  //                 for (int k = 0; k < nObj; k++) s.objs[k] +=
-  //                 objectives[k][i];
-  //             } else {
-  //                 s.objs[0] += b[i];
-  //             }
-  //         }
-  //     }
-
-  //     // Penalidade por Capacidade
-  //     double infeasible = std::max(0.0, totalW - cap);
-  //     if (infeasible > 0) {
-  //         s.ofv = 1e15 + (1000.0 * infeasible); // Valor proibitivo
-  //         return;
-  //     }
-
-  //     // Se Mono, preenchemos o OFV final aqui (Minimização do negativo do
-  //     lucro) if (nObj == 1) s.ofv = -s.objs[0];
-
-  //     // Se Multi, deixamos s.ofv quieto (ou 0), o Solver vai sobrescrever.
-  // }
   void decode(TSol &s) const override {
     // 1. Cria pares (RandomKey, IndiceOriginal) para ordenar
     std::vector<std::pair<double, int>> items(nItems);
@@ -121,22 +98,24 @@ public:
       std::fill(s.objs.begin(), s.objs.end(), 0.0);
 
     // 3. Decodificador Guloso: Enche a mochila com prioridade
+    auto addObjectives = [&](int idx) {
+      if (nObj > 1) {
+        for (int k = 0; k < nObj; k++) {
+          s.objs[k] += objectives[k][idx];
+        }
+      } else {
+        s.objs[0] += b[idx];
+      }
+    };
+
     for (const auto &item : items) {
       int idx = item.second; // Índice real do item
-
-      // Se cabe, coloca!
-      if (currentW + w[idx] <= cap) {
-        currentW += w[idx];
-
-        // Soma os objetivos
-        if (nObj > 1) {
-          for (int k = 0; k < nObj; k++) {
-            s.objs[k] += objectives[k][idx];
-          }
-        } else {
-          s.objs[0] += b[idx];
-        }
+      if (currentW + w[idx] > cap) {
+        continue;
       }
+
+      currentW += w[idx];
+      addObjectives(idx);
     }
 
     // 4. Finalização
@@ -156,11 +135,4 @@ public:
   int getNumObjectives() const override { return nObj; }
 };
 
-extern "C" {
-
-EXPORT_PLUGIN rkolib::core::IProblem *create_problem() {
-  return new KnapsackProblem();
-}
-
-EXPORT_PLUGIN void destroy_problem(rkolib::core::IProblem *p) { delete p; }
-}
+REGISTER_RKO_PROBLEM(KnapsackProblem)

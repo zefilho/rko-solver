@@ -1,9 +1,8 @@
 #include "rkolib/mh/brkga_cs.hpp"
 
-// Dependências internas
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
-#include "rkolib/core/solver.hpp" // Para solver.getProblemDimension()
+#include "rkolib/core/solver.hpp"
 
 namespace rkolib::mh {
 
@@ -32,43 +31,32 @@ static double PearsonCorrelation(const std::vector<double> &X,
     sumY2 += Y[j] * Y[j];
   }
 
-  // Pearson denominator
   double denominator =
       sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
 
-  if (denominator == 0)
+  if (denominator == 0) {
     return 0.0;
+  }
 
   return ((n * sumXY) - (sumX * sumY)) / denominator;
 }
 
 // -------------------------------------------------------------------------
 // Method: ParametricUniformCrossover
-// Optimization: Pop passed by const reference
 // -------------------------------------------------------------------------
 static TSol ParametricUniformCrossover(int eliteSize, int popSize, double pm,
                                        double rhoe,
                                        const std::vector<TSol> &Pop,
                                        const int n) {
-  TSol s;
-
-  // one chromosome from elite set
   int eliteParent = irandomico(0, eliteSize - 1);
-
-  // one chromosome from non-elite population
   int nonEliteParent = irandomico(eliteSize, popSize - 1);
 
-  // Initialize offspring (resize vector inside TSol)
-  s = Pop[eliteParent]; // Copy structure/size from elite
+  TSol s = Pop[eliteParent];
 
   for (int j = 0; j < n; j++) {
-    // mutation
     if (randomico(0, 1) < pm) {
       s.rk[j] = randomico(0, 1);
-    }
-    // mate
-    else {
-      // copy alleles of top chromosome of the new generation (Elite)
+    } else {
       if (randomico(0, 1) < rhoe) {
         s.rk[j] = Pop[eliteParent].rk[j];
       } else {
@@ -83,18 +71,11 @@ static TSol ParametricUniformCrossover(int eliteSize, int popSize, double pm,
 // -------------------------------------------------------------------------
 // Method: ChaoticInd
 // -------------------------------------------------------------------------
-static void ChaoticInd(TSol &s, int rhoe,
-                       const int n) // Note: rhoe param was int in original,
-                                    // kept but logic implies probability
-{
-  // generate a chaotic individual
-  // Note: Logic implies that if random > rhoe (likely high prob), we randomize.
-  // Original code cast rhoe (double) to int in call, making it 0 or 1. Verify
-  // logic. Assuming rhoe is meant to be double probability here based on usage.
-
+static void ChaoticInd(TSol &s, int rhoe, const int n) {
   for (int k = 0; k < n; k++) {
-    if (randomico(0, 1) > (double)rhoe)
+    if (randomico(0, 1) > (double)rhoe) {
       s.rk[k] = randomico(0, 1);
+    }
   }
 }
 
@@ -105,90 +86,92 @@ static void UpdatePopulationSize(int p, double pe, double pm, double rhoe,
                                  std::vector<TSol> &Pop,
                                  std::vector<TSol> &PopInter,
                                  RkoSolver &solver) {
-  // size of the current population
   int oldPsize = (int)Pop.size();
+  if (oldPsize == p) {
+    return;
+  }
 
-  // proportional pruning
   if (oldPsize > p) {
-
-    // copy the current population
     PopInter = Pop;
-
-    // define new size of Pop
     Pop.resize(p);
 
-    // select the elite chromosomes
     for (int i = 0; i < (int)(p * pe); i++) {
-      // copy p*pe best chromosomes
       Pop[i] = PopInter[i];
     }
 
-    // select the non-elite chromosomes
-    // Original logic: fill the rest of the new population size 'p'
-    // taking from the old population starting at the old elite position.
     int pos = (int)(pe * oldPsize);
     for (int i = (int)(p * pe); i < p; i++) {
       if (pos < (int)PopInter.size()) {
-        Pop[i] = PopInter[pos];
-        pos++;
+        Pop[i] = PopInter[pos++];
       } else {
-        // Fallback if calculations imply out of bounds
         CreateInitialSolutions(Pop[i], solver.getProblemDimension());
         solver.decodeSolution(Pop[i]);
       }
     }
 
-    // clean intermediate population
     PopInter.clear();
     PopInter.resize(p);
+    return;
   }
 
-  // generate new chromosomes
-  else if (oldPsize < p) {
+  Pop.resize(p);
 
-    // define new size of Pop
-    Pop.resize(p);
-
-    for (int k = oldPsize; k < p; k++) {
-      if (SOLVER_SHOULD_STOP)
-        return;
-
-      // Generate new individuals using crossover from existing ones
-      Pop[k] =
-          ParametricUniformCrossover((int)(oldPsize * pe), oldPsize - 1, pm,
-                                     rhoe, Pop, solver.getProblemDimension());
-      solver.decodeSolution(Pop[k]);
+  for (int k = oldPsize; k < p; k++) {
+    if (SOLVER_SHOULD_STOP) {
+      return;
     }
 
-    // sort new population
-    std::sort(Pop.begin(), Pop.end(), sortByFitness);
-
-    // clean intermediate population
-    PopInter.clear();
-    PopInter.resize(p);
+    Pop[k] = ParametricUniformCrossover((int)(oldPsize * pe), oldPsize - 1, pm,
+                                        rhoe, Pop, solver.getProblemDimension());
+    solver.decodeSolution(Pop[k]);
   }
+
+  std::sort(Pop.begin(), Pop.end(), sortByFitness);
+
+  PopInter.clear();
+  PopInter.resize(p);
+}
+
+// -------------------------------------------------------------------------
+// Helper: GetBestNeighborLabel
+// -------------------------------------------------------------------------
+static int GetBestNeighborLabel(int currentLabel,
+                                const std::map<int, double> &totalLabels) {
+  if (totalLabels.empty()) {
+    return currentLabel;
+  }
+
+  double melhorPeso = std::numeric_limits<double>::lowest();
+  auto it = totalLabels.find(currentLabel);
+  if (it != totalLabels.end()) {
+    melhorPeso = it->second;
+  }
+
+  int melhorLabel = currentLabel;
+  for (const auto &pair : totalLabels) {
+    if (pair.second > melhorPeso) {
+      melhorLabel = pair.first;
+      melhorPeso = pair.second;
+    }
+  }
+  return melhorLabel;
 }
 
 // -------------------------------------------------------------------------
 // Method: LP (Label Propagation)
 // -------------------------------------------------------------------------
-static void
-LP(const std::vector<std::vector<std::pair<int, double>>> &listaArestas,
-   std::vector<TSol> &Pop, std::vector<int> &label) {
+static void LP(const std::vector<std::vector<std::pair<int, double>>> &listaArestas,
+               std::vector<int> &label) {
   int nk = (int)listaArestas.size();
 
-  // Create vector with visit order
   std::vector<int> ordemVisita(nk);
   std::iota(ordemVisita.begin(), ordemVisita.end(), 0);
 
-  // initialize each node with its own label
-  for (int i = 0; i < nk; i++)
+  for (int i = 0; i < nk; i++) {
     label[i] = i;
+  }
 
   int movimentos = 1;
-
-  // Use local random device for shuffle to avoid global dependency issues in
-  // helper
   std::mt19937 g(std::random_device{}());
 
   while (movimentos) {
@@ -199,38 +182,13 @@ LP(const std::vector<std::vector<std::pair<int, double>>> &listaArestas,
          idVertice < ordemVisita.size(); idVertice++) {
       int u = ordemVisita[idVertice];
 
-      // Calculate the weight of the labels
       std::map<int, double> totalLabels;
-
       for (const auto &edge : listaArestas[u]) {
-        int idVizinho = edge.first;
-        double peso = edge.second;
-        int labelVizinho = label[idVizinho];
-
-        totalLabels[labelVizinho] += peso;
+        int labelVizinho = label[edge.first];
+        totalLabels[labelVizinho] += edge.second;
       }
 
-      // Best label is itself initially
-      int melhorLabel = label[u];
-      double melhorPeso = -1.0;
-
-      // If it has neighbors, find best
-      if (!totalLabels.empty()) {
-        // Try to keep current label if it's best or equal
-        if (totalLabels.find(label[u]) != totalLabels.end()) {
-          melhorPeso = totalLabels[label[u]];
-        } else {
-          melhorPeso = std::numeric_limits<double>::lowest();
-        }
-
-        for (const auto &pair : totalLabels) {
-          if (pair.second > melhorPeso) {
-            melhorLabel = pair.first;
-            melhorPeso = pair.second;
-          }
-        }
-      }
-
+      int melhorLabel = GetBestNeighborLabel(label[u], totalLabels);
       if (melhorLabel != label[u]) {
         label[u] = melhorLabel;
         movimentos = 1;
@@ -242,12 +200,11 @@ LP(const std::vector<std::vector<std::pair<int, double>>> &listaArestas,
 // -------------------------------------------------------------------------
 // Method: PromisingLP
 // -------------------------------------------------------------------------
-static void PromisingLP(int p, double pe, std::vector<TSol> &Pop,
-                        std::vector<int> &label, std::vector<int> &promising) {
+static void PromisingLP(int p, double pe, std::vector<int> &label,
+                        std::vector<int> &promising) {
   int Tpe = (int)(p * pe);
   std::vector<int> grupos;
 
-  // save labels defined by LP in groups
   for (int i = 0; i < Tpe; i++) {
     bool found = false;
     for (unsigned int j = 0; j < grupos.size(); j++) {
@@ -261,15 +218,11 @@ static void PromisingLP(int p, double pe, std::vector<TSol> &Pop,
     }
   }
 
-  // select as promising a random solution in each group
   for (unsigned int j = 0; j < grupos.size(); j++) {
     int numTry = 0;
-
-    // Safety break to prevent infinite loops if logic fails
     while (numTry < Tpe * 2) {
       numTry++;
       int pos = irandomico(0, Tpe - 1);
-
       if (label[pos] == grupos[j]) {
         promising[pos] = 1;
         break;
@@ -281,20 +234,15 @@ static void PromisingLP(int p, double pe, std::vector<TSol> &Pop,
 // -------------------------------------------------------------------------
 // Method: IC (Initial Clustering)
 // -------------------------------------------------------------------------
-static void IC(int p, double pe, std::vector<TSol> &Pop,
+static void IC(int p, double pe, const std::vector<TSol> &Pop,
                std::vector<int> &promising, const int n) {
   int Tpe = (int)(p * pe);
-  // Adjacency list: Index -> vector of pairs (Neighbor Index, Weight)
   std::vector<std::vector<std::pair<int, double>>> listaArestas(Tpe);
-
-  // pearson correlation threshold
   double sigma = 0.6;
 
-  // create weighted (pearson correlation) graph
   for (int i = 0; i < Tpe - 1; i++) {
     for (int j = i + 1; j < Tpe; j++) {
       double pearson = PearsonCorrelation(Pop[i].rk, Pop[j].rk, n);
-
       if (pearson > sigma) {
         listaArestas[i].push_back(std::make_pair(j, pearson));
         listaArestas[j].push_back(std::make_pair(i, pearson));
@@ -303,12 +251,103 @@ static void IC(int p, double pe, std::vector<TSol> &Pop,
   }
 
   std::vector<int> label(Tpe, 0);
+  LP(listaArestas, label);
+  PromisingLP(p, pe, label, promising);
+}
 
-  // apply clustering method (Label Propagation)
-  LP(listaArestas, Pop, label);
+// -------------------------------------------------------------------------
+// Helper: CrossoverMating
+// -------------------------------------------------------------------------
+static bool CrossoverMating(int p, double pe, double pm, double rhoe,
+                            std::vector<TSol> &PopInter,
+                            const std::vector<TSol> &Pop, double &bestOFV,
+                            RkoSolver &solver, const TRunData &runData) {
+  int eliteCount = (int)(p * pe);
+  int dim = solver.getProblemDimension();
 
-  // Identify representatives
-  PromisingLP(p, pe, Pop, label, promising);
+  for (int i = eliteCount; i < p; i++) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return false;
+    }
+
+    PopInter[i] = ParametricUniformCrossover(eliteCount, p, pm, rhoe, Pop, dim);
+    solver.decodeSolution(PopInter[i]);
+
+    if (PopInter[i].ofv < bestOFV) {
+      bestOFV = PopInter[i].ofv;
+    }
+  }
+  return true;
+}
+
+// -------------------------------------------------------------------------
+// Helper: ApplyCommunityLocalSearch
+// -------------------------------------------------------------------------
+static bool ApplyCommunityLocalSearch(std::vector<TSol> &Pop, TSol &bestInd,
+                                      int p, double pe, double rhoe,
+                                      int &bestGeneration, int numGenerations,
+                                      int &noImprovBRKGA,
+                                      std::vector<int> &RKorder,
+                                      RkoSolver &solver,
+                                      const TRunData &runData,
+                                      const char *method) {
+  noImprovBRKGA = 0;
+  int limitElite = (int)(p * pe);
+  std::vector<int> promising(limitElite, 0);
+
+  IC(p, pe, Pop, promising, solver.getProblemDimension());
+
+  std::vector<int> promisingSol;
+  for (int i = 0; i < limitElite; i++) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return false;
+    }
+
+    if (promising[i] == 1) {
+      promisingSol.push_back(i);
+    } else {
+      ChaoticInd(Pop[i], (int)rhoe, solver.getProblemDimension());
+      solver.decodeSolution(Pop[i]);
+    }
+  }
+
+  for (unsigned int i = 0; i < promisingSol.size(); i++) {
+    if (SOLVER_SHOULD_STOP) {
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      }
+      return false;
+    }
+
+    int solIndex = promisingSol[i];
+    if (i < 1) {
+      RVND(Pop[solIndex], solver, runData.strategy, RKorder);
+    } else {
+      NelderMeadSearch(Pop[solIndex], solver);
+    }
+
+    if (Pop[solIndex].ofv < bestInd.ofv) {
+      bestInd = Pop[solIndex];
+      bestGeneration = numGenerations;
+      noImprovBRKGA = 0;
+
+      if (runData.debug > 0) {
+        std::cout << "[DEBUG][MH] BRKGA-CS (LS) encontrou nova melhor solucao: ofv=" 
+                  << bestInd.ofv << std::endl;
+      }
+
+      UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
+    }
+  }
+
+  std::sort(Pop.begin(), Pop.end(), sortByFitness);
+  return true;
 }
 
 // =========================================================================
@@ -317,14 +356,11 @@ static void IC(int p, double pe, std::vector<TSol> &Pop,
 
 void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   const char *method = "BRKGA-CS";
-  // BRKGA parameters
   int p = 1597;     // size of population
   double pe = 0.20; // fraction of population to be the elite-set
   double pm = 0.03; // fraction of population to be replaced by mutants
-  double rhoe =
-      0.70; // probability that offspring inherit an allele from elite parent
+  double rhoe = 0.70; // probability that offspring inherit an allele from elite parent
 
-  // BRKGA variables
   std::vector<TSol> Pop;      // current population
   std::vector<TSol> PopInter; // intermediary population
   TSol bestInd;               // best solution of the BRKGA-CS
@@ -332,16 +368,12 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   double start_timeMH = get_time_in_seconds(); // start computational time
   double end_timeMH = get_time_in_seconds();   // end computational time
 
-  // Run
   int numGenerations = 0; // number of generations
   int bestGeneration = 0; // generation in which found the best solution
   float currentTime = 0;  // computational time of the search process
-  int sumLS = 0;          // number of local search applied in each generation
-  int noImprovBRKGA =
-      0; // number of generations without improvement in the best solution
+  int noImprovBRKGA = 0; // number of generations without improvement
   int improv = 0; // improvement flag
 
-  // define a order for the neighors
   std::vector<int> RKorder(solver.getProblemDimension());
   std::iota(RKorder.begin(), RKorder.end(), 0);
 
@@ -357,16 +389,11 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   double df = 0;         // discount factor
   double R = 0;          // reward
 
-  const double math_eps = 1e-9; // security margin for floating point denominator
-  double delta = 0.0;     // variance used to update the parameters of the Q-Learning method
-  float epsilon_max = 1.0; // maximum epsilon
-  float epsilon_min = 0.1; // minimum epsilon
-  int Ti = 1;              // number of epochs performed
-  int restartEpsilon = 1;  // number of restart epsilon
-  int st = 0;              // current state
-  int at = 0;              // current action
+  const double math_eps = 1e-9;
+  double delta = 0.0;
+  int st = 0;
+  int at = 0;
 
-  // ** read file with parameter values
   numPar = 4;
   std::vector<std::vector<double>> parameters;
   parameters.resize(numPar);
@@ -375,48 +402,26 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
   // offline control
   if (runData.control == 0) {
-    if (!parameters[0].empty())
-      p = (int)parameters[0][0];
-    if (!parameters[1].empty())
-      pe = parameters[1][0];
-    if (!parameters[2].empty())
-      pm = parameters[2][0];
-    if (!parameters[3].empty())
-      rhoe = parameters[3][0];
-  }
+    if (!parameters[0].empty()) { p = (int)parameters[0][0]; }
+    if (!parameters[1].empty()) { pe = parameters[1][0]; }
+    if (!parameters[2].empty()) { pm = parameters[2][0]; }
+    if (!parameters[3].empty()) { rhoe = parameters[3][0]; }
+  } else if (runData.control == 1) {
+    CreateStates(parameters, numStates, numPar, S);
+    epsilon = 0.95;
+    delta = 0.0;
 
-  // online control
-  else {
-    // Q-Learning
-    if (runData.control == 1) {
-      // create possible states of the Markov chain
-      CreateStates(parameters, numStates, numPar, S);
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
-
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      //variance and epsilon
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define the initial parameters of the BRGKA
-      if (!S.empty()) {
-        p = (int)S[iCurr].par[0];
-        pe = S[iCurr].par[1];
-        pm = S[iCurr].par[2];
-        rhoe = S[iCurr].par[3];
-      }
+    if (!S.empty()) {
+      p = (int)S[iCurr].par[0];
+      pe = S[iCurr].par[1];
+      pm = S[iCurr].par[2];
+      rhoe = S[iCurr].par[3];
     }
   }
 
-  // initialize population
   if (runData.debug > 0) {
     std::cout << "[DEBUG][MH] BRKGA-CS iniciado. PopSize=" << p << ", pe=" << pe 
               << ", pm=" << pm << ", rhoe=" << rhoe << std::endl;
@@ -424,11 +429,9 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
   Pop.clear();
   PopInter.clear();
-
   Pop.resize(p);
   PopInter.resize(p);
 
-  // Create the initial chromosomes with random keys
   bestInd.ofv = std::numeric_limits<double>::infinity();
 
   for (int i = 0; i < p; i++) {
@@ -441,94 +444,50 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
-  // sort population in increase order of fitness
   std::sort(Pop.begin(), Pop.end(), sortByFitness);
-  // bestInd = Pop[0]; // Redundant if checked in loop, but safe
 
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-    // number of generations
     numGenerations++;
-
-    // number of generations without improvement in the best solution
     noImprovBRKGA++;
-
-    //best solution found so far
     double bestOfvStartGen = bestInd.ofv;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      // set Q-Learning parameters
-      if (0) {
-        SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                       epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
-      } else {
-        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-          currentTime, delta);
-      }
-
-      //set variance
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
       delta = 0.0;
-
-      // choose a action a_t for current state s_t
       at = ChooseAction(S, st, epsilon);
 
-      // execute action a_t
       if (at >= 0 && at < (int)S[st].Ai.size()) {
         iCurr = S[st].Ai[at];
-
-        // define the parameters of the BRGKA according of the current state
         p = (int)S[iCurr].par[0];
         pe = S[iCurr].par[1];
         pm = S[iCurr].par[2];
         rhoe = S[iCurr].par[3];
 
-        // update population size
         UpdatePopulationSize(p, pe, pm, rhoe, Pop, PopInter, solver);
       }
     }
 
-    // -----------------------------------------------------------------
-    // BRKGA Evolution Phase
-    // -----------------------------------------------------------------
-
-    // Ensure intermediate population is sized correctly (if p changed)
-    if ((int)PopInter.size() != p)
+    if ((int)PopInter.size() != p) {
       PopInter.resize(p);
+    }
 
-    // The 'Pe' best chromosomes are maintained
     for (int i = 0; i < (int)(p * pe); i++) {
       PopInter[i] = Pop[i];
     }
 
-    // We'll mate 'P - Pe' pairs
     double bestOFV = INFINITY;
-    for (int i = (int)(p * pe); i < p; i++) {
-      if (SOLVER_SHOULD_STOP) {
-        if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
-        return;
-      }
-
-      // Parametric uniform crossover with mutation
-      PopInter[i] = ParametricUniformCrossover((int)(p * pe), p, pm, rhoe, Pop,
-                                               solver.getProblemDimension());
-
-      // Calculate the fitness of new chromosomes
-      solver.decodeSolution(PopInter[i]);
-
-      if (PopInter[i].ofv < bestOFV)
-        bestOFV = PopInter[i].ofv;
+    if (!CrossoverMating(p, pe, pm, rhoe, PopInter, Pop, bestOFV, solver, runData)) {
+      return;
     }
 
-    // Update the current population
     Pop = PopInter;
-
-    // Sort population in increase order of fitness
     std::sort(Pop.begin(), Pop.end(), sortByFitness);
 
-    // We improve the best fitness in the current population
     if (Pop[0].ofv < bestInd.ofv) {
       bestInd = Pop[0];
       bestGeneration = numGenerations;
@@ -540,7 +499,6 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
                   << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
       }
 
-      // update the SOLVER_POOL of solutions
       UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
     }
 
@@ -548,132 +506,30 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
     // Q-Learning Reward Phase (Post-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
-      // We improve the best fitness in the current population
       if (improv) {
-        // The reward function is based on improvement of the current best
-        // fitness and binary reward
         R = 1.0 + 1.0 / (double)p;
         improv = 0;
-        // update the variance
         delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
-        // Protection against division by zero
-        if (std::abs(bestOFV) > math_eps)
-          R = (bestInd.ofv - bestOFV) / (std::abs(bestOFV) + math_eps);
-        else
-          R = 0;
+        R = (std::abs(bestOFV) > math_eps) ? (bestInd.ofv - bestOFV) / (std::abs(bestOFV) + math_eps) : 0;
       }
 
-      // index of the next state
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
-        int st_1 = S[st].Ai[at];
-
-        // Update the Q-Table value
-        if (at < (int)S[st].Qa.size()) {
-          S[st].Qa[at] =
-              S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-          // Recalculate true maxQ and maxA for state st
-          S[st].maxQ = S[st].Qa[0];
-          S[st].maxA = 0;
-          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-            if (S[st].Qa[k] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[k];
-              S[st].maxA = (int)k;
-            }
-          }
-        }
-        // Define the new current state st
-        st = st_1;
-      }
+      UpdateQValue(S, st, at, R, lf, df);
     }
 
-    // ********************* LOCAL SEARCH IN COMMUNITIES *******************
-    sumLS = 0;
-
-    // apply local search when BRKGA found a new better solution or 10
-    // generations without improvements
+    // Local Search in Communities
     if (noImprovBRKGA == 0 || noImprovBRKGA > 10) {
-      // restart the count of generations without improvements (local search)
-      noImprovBRKGA = 0;
-
-      // promising vector
-      std::vector<int> promising((int)(p * pe), 0);
-
-      // Identify commuties in the Elite with Label Propagation method
-      IC(p, pe, Pop, promising, solver.getProblemDimension());
-
-      std::vector<int> promisingSol;
-      promisingSol.clear();
-
-      // Select candidates from Elite
-      int limitElite = (int)(p * pe);
-      for (int i = 0; i < limitElite; i++) {
-        if (SOLVER_SHOULD_STOP) {
-          if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
-          return;
-        }
-
-        // insert the individual index in the promising list
-        if (promising[i] == 1) {
-          promisingSol.push_back(i);
-        }
-
-        // generate chaotic individual (crossover between one elite and one
-        // mutant) The original logic replaced the elite individual. We
-        // replicate that.
-        else {
-          // Cast rhoe to int to match helper signature, though semantically
-          // it's double
-          ChaoticInd(Pop[i], (int)rhoe, solver.getProblemDimension());
-          solver.decodeSolution(Pop[i]);
-        }
+      if (!ApplyCommunityLocalSearch(Pop, bestInd, p, pe, rhoe, bestGeneration,
+                                    numGenerations, noImprovBRKGA, RKorder,
+                                    solver, runData, method)) {
+        return;
       }
-
-      // Apply LS on promising
-      for (unsigned int i = 0; i < promisingSol.size(); i++) {
-        if (SOLVER_SHOULD_STOP) {
-          if (runData.debug > 0) std::cout << "[DEBUG][MH] BRKGA-CS interrompido via SOLVER_SHOULD_STOP." << std::endl;
-          return;
-        }
-
-        int solIndex = promisingSol[i];
-        // local search not influence the evolutionary process
-        if (i < 1)
-          RVND(Pop[solIndex], solver, runData.strategy, RKorder);
-        else
-          NelderMeadSearch(Pop[solIndex], solver);
-
-        if (Pop[solIndex].ofv < bestInd.ofv) {
-          bestInd = Pop[solIndex];
-          bestGeneration = numGenerations;
-          noImprovBRKGA = 0;
-
-          if (runData.debug > 0) {
-            std::cout << "[DEBUG][MH] BRKGA-CS (LS) encontrou nova melhor solucao: ofv=" << bestInd.ofv << std::endl;
-          }
-
-          // update the SOLVER_POOL of solutions
-          UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
-        }
-      }
-
-      sumLS = (int)promisingSol.size();
-      promisingSol.clear();
-      promising.clear();
-
-      // Sort again as local search might have changed fitnesses or ChaoticInd
-      // changed individuals
-      std::sort(Pop.begin(), Pop.end(), sortByFitness);
     }
-    // *********************************************************************
 
-    // terminate the evolutionary process in MAXTIME
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
   }
 
-  // free memory of BRKGA-CS components
   Pop.clear();
   PopInter.clear();
 

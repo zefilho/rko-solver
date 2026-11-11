@@ -6,6 +6,30 @@
 
 namespace rkolib::mh {
 
+static void AcceptNeighborhoodSolution(core::TSol &s, core::TSol &sBest, const core::TSol &sBestLine,
+                                        int &k, int Iter, int &IterMelhora, int &improv,
+                                        const char *method, const rkolib::core::TRunData &runData) {
+  if (sBestLine.ofv >= s.ofv) {
+    k++;
+    return;
+  }
+
+  s = sBestLine;
+  if (s.ofv < sBest.ofv) {
+    sBest = s;
+    k = 1;
+    IterMelhora = Iter;
+    improv = 1;
+
+    if (runData.debug > 0) {
+      std::cout << "[DEBUG][MH] VNS encontrou nova melhor solucao na iteracao " 
+                << Iter << ": ofv=" << sBest.ofv << std::endl;
+    }
+
+    UpdatePoolSolutions(sBestLine, method, (int)runData.debug, runData.poolUpdateMethod);
+  }
+}
+
 void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   using namespace rkolib::core; // Facilita acesso a TSol, TState, etc.
 
@@ -47,7 +71,6 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   double delta = 0.0; // variance used to update the parameters of the Q-Learning method
   float epsilon_max = 1.0; // maximum epsilon
   float epsilon_min = 0.1; // minimum epsilon
-  int Ti = 1;              // number of epochs performed
   int restartEpsilon = 1;  // number of restart epsilon
   int st = 0;              // current state
   int at = 0;              // current action
@@ -62,38 +85,27 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
   // offline control
   if (runData.control == 0) {
-    if (!parameters[0].empty())
+    if (!parameters[0].empty()) {
       kMax = (int)parameters[0][0];
-    if (!parameters[1].empty())
+    }
+    if (!parameters[1].empty()) {
       betaMin = parameters[1][0];
-  }
+    }
+  } else if (runData.control == 1) {
+    // Q-Learning: create possible states of the Markov chain (Defined in qlearning.hpp)
+    CreateStates(parameters, numStates, numPar, S);
 
-  // online control
-  else {
-    // Q-Learning
-    if (runData.control == 1) {
-      // create possible states of the Markov chain (Defined in qlearning.hpp)
-      CreateStates(parameters, numStates, numPar, S);
+    restartEpsilon = 1;
+    epsilon_max = 1.0;
+    epsilon = 0.95;
+    delta = 0.0;
 
-      // number of restart epsilon
-      restartEpsilon = 1;
+    iCurr = irandomico(0, numStates - 1);
+    st = iCurr;
 
-      // maximum epsilon
-      epsilon_max = 1.0;
-
-      // set initial variance and epsilon
-      epsilon = 0.95;
-      delta = 0.0;
-
-      // current state
-      iCurr = irandomico(0, numStates - 1);
-      st = iCurr;
-
-      // define parameters of VNS based on initial state
-      if (!S.empty()) {
-        kMax = (int)S[iCurr].par[0];
-        betaMin = S[iCurr].par[1];
-      }
+    if (!S.empty()) {
+      kMax = (int)S[iCurr].par[0];
+      betaMin = S[iCurr].par[1];
     }
   }
 
@@ -104,51 +116,27 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // ---------------------------------------------------------------------
   // Initialization
   // ---------------------------------------------------------------------
-  // Create the initial solution with random keys
   sBest.ofv = INFINITY;
 
-  // One-iteration loop to generate initial solution (kept from original)
-  for (int i = 0; i < 1; i++) {
-    CreateInitialSolutions(s, solver.getProblemDimension());
-    solver.decodeSolution(s);
-    if (s.ofv < sBest.ofv)
-      sBest = s;
-  }
-
-  // current solution
-  s = sBest;
+  CreateInitialSolutions(s, solver.getProblemDimension());
+  solver.decodeSolution(s);
+  sBest = s;
 
   // ---------------------------------------------------------------------
   // Main Loop
   // ---------------------------------------------------------------------
-  // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
-
-    //best solution found so far
     double bestOfvStartGen = sBest.ofv;
 
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
-      if (0){
-      // set Q-Learning parameters
-      SetQLParameter(currentTime, Ti, restartEpsilon, epsilon_max, epsilon_min,
-                     epsilon, lf, df, (int)(runData.MAXTIME * runData.restart));
-      } else {
-        SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                       currentTime, delta);
-      }
-
-      //set variance
+      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
+                     currentTime, delta);
       delta = 0.0;
 
-      // choose a action at for current state st
       at = ChooseAction(S, st, epsilon);
-
-      // execute action at of st
       if (at >= 0 && at < (int)S[st].Ai.size()) {
         iCurr = S[st].Ai[at];
-
-        // define the parameters according of the current state
         kMax = (int)S[iCurr].par[0];
         betaMin = S[iCurr].par[1];
       }
@@ -158,7 +146,6 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     int k = 1;
     while (k <= kMax && currentTime < runData.MAXTIME * runData.restart) {
       if (SOLVER_SHOULD_STOP) {
-        if (runData.debug > 0) std::cout << "[DEBUG][MH] VNS interrompido via SOLVER_SHOULD_STOP." << std::endl;
         return;
       }
 
@@ -166,12 +153,8 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
       // s' <- perturb the best solution in the neighborhood k
       beta = randomico(k * betaMin, (k + 1) * betaMin);
-
-      // perturb the current solution (s)
       sLine = s;
       ShakeSolution(sLine, beta, beta, solver.getProblemDimension());
-
-      // calculate OFV
       solver.decodeSolution(sLine);
 
       // s*' <- local search (s')
@@ -179,76 +162,23 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       RVND(sBestLine, solver, (int)runData.strategy, RKorder);
 
       // s <- acceptance criterion (s,s*', historico)
-      if (sBestLine.ofv < s.ofv) {
-        s = sBestLine;
+      AcceptNeighborhoodSolution(s, sBest, sBestLine, k, Iter, IterMelhora, improv, method, runData);
 
-        // update the best solution found in VNS
-        if (s.ofv < sBest.ofv) {
-          sBest = s;
-
-          // return to the first neighborhood structure
-          k = 1;
-          IterMelhora = Iter;
-          improv = 1;
-
-          if (runData.debug > 0) {
-            std::cout << "[DEBUG][MH] VNS encontrou nova melhor solucao na iteracao " 
-                      << Iter << ": ofv=" << sBest.ofv << std::endl;
-          }
-
-          // update the SOLVER_POOL of solutions (Global Method)
-          UpdatePoolSolutions(sBestLine, method, (int)runData.debug, runData.poolUpdateMethod);
-        }
-      } else {
-        // next neighborhood structure
-        k++;
-      }
-
-      // terminate the search process in MAXTIME
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
     }
 
     // Q-Learning Reward Phase (Post-Action)
     if (runData.control == 1 && !S.empty()) {
-      // The reward function is based on improvement of the current best fitness
-      // and binary reward
       if (improv) {
         R = 1;
         improv = 0;
         delta = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
-
       } else {
-        // Evita divisão por zero
-        if (std::abs(s.ofv) > math_eps)
-          R = (sBest.ofv - s.ofv) / (std::abs(s.ofv) + math_eps);
-        else
-          R = 0;
+        R = (std::abs(s.ofv) > math_eps) ? ((sBest.ofv - s.ofv) / (std::abs(s.ofv) + math_eps)) : 0.0;
       }
 
-      // index of the next state
-      // Garante segurança no acesso ao vetor
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
-        int st_1 = S[st].Ai[at];
-
-        // Update the Q-Table value
-        if (at < (int)S[st].Qa.size()) {
-          S[st].Qa[at] =
-              S[st].Qa[at] + lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-          // Recalculate true maxQ and maxA for state st
-          S[st].maxQ = S[st].Qa[0];
-          S[st].maxA = 0;
-          for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-            if (S[st].Qa[k] > S[st].maxQ) {
-              S[st].maxQ = S[st].Qa[k];
-              S[st].maxA = (int)k;
-            }
-          }
-        }
-        // Define the new current state st
-        st = st_1;
-      }
+      UpdateQValue(S, st, at, R, lf, df);
     }
   }
 

@@ -33,7 +33,6 @@ public:
   // -------------------------------------------------------------------------
   // ACCESSORS
   // -------------------------------------------------------------------------
-  // const core::TSol &getBestSolution() const { return bestSolutionGlobal_; }
   core::TSol getBestSolution() const {
     core::TSol copy;
     
@@ -132,6 +131,13 @@ private:
 
   // Convergence points
   std::vector<core::ConvergencePoint> convergenceHistory_;
+
+  bool fixedNadirPoint_ = false;
+  bool boundsInitialized_ = false;
+  std::vector<double> candIdealPoint_; // Acumula os melhores valores sem causar drift imediato
+
+  // Método auxiliar para sincronizar régua e re-escalarizar Pool + Incumbente
+  void syncReferencePointsAndPool(core::TSol *bestRunSol = nullptr);
 };
 
 } // namespace rkolib

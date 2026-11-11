@@ -41,4 +41,10 @@ namespace rkolib::core {
     void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME, 
         float currentTime, float delta);
 
+    /**
+     * Method: UpdateQValue
+     * Description: Update Q-Table value, recalculate maxQ/maxA, and transition to next state
+     */
+    void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf, double df);
+
 } // namespace rkolib::core
