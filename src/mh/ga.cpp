@@ -223,6 +223,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     }
   }
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
@@ -270,23 +274,30 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       return;
     }
 
-    // -----------------------------------------------------------------
-    // Local Search
-    // -----------------------------------------------------------------
-    int pos1 = irandomico(0, sizePop - 1);
-    NelderMeadSearch(PopNew[pos1], solver);
-
-    if (PopNew[pos1].ofv < bestInd.ofv) {
-      bestInd = PopNew[pos1];
-      bestGeneration = numGenerations;
-      if (runData.debug > 0) {
-        std::cout << "[DEBUG][MH] GA (LS) encontrou novo melhor individuo: ofv=" << bestInd.ofv << std::endl;
-      }
-      UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
-    }
-
     // replace the population with offspring
     Pop = PopNew;
+
+    // -----------------------------------------------------------------
+    // Local Search (Nelder-Mead)
+    // -----------------------------------------------------------------
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      TSol sNM = bestInd;
+      NelderMeadSearch(sNM, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (sNM.ofv < bestInd.ofv) {
+        bestInd = sNM;
+        bestGeneration = numGenerations;
+        improv = 1;
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GA (LS) encontrou novo melhor individuo: ofv=" << bestInd.ofv << std::endl;
+        }
+        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
+      }
+    }
 
     // -----------------------------------------------------------------
     // Q-Learning Reward Phase (Post-Action)

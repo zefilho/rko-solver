@@ -214,6 +214,10 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
   std::sort(Pop.begin(), Pop.end(), sortByFitness);
   bestInd = Pop[0];
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
@@ -267,11 +271,6 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
 
     Pop = PopInter;
 
-    if (eliteCount > 0) {
-      int pos = irandomico(0, eliteCount - 1);
-      NelderMeadSearch(Pop[pos], solver);
-    }
-
     std::sort(Pop.begin(), Pop.end(), sortByFitness);
 
     if (Pop[0].ofv < bestInd.ofv) {
@@ -286,6 +285,28 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
       }
 
       UpdatePoolSolutions(Pop[0], method, runData.debug, runData.poolUpdateMethod);
+    }
+
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      NelderMeadSearch(Pop[0], solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (Pop[0].ofv < bestInd.ofv) {
+        bestGeneration = numGenerations;
+        improv = 1;
+        delta = (bestInd.ofv - Pop[0].ofv) / (bestInd.ofv + math_eps);
+        bestInd = Pop[0];
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] BRKGA (LS) encontrou novo melhor individuo na geracao "
+                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(Pop[0], method, runData.debug, runData.poolUpdateMethod);
+      }
     }
 
     // -----------------------------------------------------------------

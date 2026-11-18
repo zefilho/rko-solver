@@ -101,6 +101,10 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   end_timeMH = get_time_in_seconds();
   currentTime = (float)(end_timeMH - start_timeMH);
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   // run the search process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     if (SOLVER_SHOULD_STOP) {
@@ -148,6 +152,29 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       }
 
       UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
+    }
+
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      TSol sNM = sBest;
+      NelderMeadSearch(sNM, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (sNM.ofv < sBest.ofv) {
+        delta = (sBest.ofv - sNM.ofv) / (sBest.ofv + math_eps);
+        sBest = sNM;
+        IterImprov = Iter;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] ILS (LS) encontrou nova melhor solucao na iteracao "
+                    << Iter << ": ofv=" << sBest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
+      }
     }
 
     // Q-Learning Reward Phase (Post-Action)

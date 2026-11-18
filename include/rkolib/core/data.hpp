@@ -33,6 +33,8 @@ namespace rkolib::core {
         float restart;                          // define the restart strategy (0 - without restart; 1 - with restart)
         int sizePool;                           // define the size of the elite pool solutions
         int poolUpdateMethod = 0;               // define the pool update method (0 - standard; 1 - nsga)
+        float tauMinNM = 0.005f;                // minimum fraction of MAXTIME between Nelder-Mead calls
+        float tauMaxNM = 0.20f;                 // maximum fraction of MAXTIME without Nelder-Mead call
     };
 
     //--------------------------------------------------------------------------

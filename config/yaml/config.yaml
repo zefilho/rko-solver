@@ -23,10 +23,12 @@ search_parameters:
   local_search_strategy: 1  # 1: first improvement, 2: best improvement
   restart_threshold: 1      # % do tempo máximo para disparar o restart
   elite_pool_size: 10       # Tamanho do pool de soluções de elite
+  tau_min_nm: 0.005         # Fração mínima de MAXTIME entre chamadas Nelder-Mead
+  tau_max_nm: 0.20          # Fração máxima de MAXTIME sem chamada Nelder-Mead
 
 # Se o problema carregado for multi-objetivo, qual técnica usar?
 # Opções: "Tchebycheff", "WeightedSum", "Gini_Coefficient", "Lexicographic_MinMax"
-scalarization: "Tchebycheff"
+scalarization: "Gini_Coefficient"
 
 # Fator de decaimento para Lexicographic_MinMax (padrão 0.05)
 # lexicographic_decay: 0.05

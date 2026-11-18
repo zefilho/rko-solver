@@ -261,6 +261,9 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
   sBest = s;
 
   int iter = 0;
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
 
   while (currentTime < runData.MAXTIME * runData.restart) {
     if (runData.control == 1 && !S.empty()) {
@@ -291,6 +294,27 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
 
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
+    }
+
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      NelderMeadSearch(s, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (s.ofv < sBest.ofv) {
+        delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
+        sBest = s;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] GRASP (LS) encontrou nova melhor solucao na iteracao "
+                    << iter << ": ofv=" << sBest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
+      }
     }
 
     if (runData.control == 1 && !S.empty()) {

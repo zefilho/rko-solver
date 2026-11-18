@@ -94,30 +94,55 @@ public:
 
 class GiniScalarizer : public IScalarizer {
 public:
-    double scalarize(const TSol &s, const std::vector<double> &/*lambda*/,
-                     const std::vector<double> &/*ideal*/,
-                     const std::vector<double> &/*nadir*/) override {
+    double scalarize(const TSol &s, const std::vector<double> &lambda,
+                     const std::vector<double> &ideal,
+                     const std::vector<double> &nadir) override {
         if (s.objs.empty()) return 1e15;
 
-        double sum_diffs = 0.0;
-        double sum = 0.0;
-        int n = s.objs.size();
+        size_t n = s.objs.size();
+        if (n == 1) return s.objs[0];
 
-        for (int i = 0; i < n; ++i) {
-            sum += s.objs[i];
-            for (int j = 0; j < n; ++j) {
-                sum_diffs += std::abs(s.objs[i] - s.objs[j]);
+        bool has_bounds = (ideal.size() == n && nadir.size() == n);
+        bool use_weights = (lambda.size() == n);
+
+        double min_obj = s.objs[0];
+        if (!has_bounds) {
+            for (size_t i = 1; i < n; ++i) {
+                if (s.objs[i] < min_obj) min_obj = s.objs[i];
             }
         }
 
-        if (sum < 1e-9) return 0.0; // All resources are zero
+        std::vector<double> d(n, 0.0);
+        double sum = 0.0;
+        for (size_t i = 0; i < n; ++i) {
+            double val = s.objs[i];
+            if (has_bounds) {
+                double range = nadir[i] - ideal[i];
+                if (range < 1e-9) range = 1.0;
+                val = std::max(0.0, (s.objs[i] - ideal[i]) / range);
+            } else {
+                val = s.objs[i] - min_obj;
+            }
+            double w = use_weights ? lambda[i] : (1.0 / static_cast<double>(n));
+            d[i] = w * val;
+            sum += d[i];
+        }
 
-        double mean = sum / n;
-        double gini = sum_diffs / (2.0 * n * n * mean);
-        
-        return gini; // The engine will minimize the inequality
+        if (sum < 1e-9) return 0.0;
+        double mean = sum / static_cast<double>(n);
+
+        double sum_diffs = 0.0;
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = 0; j < n; ++j) {
+                sum_diffs += std::abs(d[i] - d[j]);
+            }
+        }
+
+        // Mean * (1 + Gini) = mean + sum_diffs / (2 * n^2)
+        double gini_term = sum_diffs / (2.0 * static_cast<double>(n * n));
+        return mean + gini_term;
     }
-    
+
     std::string getName() const override { return "Gini_Coefficient"; }
 };
 

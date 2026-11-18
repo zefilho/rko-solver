@@ -488,7 +488,6 @@ TSol Blending(TSol &s1, TSol &s2, double factor, const int n) {
       value = randomico(0, 1);
     } else if (randomico(0, 1) < 0.5) {
       value = s1.rk[j];
-      continue;
     } else if (factor == -1) { // Nelder-Mead reflection logic implicitly
       value = std::clamp(1.0 - s2.rk[j], 0.0, 0.9999999);
     } else {
@@ -765,10 +764,10 @@ void FareyLS(TSol &s, rkolib::RkoSolver &solver, const int &strategy,
 void RVND(TSol &s, rkolib::RkoSolver &solver, const int &strategy,
           std::vector<int> &RKorder) {
   // Define the list of neighborhood structures
-  const int numLS = 4;
-  enum class LS { SWAP = 1, INVERT, NELDERMEAD, FAREY };
+  const int numLS = 3;
+  enum class LS { SWAP = 1, INVERT, FAREY };
 
-  std::vector<int> NSL;
+  std::vector<int> NSL(numLS);
   std::iota(NSL.begin(), NSL.end(), 1); // Push with values 1 to numLS
 
   while (!NSL.empty()) {
@@ -777,9 +776,9 @@ void RVND(TSol &s, rkolib::RkoSolver &solver, const int &strategy,
 
     double foCurrent = s.ofv;
 
-    std::uniform_int_distribution<size_t> dist(0, numLS - 1);
+    std::uniform_int_distribution<size_t> dist(0, NSL.size() - 1);
     size_t pos = dist(SOLVER_RNG);
-    auto k = (LS)NSL[pos];
+    auto k = static_cast<LS>(NSL[pos]);
 
     switch (k) {
     case LS::SWAP:
@@ -788,10 +787,7 @@ void RVND(TSol &s, rkolib::RkoSolver &solver, const int &strategy,
     case LS::INVERT:
       InvertLS(s, solver, strategy, RKorder);
       break;
-    case LS::NELDERMEAD:
-      NelderMeadSearch(s, solver);
-      break;
-    default:
+    case LS::FAREY:
       FareyLS(s, solver, strategy, RKorder);
       break;
     }

@@ -120,6 +120,7 @@ static bool RunLnsCoolingCycle(TSol &s, TSol &sBest, double &T, double alphaLNS,
                                int &improv, double &delta, int &st, int &at,
                                std::vector<TState> &S, double &epsilon, double lf,
                                double df, float &currentTime, double start_timeMH,
+                               double &lastNM_time, double tauMinNM_sec, double tauMaxNM_sec,
                                const double math_eps, RkoSolver &solver,
                                const TRunData &runData, const char *method) {
   while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
@@ -148,10 +149,28 @@ static bool RunLnsCoolingCycle(TSol &s, TSol &sBest, double &T, double alphaLNS,
       return false;
     }
 
-    TSol sLineBest = sLine;
-    NelderMeadSearch(sLineBest, solver);
+    AcceptLnsSolution(s, sBest, sLine, T, improv, delta, math_eps, runData, method);
 
-    AcceptLnsSolution(s, sBest, sLineBest, T, improv, delta, math_eps, runData, method);
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      NelderMeadSearch(s, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (s.ofv < sBest.ofv) {
+        delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
+        sBest = s;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] LNS (LS) encontrou nova melhor solucao: ofv="
+                    << sBest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
+      }
+    }
 
     if (runData.control == 1 && !S.empty()) {
       double R = 0.0;
@@ -251,12 +270,17 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
   solver.decodeSolution(s);
   sBest = s;
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   while (currentTime < runData.MAXTIME * runData.restart) {
     T = (!reanneling) ? T0 : (T0 * 0.3);
 
     if (!RunLnsCoolingCycle(s, sBest, T, alphaLNS, betaMin, betaMax, RKorder,
                             F, improv, delta, st, at, S, epsilon, lf, df,
-                            currentTime, start_timeMH, math_eps, solver,
+                            currentTime, start_timeMH, lastNM_time,
+                            tauMinNM_sec, tauMaxNM_sec, math_eps, solver,
                             runData, method)) {
       return;
     }

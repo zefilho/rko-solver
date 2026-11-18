@@ -69,6 +69,7 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
                                int &st, int &at, std::vector<rkolib::core::TState> &S,
                                double &epsilon, double lf, double df,
                                float &currentTime, double start_timeMH,
+                               double &lastNM_time, double tauMinNM_sec, double tauMaxNM_sec,
                                const double math_eps, rkolib::RkoSolver &solver,
                                const rkolib::core::TRunData &runData, const char *method) {
   using namespace rkolib::core;
@@ -102,6 +103,8 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
       return false;
     }
 
+    bool improvedEpoch = (improv != 0);
+
     if (runData.control == 1 && !S.empty()) {
       double R = 0.0;
       if (improv) {
@@ -118,21 +121,24 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
     T = T * alphaSA;
     IterT = 0;
 
-    TSol sViz = s;
-    NelderMeadSearch(sViz, solver);
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improvedEpoch && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      TSol sViz = s;
+      NelderMeadSearch(sViz, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
 
-    if (sViz.ofv < sBest.ofv) {
-      sBest = sViz;
+      if (sViz.ofv < sBest.ofv) {
+        sBest = sViz;
 
-      if (runData.debug > 0) {
-        std::cout << "[DEBUG][MH] SA (LS) encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] SA (LS) encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
       }
-
-      UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
     }
-
-    double end_timeMH = get_time_in_seconds();
-    currentTime = (float)(end_timeMH - start_timeMH);
   }
   return true;
 }
@@ -218,13 +224,18 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // ---------------------------------------------------------------------
   // Main Loop
   // ---------------------------------------------------------------------
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   while (currentTime < runData.MAXTIME * runData.restart) {
     IterT = 0;
     T = (!reanneling) ? T0 : (T0 * 0.3);
 
     if (!RunTemperatureLoop(s, sBest, T, alphaSA, betaMin, betaMax, SAmax,
                             IterT, improv, delta_q, st, at, S, epsilon, lf,
-                            df, currentTime, start_timeMH, math_eps, solver,
+                            df, currentTime, start_timeMH, lastNM_time,
+                            tauMinNM_sec, tauMaxNM_sec, math_eps, solver,
                             runData, method)) {
       return;
     }

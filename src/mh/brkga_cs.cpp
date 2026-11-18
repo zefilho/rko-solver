@@ -326,11 +326,7 @@ static bool ApplyCommunityLocalSearch(std::vector<TSol> &Pop, TSol &bestInd,
     }
 
     int solIndex = promisingSol[i];
-    if (i < 1) {
-      RVND(Pop[solIndex], solver, runData.strategy, RKorder);
-    } else {
-      NelderMeadSearch(Pop[solIndex], solver);
-    }
+    RVND(Pop[solIndex], solver, runData.strategy, RKorder);
 
     if (Pop[solIndex].ofv < bestInd.ofv) {
       bestInd = Pop[solIndex];
@@ -446,6 +442,10 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
   std::sort(Pop.begin(), Pop.end(), sortByFitness);
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
@@ -500,6 +500,28 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
       }
 
       UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
+    }
+
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      NelderMeadSearch(Pop[0], solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (Pop[0].ofv < bestInd.ofv) {
+        bestInd = Pop[0];
+        bestGeneration = numGenerations;
+        noImprovBRKGA = 0;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] BRKGA-CS (NM) encontrou nova melhor solucao na geracao "
+                    << numGenerations << ": ofv=" << bestInd.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(bestInd, method, runData.debug, runData.poolUpdateMethod);
+      }
     }
 
     // -----------------------------------------------------------------

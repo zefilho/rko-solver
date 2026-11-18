@@ -165,6 +165,8 @@ void RkoSolver::loadConfiguration(const std::string &configFile) {
     runData_.strategy = params["local_search_strategy"].as<int>(1);
     runData_.restart = params["restart_threshold"].as<float>(1.0f);
     runData_.sizePool = params["elite_pool_size"].as<int>(10);
+    runData_.tauMinNM = params["tau_min_nm"].as<float>(0.005f);
+    runData_.tauMaxNM = params["tau_max_nm"].as<float>(0.20f);
   }
 
   std::string scalarizationMethod = "Tchebycheff";

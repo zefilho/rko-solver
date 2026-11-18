@@ -73,33 +73,6 @@ static void UpdateParticleSize(std::vector<TSol> &X, std::vector<TSol> &Pbest,
 }
 
 // -------------------------------------------------------------------------
-// Helper Function: ApplyPsoLocalSearch
-// -------------------------------------------------------------------------
-static void ApplyPsoLocalSearch(std::vector<TSol> &Pbest, TSol &Gbest,
-                                int &bestGeneration, int numGenerations,
-                                int &improv, RkoSolver &solver,
-                                const TRunData &runData) {
-  int currentPsize = (int)Pbest.size();
-  if (currentPsize <= 0) {
-    return;
-  }
-
-  int chosen = irandomico(0, currentPsize - 1);
-  NelderMeadSearch(Pbest[chosen], solver);
-
-  if (Pbest[chosen].ofv < Gbest.ofv) {
-    Gbest = Pbest[chosen];
-    bestGeneration = numGenerations;
-    improv = 1;
-
-    if (runData.debug > 0) {
-      std::cout << "[DEBUG][MH] PSO (LS) encontrou novo Gbest: ofv="
-                << Gbest.ofv << std::endl;
-    }
-  }
-}
-
-// -------------------------------------------------------------------------
 // Helper Function: EvolveParticles
 // -------------------------------------------------------------------------
 static bool EvolveParticles(std::vector<TSol> &X, std::vector<TSol> &Pbest,
@@ -247,6 +220,10 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     Pbest[i] = X[i];
   }
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
@@ -280,17 +257,33 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     if (EvolveParticles(X, Pbest, V, Gbest, bestOFcurrent, bestGeneration,
                         numGenerations, c1, c2, w, solver, runData)) {
       improv = 1;
+      UpdatePoolSolutions(Gbest, method, runData.debug, runData.poolUpdateMethod);
     }
 
     if (SOLVER_SHOULD_STOP) {
       return;
     }
 
-    double oldGbest = Gbest.ofv;
-    ApplyPsoLocalSearch(Pbest, Gbest, bestGeneration, numGenerations, improv, solver, runData);
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      TSol sNM = Gbest;
+      NelderMeadSearch(sNM, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
 
-    if (bestGeneration == numGenerations || Gbest.ofv < oldGbest) {
-      UpdatePoolSolutions(Gbest, method, runData.debug, runData.poolUpdateMethod);
+      if (sNM.ofv < Gbest.ofv) {
+        Gbest = sNM;
+        bestGeneration = numGenerations;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] PSO (LS) encontrou novo Gbest: ofv="
+                    << Gbest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(Gbest, method, runData.debug, runData.poolUpdateMethod);
+      }
     }
 
     // -----------------------------------------------------------------

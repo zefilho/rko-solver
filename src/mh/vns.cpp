@@ -122,6 +122,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   solver.decodeSolution(s);
   sBest = s;
 
+  double lastNM_time = 0.0;
+  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+
   // ---------------------------------------------------------------------
   // Main Loop
   // ---------------------------------------------------------------------
@@ -166,6 +170,27 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
+    }
+
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      NelderMeadSearch(s, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (s.ofv < sBest.ofv) {
+        sBest = s;
+        IterMelhora = Iter;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] VNS (LS) encontrou nova melhor solucao na iteracao "
+                    << Iter << ": ofv=" << sBest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(sBest, method, (int)runData.debug, runData.poolUpdateMethod);
+      }
     }
 
     // Q-Learning Reward Phase (Post-Action)
