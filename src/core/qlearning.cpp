@@ -203,26 +203,48 @@ void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME, float 
     df = 0.8;
 }
 
+// void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf, double df) {
+//   if (st < 0 || st >= static_cast<int>(S.size())) return;
+//   if (at < 0 || at >= static_cast<int>(S[st].Ai.size())) return;
+
+//   int st_1 = S[st].Ai[at];
+//   if (at >= static_cast<int>(S[st].Qa.size())) return;
+
+//   S[st].Qa[at] += lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
+
+//   // Recalculate true maxQ and maxA for state st
+//   S[st].maxQ = S[st].Qa[0];
+//   S[st].maxA = 0;
+//   for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+//     if (S[st].Qa[k] > S[st].maxQ) {
+//       S[st].maxQ = S[st].Qa[k];
+//       S[st].maxA = static_cast<int>(k);
+//     }
+//   }
+
+//   // Define the new current state st
+//   st = st_1;
+// }
+
 void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf, double df) {
+  // Validação completa de índices para evitar acesso fora dos limites
   if (st < 0 || st >= static_cast<int>(S.size())) return;
-  if (at < 0 || at >= static_cast<int>(S[st].Ai.size())) return;
+  if (at < 0 || at >= static_cast<int>(S[st].Ai.size()) || at >= static_cast<int>(S[st].Qa.size())) return;
 
-  int st_1 = S[st].Ai[at];
-  if (at >= static_cast<int>(S[st].Qa.size())) return;
+  const int st_1 = S[st].Ai[at];
+  if (st_1 < 0 || st_1 >= static_cast<int>(S.size())) return;
 
+  // Equação de Bellman padrão
   S[st].Qa[at] += lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-  // Recalculate true maxQ and maxA for state st
-  S[st].maxQ = S[st].Qa[0];
-  S[st].maxA = 0;
-  for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-    if (S[st].Qa[k] > S[st].maxQ) {
-      S[st].maxQ = S[st].Qa[k];
-      S[st].maxA = static_cast<int>(k);
-    }
+  // Atualização monotônica intencional (Peak-Reward / High-Watermark Memory):
+  // maxQ e maxA só são promovidos se o novo valor Q superar o maior pico já registrado neste estado
+  if (S[st].Qa[at] > S[st].maxQ) {
+    S[st].maxQ = S[st].Qa[at];
+    S[st].maxA = at;
   }
 
-  // Define the new current state st
+  // Transição para o próximo estado
   st = st_1;
 }
 
