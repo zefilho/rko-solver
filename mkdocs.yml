@@ -16,6 +16,8 @@ theme:
 
 markdown_extensions:
   - admonition
+  - pymdownx.arithmatex:
+      generic: true
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -26,6 +28,10 @@ markdown_extensions:
   - toc:
       permalink: true
 
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
 nav:
   - Home: index.md
+  - Algorithms & Control: algorithms.md
   - API Reference: reference.md
