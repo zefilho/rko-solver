@@ -71,6 +71,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   } else if (runData.control == 1) {
     // Q-Learning
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -109,7 +110,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   while (currentTime < runData.MAXTIME * runData.restart) {
     if (SOLVER_SHOULD_STOP) {
       if (runData.debug > 0) std::cout << "[DEBUG][MH] ILS interrompido via SOLVER_SHOULD_STOP." << std::endl;
-      return;
+      break;
     }
 
     Iter++;
@@ -117,7 +118,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
 
       at = ChooseAction(S, st, epsilon);
@@ -141,7 +142,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // s* <- acceptance criterion (s*, s*', historico)
     if (sBestLine.ofv < sBest.ofv) {
-      delta = (sBest.ofv - sBestLine.ofv) / (sBest.ofv + math_eps);
+      delta = std::max(delta, ComputeDelta(sBest.ofv, sBestLine.ofv));
       sBest = sBestLine;
       IterImprov = Iter;
       improv = 1;
@@ -163,7 +164,7 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       lastNM_time = currentTime;
 
       if (sNM.ofv < sBest.ofv) {
-        delta = (sBest.ofv - sNM.ofv) / (sBest.ofv + math_eps);
+        delta = std::max(delta, ComputeDelta(sBest.ofv, sNM.ofv));
         sBest = sNM;
         IterImprov = Iter;
         improv = 1;
@@ -191,6 +192,10 @@ void ILS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   if (runData.debug > 0) {

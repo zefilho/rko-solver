@@ -2,7 +2,13 @@
 #include "rkolib/core/method.hpp" // Necessário para randomico() e irandomico()
 
 #include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <limits>
 #include <omp.h>
+#include <sstream>
 
 namespace rkolib::core {
 
@@ -18,6 +24,144 @@ void PrintPolicy(const std::vector<TState> &S, int st) {
   }
 }
 
+bool SaveQTable(const std::vector<TState> &S, int st, const std::string &method,
+                const std::string &outDir) {
+  if (S.empty() || S[0].par.empty()) {
+    return false;
+  }
+
+  bool success = false;
+#pragma omp critical(qtable_io_lock)
+  {
+    try {
+      if (!outDir.empty() && !std::filesystem::exists(outDir)) {
+        std::filesystem::create_directories(outDir);
+      }
+
+      std::string filepath =
+          outDir.empty() ? ("QTable_" + method + ".txt")
+                         : (outDir + "/QTable_" + method + ".txt");
+
+      std::ofstream out(filepath, std::ios::trunc);
+      if (out.is_open()) {
+        out << std::setprecision(10);
+        out << "numStates " << S.size() << "\n";
+        out << "numPar " << S[0].par.size() << "\n";
+        out << "lastState " << st << "\n";
+
+        for (size_t i = 0; i < S.size(); ++i) {
+          out << "S " << i;
+          for (double pVal : S[i].par) {
+            out << " " << pVal;
+          }
+          out << "\n";
+
+          out << "A " << S[i].Ai.size();
+          for (size_t k = 0; k < S[i].Ai.size() && k < S[i].Qa.size(); ++k) {
+            out << " " << S[i].Ai[k] << ":" << S[i].Qa[k];
+          }
+          out << "\n";
+        }
+
+        success = out.good();
+      }
+    } catch (...) {
+      success = false;
+    }
+  }
+  return success;
+}
+
+bool LoadQTable(std::vector<TState> &S, const std::string &method,
+                const std::string &outDir) {
+  if (S.empty() || S[0].par.empty()) {
+    return false;
+  }
+
+  bool loaded = false;
+#pragma omp critical(qtable_io_lock)
+  {
+    std::string filepath =
+        outDir.empty() ? ("QTable_" + method + ".txt")
+                       : (outDir + "/QTable_" + method + ".txt");
+
+    std::ifstream in(filepath);
+    if (in.is_open()) {
+      std::string tag;
+      size_t fileNumStates = 0;
+      size_t fileNumPar = 0;
+      int fileLastState = 0;
+
+      bool headerOk = true;
+      if (!(in >> tag >> fileNumStates) || tag != "numStates") headerOk = false;
+      if (headerOk && (!(in >> tag >> fileNumPar) || tag != "numPar")) headerOk = false;
+      if (headerOk && (!(in >> tag >> fileLastState) || tag != "lastState")) headerOk = false;
+
+      if (headerOk && fileNumStates == S.size() && fileNumPar == S[0].par.size()) {
+        std::vector<std::vector<double>> loadedQa(S.size());
+        bool valid = true;
+
+        for (size_t i = 0; i < S.size() && valid; ++i) {
+          size_t stateIdx = 0;
+          if (!(in >> tag >> stateIdx) || tag != "S" || stateIdx != i) {
+            valid = false;
+            break;
+          }
+
+          for (size_t j = 0; j < fileNumPar; ++j) {
+            double pVal = 0.0;
+            if (!(in >> pVal) || std::fabs(pVal - S[i].par[j]) > 1e-6) {
+              valid = false;
+              break;
+            }
+          }
+          if (!valid) break;
+
+          size_t numActions = 0;
+          if (!(in >> tag >> numActions) || tag != "A" || numActions != S[i].Ai.size()) {
+            valid = false;
+            break;
+          }
+
+          loadedQa[i].resize(numActions, 0.0);
+          for (size_t k = 0; k < numActions; ++k) {
+            std::string pairToken;
+            if (!(in >> pairToken)) {
+              valid = false;
+              break;
+            }
+            size_t colonPos = pairToken.find(':');
+            if (colonPos == std::string::npos) {
+              valid = false;
+              break;
+            }
+            try {
+              int target = std::stoi(pairToken.substr(0, colonPos));
+              double qVal = std::stod(pairToken.substr(colonPos + 1));
+              if (target != S[i].Ai[k] || !std::isfinite(qVal)) {
+                valid = false;
+                break;
+              }
+              loadedQa[i][k] = qVal;
+            } catch (...) {
+              valid = false;
+              break;
+            }
+          }
+        }
+
+        if (valid) {
+          for (size_t i = 0; i < S.size(); ++i) {
+            S[i].Qa = std::move(loadedQa[i]);
+            UpdateMaxQ(S, static_cast<int>(i));
+          }
+          loaded = true;
+        }
+      }
+    }
+  }
+  return loaded;
+}
 
 // Helper 1: Calculates the total number of combinations
 int CalculateTotalStates(const std::vector<std::vector<double>> &parameters,
@@ -25,9 +169,9 @@ int CalculateTotalStates(const std::vector<std::vector<double>> &parameters,
   if (parameters.empty())
     return 0;
 
-  int total = parameters[0].size();
+  int total = static_cast<int>(parameters[0].size());
   for (int i = 1; i < numPar; i++) {
-    total *= parameters[i].size();
+    total *= static_cast<int>(parameters[i].size());
   }
   return total;
 }
@@ -46,11 +190,9 @@ void InitializeStateVector(std::vector<TState> &S, int numStates, int numPar) {
     sAux.Ai.clear();
     sAux.Qa.clear();
     sAux.sumQ = 0;
-    sAux.maxQ = 0;
+    sAux.maxQ = -std::numeric_limits<double>::infinity();
     sAux.minA = 0;
     sAux.maxA = 0;
-    // Vectors Ai and Qa are empty by default, no need to clear explicitly on
-    // new object
     S.push_back(sAux);
   }
 }
@@ -61,7 +203,7 @@ void MapParametersToStates(std::vector<TState> &S,
                            int numPar, int numStates) {
   int nC = 1;
   for (int j = 0; j < numPar; j++) {
-    nC *= parameters[j].size();
+    nC *= static_cast<int>(parameters[j].size());
 
     // Calculate divisor once per column group to reduce inner complexity
     int den = (numStates / nC);
@@ -69,46 +211,60 @@ void MapParametersToStates(std::vector<TState> &S,
       den = 1;
 
     for (int i = 0; i < numStates; i++) {
-      int columnIndex = (i / den) % parameters[j].size();
+      int columnIndex = (i / den) % static_cast<int>(parameters[j].size());
       S[i].par[j] = parameters[j][columnIndex];
     }
   }
 }
 
-// Helper 4: Calculates Hamming distance (removes inner loop nesting)
-int GetHammingDistance(const TState &s1, const TState &s2) {
-  int distance = 0;
-  size_t size = s1.par.size();
-  for (size_t k = 0; k < size; k++) {
-    if (s1.par[k] != s2.par[k]) {
-      distance++;
-    }
+// Helper 4: Establishes adjacent M/D/A connections between states via stride in O(|S| * m)
+void BuildStateConnections(std::vector<TState> &S,
+                           const std::vector<std::vector<double>> &parameters,
+                           int numPar, int numStates) {
+  if (numPar <= 0 || numStates <= 0 || S.empty())
+    return;
+
+  std::vector<int> stride(numPar);
+  int prod = 1;
+  for (int j = 0; j < numPar; j++) {
+    prod *= static_cast<int>(parameters[j].size());
+    stride[j] = (prod > 0) ? (numStates / prod) : 1;
   }
-  return distance;
-}
 
-// Helper 5: Establishes connections between states (Q-Table initialization)
-void BuildStateConnections(std::vector<TState> &S) {
-  int sSize = (int)S.size();
+  for (int i = 0; i < static_cast<int>(S.size()); i++) {
+    std::vector<int> targets;
+    targets.reserve(1 + 2 * numPar);
 
-  for (int i = 0; i < sSize; i++) {
-    for (int j = 0; j < sSize; j++) {
+    // Action M: keep current configuration
+    targets.push_back(i);
 
-      // Reduced nesting by extracting distance logic
-      if (GetHammingDistance(S[i], S[j]) <= 1) {
-        S[i].Ai.push_back(j);
+    for (int j = 0; j < numPar; j++) {
+      int size = static_cast<int>(parameters[j].size());
+      int idx = (i / stride[j]) % size;
 
-        double q0 = randomico(0.005, 0.01);
-        S[i].Qa.push_back(q0);
+      // Action D: previous value of parameter j
+      if (idx > 0) {
+        targets.push_back(i - stride[j]);
+      }
+      // Action A: next value of parameter j
+      if (idx < size - 1) {
+        targets.push_back(i + stride[j]);
+      }
+    }
 
-        if (q0 > S[i].maxQ) {
-          S[i].maxQ = q0;
-          S[i].maxA = (int)S[i].Ai.size() - 1;
-        }
+    for (int target : targets) {
+      S[i].Ai.push_back(target);
+      double q0 = randomico(0.005, 0.01);
+      S[i].Qa.push_back(q0);
+
+      if (q0 > S[i].maxQ) {
+        S[i].maxQ = q0;
+        S[i].maxA = static_cast<int>(S[i].Ai.size()) - 1;
       }
     }
   }
 }
+
 void CreateStates(const std::vector<std::vector<double>> &parameters,
                   int &numStates, int numPar, std::vector<TState> &S) {
 #pragma omp critical
@@ -122,8 +278,8 @@ void CreateStates(const std::vector<std::vector<double>> &parameters,
     // 3. Fill parameter configurations
     MapParametersToStates(S, parameters, numPar, numStates);
 
-    // 4. Create topology (Edges and Q-Values)
-    BuildStateConnections(S);
+    // 4. Create adjacent M/D/A topology (Edges and Q-Values)
+    BuildStateConnections(S, parameters, numPar, numStates);
   }
 }
 
@@ -144,12 +300,24 @@ int ChooseAction(const std::vector<TState> &S, int st, double epsilon) {
     }
   }
 
-  // return the choose action
+  // return the chosen action
   return at;
 }
 
+double ComputeDelta(double oldBest, double newBest, double delta_max) {
+  if (newBest >= oldBest)
+    return 0.0;
+
+  double den = std::fabs(oldBest);
+  if (den < 1e-12)
+    return delta_max;
+
+  double d = (oldBest - newBest) / den;
+  return (d > delta_max) ? delta_max : d;
+}
+
 void SetQLParameter(float currentTime, int &Ti, int &restartEpsilon,
-                    float epsilon_max, float epsilon_min, double &epsilon,
+                    float &epsilon_max, float epsilon_min, double &epsilon,
                     double &lf, double &df, int MAXTIME) {
   // **** define epsilon ****
   static const double PI = 3.14159265;
@@ -174,74 +342,66 @@ void SetQLParameter(float currentTime, int &Ti, int &restartEpsilon,
   }
 
   // *** define learning rate ***
-
-  // initialy, a higher priority is given to the newly gained information
-  // (exploration mode) then, we decrement lf and have a higher priority for the
-  // existing information in Q-Table (exploitation mode)
   lf = std::max(0.01, 1.0 - (0.9 * currentTime / (double)MAXTIME));
 
   // *** define discount rate ***
-
-  // we look for a higher, long-term reward
   df = 0.8;
 }
 
-void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME, float currentTime, float delta)
-{
+void SetQLParameter(double &epsilon, double &lf, double &df, int MAXTIME,
+                    float currentTime, float delta, double epsilon_min) {
+  double d = std::clamp(static_cast<double>(delta), 0.0, 1.0);
 
-    epsilon = epsilon * (1.0 - delta);
-    
-    // *** define learning rate ***
+  epsilon = epsilon * (1.0 - d);
+  if (epsilon < epsilon_min) {
+    epsilon = epsilon_min;
+  }
 
-    // initialy, a higher priority is given to the newly gained information (exploration mode)
-    // then, we decrement lf and have a higher priority for the existing information in Q-Table (exploitation mode)
-    lf = std::max(0.01, 1.0 - (0.9 * (double)currentTime / (double)MAXTIME)); 
+  // *** define learning rate ***
+  lf = std::max(0.01,
+                1.0 - (0.9 * static_cast<double>(currentTime) /
+                       static_cast<double>(MAXTIME)));
 
-    // *** define discount rate ***
-
-    // we look for a higher, long-term reward
-    df = 0.8;
+  // *** define discount rate ***
+  df = 0.8;
 }
 
-// void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf, double df) {
-//   if (st < 0 || st >= static_cast<int>(S.size())) return;
-//   if (at < 0 || at >= static_cast<int>(S[st].Ai.size())) return;
+void UpdateMaxQ(std::vector<TState> &S, int st) {
+  if (st < 0 || st >= static_cast<int>(S.size()) || S[st].Qa.empty())
+    return;
 
-//   int st_1 = S[st].Ai[at];
-//   if (at >= static_cast<int>(S[st].Qa.size())) return;
+  S[st].maxA = 0;
+  S[st].maxQ = S[st].Qa[0];
+  for (size_t k = 1; k < S[st].Qa.size(); ++k) {
+    if (S[st].Qa[k] > S[st].maxQ) {
+      S[st].maxQ = S[st].Qa[k];
+      S[st].maxA = static_cast<int>(k);
+    }
+  }
+}
 
-//   S[st].Qa[at] += lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
-
-//   // Recalculate true maxQ and maxA for state st
-//   S[st].maxQ = S[st].Qa[0];
-//   S[st].maxA = 0;
-//   for (size_t k = 1; k < S[st].Qa.size(); ++k) {
-//     if (S[st].Qa[k] > S[st].maxQ) {
-//       S[st].maxQ = S[st].Qa[k];
-//       S[st].maxA = static_cast<int>(k);
-//     }
-//   }
-
-//   // Define the new current state st
-//   st = st_1;
-// }
-
-void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf, double df) {
+void UpdateQValue(std::vector<TState> &S, int &st, int at, double R, double lf,
+                  double df) {
   // Validação completa de índices para evitar acesso fora dos limites
-  if (st < 0 || st >= static_cast<int>(S.size())) return;
-  if (at < 0 || at >= static_cast<int>(S[st].Ai.size()) || at >= static_cast<int>(S[st].Qa.size())) return;
+  if (st < 0 || st >= static_cast<int>(S.size()))
+    return;
+  if (at < 0 || at >= static_cast<int>(S[st].Ai.size()) ||
+      at >= static_cast<int>(S[st].Qa.size()))
+    return;
 
   const int st_1 = S[st].Ai[at];
-  if (st_1 < 0 || st_1 >= static_cast<int>(S.size())) return;
+  if (st_1 < 0 || st_1 >= static_cast<int>(S.size()))
+    return;
 
   // Equação de Bellman padrão
   S[st].Qa[at] += lf * (R + df * S[st_1].maxQ - S[st].Qa[at]);
 
-  // Atualização monotônica intencional (Peak-Reward / High-Watermark Memory):
-  // maxQ e maxA só são promovidos se o novo valor Q superar o maior pico já registrado neste estado
+  // Atualização condicional de maxQ / maxA em O(1) no caso comum
   if (S[st].Qa[at] > S[st].maxQ) {
     S[st].maxQ = S[st].Qa[at];
     S[st].maxA = at;
+  } else if (at == S[st].maxA) {
+    UpdateMaxQ(S, st);
   }
 
   // Transição para o próximo estado

@@ -89,9 +89,10 @@ static void CrossAndMutatePair(TSol &child1, TSol &child2,
 // -------------------------------------------------------------------------
 static void EvaluateOffspring(TSol &child, TSol &bestInd, double &bestOFcurrent,
                               int &bestGeneration, int numGenerations,
-                              int &improv, const char *method,
+                              int &improv, double &delta, const char *method,
                               const TRunData &runData) {
   if (child.ofv < bestInd.ofv) {
+    delta = std::max(delta, ComputeDelta(bestInd.ofv, child.ofv));
     bestInd = child;
     bestGeneration = numGenerations;
     improv = 1;
@@ -112,8 +113,8 @@ static void EvaluateOffspring(TSol &child, TSol &bestInd, double &bestOFcurrent,
 static bool ReproduceGeneration(int sizePop, std::vector<TSol> &PopNew,
                                 const std::vector<TSol> &PopInter, TSol &bestInd,
                                 double &bestOFcurrent, int &bestGeneration,
-                                int numGenerations, int &improv, float probCros,
-                                float probMut, RkoSolver &solver,
+                                int numGenerations, int &improv, double &delta,
+                                float probCros, float probMut, RkoSolver &solver,
                                 const TRunData &runData, const char *method) {
   for (int i = 0; i < sizePop - 1; i += 2) {
     if (SOLVER_SHOULD_STOP) {
@@ -126,9 +127,9 @@ static bool ReproduceGeneration(int sizePop, std::vector<TSol> &PopNew,
     CrossAndMutatePair(PopNew[i], PopNew[i + 1], PopInter[i], PopInter[i + 1],
                        probCros, probMut, solver);
     EvaluateOffspring(PopNew[i], bestInd, bestOFcurrent, bestGeneration,
-                      numGenerations, improv, method, runData);
+                      numGenerations, improv, delta, method, runData);
     EvaluateOffspring(PopNew[i + 1], bestInd, bestOFcurrent, bestGeneration,
-                      numGenerations, improv, method, runData);
+                      numGenerations, improv, delta, method, runData);
   }
   return true;
 }
@@ -189,6 +190,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     if (!parameters[2].empty()) { probMut = (float)parameters[2][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -230,14 +232,13 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
-    double bestOfvStartGen = bestInd.ofv;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -269,9 +270,9 @@ void GA(const TRunData &runData, RkoSolver &solver) {
     double bestOFcurrent = INFINITY;
 
     if (!ReproduceGeneration(sizePop, PopNew, PopInter, bestInd, bestOFcurrent,
-                            bestGeneration, numGenerations, improv, probCros,
+                            bestGeneration, numGenerations, improv, delta, probCros,
                             probMut, solver, runData, method)) {
-      return;
+      break;
     }
 
     // replace the population with offspring
@@ -289,6 +290,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       lastNM_time = currentTime;
 
       if (sNM.ofv < bestInd.ofv) {
+        delta = std::max(delta, ComputeDelta(bestInd.ofv, sNM.ofv));
         bestInd = sNM;
         bestGeneration = numGenerations;
         improv = 1;
@@ -306,7 +308,6 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
-        delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
         R = (std::abs(bestOFcurrent) > math_eps) ? (bestInd.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + math_eps) : 0;
       }
@@ -316,6 +317,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
 
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   Pop.clear();

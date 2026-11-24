@@ -8,8 +8,9 @@ namespace rkolib::mh {
 
 /**
  * Method: IPR
- * Description: Apply the Implicit Path Relinking method.
- * Explores the trajectory between random elite solutions from the pool.
+ * Description: Apply the Implicit Path-Relinking method with 6 trajectory strategies
+ * (One-way, Back-and-Forth, Mixed, GRAPR, Truncated, External) and online Q-Learning
+ * control over block size fraction (alpha) and Path-Relinking strategy.
  */
 void IPR(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver);
 

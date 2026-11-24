@@ -78,8 +78,8 @@ static void UpdateParticleSize(std::vector<TSol> &X, std::vector<TSol> &Pbest,
 static bool EvolveParticles(std::vector<TSol> &X, std::vector<TSol> &Pbest,
                             std::vector<std::vector<float>> &V, TSol &Gbest,
                             double &bestOFcurrent, int &bestGeneration,
-                            int numGenerations, float c1, float c2, float w,
-                            RkoSolver &solver, const TRunData &runData) {
+                            int numGenerations, double &delta, float c1, float c2,
+                            float w, RkoSolver &solver, const TRunData &runData) {
   int currentPsize = (int)X.size();
   bool improved = false;
   int dim = solver.getProblemDimension();
@@ -104,6 +104,7 @@ static bool EvolveParticles(std::vector<TSol> &X, std::vector<TSol> &Pbest,
     }
 
     if (X[i].ofv < Gbest.ofv) {
+      delta = std::max(delta, ComputeDelta(Gbest.ofv, X[i].ofv));
       Gbest = X[i];
       bestGeneration = numGenerations;
       improved = true;
@@ -176,6 +177,7 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     if (!parameters[3].empty()) { w = (float)parameters[3][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -227,14 +229,13 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
-    double bestOfvStartGen = Gbest.ofv;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -255,13 +256,13 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
     bestOFcurrent = INFINITY;
 
     if (EvolveParticles(X, Pbest, V, Gbest, bestOFcurrent, bestGeneration,
-                        numGenerations, c1, c2, w, solver, runData)) {
+                        numGenerations, delta, c1, c2, w, solver, runData)) {
       improv = 1;
       UpdatePoolSolutions(Gbest, method, runData.debug, runData.poolUpdateMethod);
     }
 
     if (SOLVER_SHOULD_STOP) {
-      return;
+      break;
     }
 
     currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
@@ -273,6 +274,7 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
       lastNM_time = currentTime;
 
       if (sNM.ofv < Gbest.ofv) {
+        delta = std::max(delta, ComputeDelta(Gbest.ofv, sNM.ofv));
         Gbest = sNM;
         bestGeneration = numGenerations;
         improv = 1;
@@ -293,7 +295,6 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
-        delta = (bestOfvStartGen - Gbest.ofv) / (bestOfvStartGen + math_eps);
       } else {
         R = (std::abs(bestOFcurrent) > 1e-9) ? (Gbest.ofv - bestOFcurrent) / (std::abs(bestOFcurrent) + 1e-9) : 0;
       }
@@ -303,6 +304,10 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
 
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   X.clear();

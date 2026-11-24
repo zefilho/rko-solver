@@ -181,6 +181,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     if (!parameters[3].empty()) { rhoe = parameters[3][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -227,7 +228,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -261,12 +262,12 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
 
     if (!GenerateOffspring(eliteCount, crossoverLimit, p, rhoe, PopInter, Pop,
                           bestOff, solver, runData)) {
-      return;
+      break;
     }
 
     // 3. MUTANTS
     if (!GenerateMutants(crossoverLimit, p, PopInter, solver, runData)) {
-      return;
+      break;
     }
 
     Pop = PopInter;
@@ -276,7 +277,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
     if (Pop[0].ofv < bestInd.ofv) {
       bestGeneration = numGenerations;
       improv = 1;
-      delta = (bestInd.ofv - Pop[0].ofv) / (bestInd.ofv + math_eps);
+      delta = std::max(delta, ComputeDelta(bestInd.ofv, Pop[0].ofv));
       bestInd = Pop[0];
 
       if (runData.debug > 0) {
@@ -297,7 +298,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
       if (Pop[0].ofv < bestInd.ofv) {
         bestGeneration = numGenerations;
         improv = 1;
-        delta = (bestInd.ofv - Pop[0].ofv) / (bestInd.ofv + math_eps);
+        delta = std::max(delta, ComputeDelta(bestInd.ofv, Pop[0].ofv));
         bestInd = Pop[0];
 
         if (runData.debug > 0) {
@@ -325,6 +326,10 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
 
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   Pop.clear();

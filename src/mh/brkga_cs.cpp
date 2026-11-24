@@ -289,7 +289,7 @@ static bool CrossoverMating(int p, double pe, double pm, double rhoe,
 static bool ApplyCommunityLocalSearch(std::vector<TSol> &Pop, TSol &bestInd,
                                       int p, double pe, double rhoe,
                                       int &bestGeneration, int numGenerations,
-                                      int &noImprovBRKGA,
+                                      int &noImprovBRKGA, double &delta,
                                       std::vector<int> &RKorder,
                                       RkoSolver &solver,
                                       const TRunData &runData,
@@ -329,6 +329,7 @@ static bool ApplyCommunityLocalSearch(std::vector<TSol> &Pop, TSol &bestInd,
     RVND(Pop[solIndex], solver, runData.strategy, RKorder);
 
     if (Pop[solIndex].ofv < bestInd.ofv) {
+      delta = std::max(delta, ComputeDelta(bestInd.ofv, Pop[solIndex].ofv));
       bestInd = Pop[solIndex];
       bestGeneration = numGenerations;
       noImprovBRKGA = 0;
@@ -404,6 +405,7 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
     if (!parameters[3].empty()) { rhoe = parameters[3][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -450,14 +452,13 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
     noImprovBRKGA++;
-    double bestOfvStartGen = bestInd.ofv;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
     // -----------------------------------------------------------------
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -482,13 +483,14 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
 
     double bestOFV = INFINITY;
     if (!CrossoverMating(p, pe, pm, rhoe, PopInter, Pop, bestOFV, solver, runData)) {
-      return;
+      break;
     }
 
     Pop = PopInter;
     std::sort(Pop.begin(), Pop.end(), sortByFitness);
 
     if (Pop[0].ofv < bestInd.ofv) {
+      delta = std::max(delta, ComputeDelta(bestInd.ofv, Pop[0].ofv));
       bestInd = Pop[0];
       bestGeneration = numGenerations;
       noImprovBRKGA = 0;
@@ -510,6 +512,7 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
       lastNM_time = currentTime;
 
       if (Pop[0].ofv < bestInd.ofv) {
+        delta = std::max(delta, ComputeDelta(bestInd.ofv, Pop[0].ofv));
         bestInd = Pop[0];
         bestGeneration = numGenerations;
         noImprovBRKGA = 0;
@@ -531,7 +534,6 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
       if (improv) {
         R = 1.0 + 1.0 / (double)p;
         improv = 0;
-        delta = (bestOfvStartGen - bestInd.ofv) / (bestOfvStartGen + math_eps);
       } else {
         R = (std::abs(bestOFV) > math_eps) ? (bestInd.ofv - bestOFV) / (std::abs(bestOFV) + math_eps) : 0;
       }
@@ -542,14 +544,18 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
     // Local Search in Communities
     if (noImprovBRKGA == 0 || noImprovBRKGA > 10) {
       if (!ApplyCommunityLocalSearch(Pop, bestInd, p, pe, rhoe, bestGeneration,
-                                    numGenerations, noImprovBRKGA, RKorder,
+                                    numGenerations, noImprovBRKGA, delta, RKorder,
                                     solver, runData, method)) {
-        return;
+        break;
       }
     }
 
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   Pop.clear();

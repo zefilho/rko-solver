@@ -8,7 +8,8 @@ namespace rkolib::mh {
 
 static void AcceptNeighborhoodSolution(core::TSol &s, core::TSol &sBest, const core::TSol &sBestLine,
                                         int &k, int Iter, int &IterMelhora, int &improv,
-                                        const char *method, const rkolib::core::TRunData &runData) {
+                                        double &delta, const char *method,
+                                        const rkolib::core::TRunData &runData) {
   if (sBestLine.ofv >= s.ofv) {
     k++;
     return;
@@ -16,6 +17,7 @@ static void AcceptNeighborhoodSolution(core::TSol &s, core::TSol &sBest, const c
 
   s = sBestLine;
   if (s.ofv < sBest.ofv) {
+    delta = std::max(delta, core::ComputeDelta(sBest.ofv, s.ofv));
     sBest = s;
     k = 1;
     IterMelhora = Iter;
@@ -94,6 +96,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   } else if (runData.control == 1) {
     // Q-Learning: create possible states of the Markov chain (Defined in qlearning.hpp)
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
 
     restartEpsilon = 1;
     epsilon_max = 1.0;
@@ -130,12 +133,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // Main Loop
   // ---------------------------------------------------------------------
   while (currentTime < runData.MAXTIME * runData.restart) {
-    double bestOfvStartGen = sBest.ofv;
-
     // Q-Learning Update Phase (Pre-Action)
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), epsilon_min);
       delta = 0.0;
 
       at = ChooseAction(S, st, epsilon);
@@ -148,9 +149,11 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // VNS Loop: current neighborhood
     int k = 1;
+    bool stopped = false;
     while (k <= kMax && currentTime < runData.MAXTIME * runData.restart) {
       if (SOLVER_SHOULD_STOP) {
-        return;
+        stopped = true;
+        break;
       }
 
       Iter++;
@@ -166,10 +169,13 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       RVND(sBestLine, solver, (int)runData.strategy, RKorder);
 
       // s <- acceptance criterion (s,s*', historico)
-      AcceptNeighborhoodSolution(s, sBest, sBestLine, k, Iter, IterMelhora, improv, method, runData);
+      AcceptNeighborhoodSolution(s, sBest, sBestLine, k, Iter, IterMelhora, improv, delta, method, runData);
 
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
+    }
+    if (stopped) {
+      break;
     }
 
     currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
@@ -180,6 +186,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       lastNM_time = currentTime;
 
       if (s.ofv < sBest.ofv) {
+        delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
         sBest = s;
         IterMelhora = Iter;
         improv = 1;
@@ -198,13 +205,16 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       if (improv) {
         R = 1;
         improv = 0;
-        delta = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
       } else {
         R = (std::abs(s.ofv) > math_eps) ? ((sBest.ofv - s.ofv) / (std::abs(s.ofv) + math_eps)) : 0.0;
       }
 
       UpdateQValue(S, st, at, R, lf, df);
     }
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   if (runData.debug > 0) {

@@ -8,7 +8,7 @@ namespace rkolib::mh {
 
 static bool MetropolisStep(rkolib::core::TSol &s, rkolib::core::TSol &sBest, double T,
                            float betaMin, float betaMax, double &bestOFV,
-                           rkolib::RkoSolver &solver,
+                           double &delta_q, rkolib::RkoSolver &solver,
                            const rkolib::core::TRunData &runData, const char *method) {
   using namespace rkolib::core;
   TSol sViz = s;
@@ -24,6 +24,7 @@ static bool MetropolisStep(rkolib::core::TSol &s, rkolib::core::TSol &sBest, dou
   if (delta < 0) {
     s = sViz;
     if (s.ofv < sBest.ofv) {
+      delta_q = std::max(delta_q, ComputeDelta(sBest.ofv, s.ofv));
       sBest = s;
       improvedBest = true;
       if (runData.debug > 0) {
@@ -43,7 +44,7 @@ static bool MetropolisStep(rkolib::core::TSol &s, rkolib::core::TSol &sBest, dou
 
 static bool RunMetropolisEpoch(rkolib::core::TSol &s, rkolib::core::TSol &sBest, double T,
                                int SAmax, int &IterT, float betaMin, float betaMax,
-                               double &bestOFV, float currentTime,
+                               double &bestOFV, double &delta_q, float currentTime,
                                rkolib::RkoSolver &solver,
                                const rkolib::core::TRunData &runData, const char *method) {
   bool anyImprovement = false;
@@ -56,7 +57,7 @@ static bool RunMetropolisEpoch(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
     }
 
     IterT++;
-    if (MetropolisStep(s, sBest, T, betaMin, betaMax, bestOFV, solver, runData, method)) {
+    if (MetropolisStep(s, sBest, T, betaMin, betaMax, bestOFV, delta_q, solver, runData, method)) {
       anyImprovement = true;
     }
   }
@@ -75,11 +76,9 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
   using namespace rkolib::core;
 
   while (T > 0.0001 && currentTime < runData.MAXTIME * runData.restart) {
-    double bestOfvStartGen = sBest.ofv;
-
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta_q);
+                     currentTime, static_cast<float>(delta_q), 0.1);
       delta_q = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -95,7 +94,7 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
     double bestOFV = INFINITY;
 
     if (RunMetropolisEpoch(s, sBest, T, SAmax, IterT, betaMin, betaMax,
-                           bestOFV, currentTime, solver, runData, method)) {
+                           bestOFV, delta_q, currentTime, solver, runData, method)) {
       improv = 1;
     }
 
@@ -110,7 +109,6 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
       if (improv) {
         R = 1;
         improv = 0;
-        delta_q = (bestOfvStartGen - sBest.ofv) / (bestOfvStartGen + math_eps);
       } else {
         R = (std::abs(bestOFV) > math_eps) ? (sBest.ofv - bestOFV) / (std::abs(bestOFV) + math_eps) : 0;
       }
@@ -130,6 +128,7 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
       lastNM_time = currentTime;
 
       if (sViz.ofv < sBest.ofv) {
+        delta_q = std::max(delta_q, ComputeDelta(sBest.ofv, sViz.ofv));
         sBest = sViz;
 
         if (runData.debug > 0) {
@@ -197,6 +196,7 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
     if (!parameters[4].empty()) { T0 = parameters[4][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta_q = 0.0;
 
@@ -237,10 +237,14 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
                             df, currentTime, start_timeMH, lastNM_time,
                             tauMinNM_sec, tauMaxNM_sec, math_eps, solver,
                             runData, method)) {
-      return;
+      break;
     }
 
     reanneling = 1;
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   if (runData.debug > 0) {

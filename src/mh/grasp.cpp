@@ -154,7 +154,7 @@ static bool GraspInnerStep(TSol &s, TSol &sBest, float &h, float alphaGrasp,
   RVND(sLineBest, solver, runData.strategy, RKorder);
 
   if (sLineBest.ofv < sBest.ofv) {
-    delta = (sBest.ofv - sLineBest.ofv) / (sBest.ofv + math_eps);
+    delta = std::max(delta, ComputeDelta(sBest.ofv, sLineBest.ofv));
     sBest = sLineBest;
     improv = 1;
 
@@ -238,6 +238,7 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     if (!parameters[2].empty()) { he = (float)parameters[2][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -268,7 +269,7 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
   while (currentTime < runData.MAXTIME * runData.restart) {
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -281,6 +282,7 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
     }
 
     h = hs;
+    bool stopped = false;
     while (h >= he && currentTime < runData.MAXTIME * runData.restart) {
       if (runData.control == 0) {
         alphaGrasp = (float)randomico(0.1, 0.9);
@@ -289,11 +291,15 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
       if (!GraspInnerStep(s, sBest, h, alphaGrasp, iter, improv, delta,
                           math_eps, currentTime, RKorder, solver, runData,
                           method, sLineBest)) {
-        return;
+        stopped = true;
+        break;
       }
 
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
+    }
+    if (stopped) {
+      break;
     }
 
     currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
@@ -304,7 +310,7 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
       lastNM_time = currentTime;
 
       if (s.ofv < sBest.ofv) {
-        delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
+        delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
         sBest = s;
         improv = 1;
 
@@ -330,6 +336,10 @@ void GRASP(const TRunData &runData, RkoSolver &solver) {
 
     end_timeMH = get_time_in_seconds();
     currentTime = (float)(end_timeMH - start_timeMH);
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   if (runData.debug > 0) {

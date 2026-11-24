@@ -92,7 +92,7 @@ static void AcceptLnsSolution(TSol &s, TSol &sBest, const TSol &sLineBest,
     s = sLineBest;
 
     if (s.ofv < sBest.ofv) {
-      delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
+      delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
       sBest = s;
       improv = 1;
 
@@ -126,7 +126,7 @@ static bool RunLnsCoolingCycle(TSol &s, TSol &sBest, double &T, double alphaLNS,
   while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, delta);
+                     currentTime, static_cast<float>(delta), 0.1);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
@@ -159,7 +159,7 @@ static bool RunLnsCoolingCycle(TSol &s, TSol &sBest, double &T, double alphaLNS,
       lastNM_time = currentTime;
 
       if (s.ofv < sBest.ofv) {
-        delta = (sBest.ofv - s.ofv) / (sBest.ofv + math_eps);
+        delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
         sBest = s;
         improv = 1;
 
@@ -247,6 +247,7 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
     if (!parameters[3].empty()) { alphaLNS = parameters[3][0]; }
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
+    LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
@@ -282,10 +283,14 @@ void LNS(const TRunData &runData, RkoSolver &solver) {
                             currentTime, start_timeMH, lastNM_time,
                             tauMinNM_sec, tauMaxNM_sec, math_eps, solver,
                             runData, method)) {
-      return;
+      break;
     }
 
     reanneling = 1;
+  }
+
+  if (runData.control == 1 && !S.empty()) {
+    SaveQTable(S, st, method);
   }
 
   if (runData.debug > 0) {
