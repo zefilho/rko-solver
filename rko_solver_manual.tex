@@ -1,0 +1,867 @@
+% =============================================================================
+% RKOSolver (C++20) - Manual Tecnico e Relatorio Cientifico de Arquitetura
+% Compativel com pdflatex / xelatex / Overleaf (TeX Live padrao)
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{microtype}
+
+% Matematica e Teoremas
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+
+% Tabelas e Listas
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+
+% Cores, Graficos TikZ e Caixas
+\usepackage[dvipsnames]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc,backgrounds}
+
+% Listagens de Codigo
+\usepackage{listings}
+
+% Links e Referencias Cruzadas
+\usepackage[colorlinks=true,
+            linkcolor=NavyBlue,
+            citecolor=ForestGreen,
+            urlcolor=RoyalBlue]{hyperref}
+
+% Definicao de Cores institucionais
+\definecolor{rkoBlue}{RGB}{20,65,125}
+\definecolor{rkoLightBlue}{RGB}{240,246,252}
+\definecolor{rkoGreen}{RGB}{25,110,65}
+\definecolor{rkoLightGreen}{RGB}{241,249,244}
+\definecolor{rkoGray}{RGB}{247,248,250}
+\definecolor{rkoBorder}{RGB}{190,205,225}
+\definecolor{codeKeyword}{RGB}{0,70,160}
+\definecolor{codeComment}{RGB}{75,125,75}
+\definecolor{codeString}{RGB}{165,45,45}
+
+% Configuracao segura de lstlistings com suporte a acentuacao UTF-8
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{rkoGray},
+  frame=single,
+  rulecolor=\color{rkoBorder},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=7pt,
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  tabsize=2,
+  keywordstyle=\color{codeKeyword}\bfseries,
+  commentstyle=\color{codeComment}\itshape,
+  stringstyle=\color{codeString},
+  captionpos=b,
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {à}{{\`a}}1 {À}{{\`A}}1
+    {ã}{{\~a}}1 {õ}{{\~o}}1 {Ã}{{\~A}}1 {Õ}{{\~O}}1
+    {â}{{\^a}}1 {ê}{{\^e}}1 {ô}{{\^o}}1 {Â}{{\^A}}1 {Ê}{{\^E}}1 {Ô}{{\^O}}1
+    {ç}{{\c{c}}}1 {Ç}{{\c{C}}}1
+}
+
+% Caixas portateis sem dependencia de pacotes externos frageis
+\newenvironment{exemplobox}[1]{%
+  \par\medskip\noindent
+  \begin{tikzpicture}
+    \node[draw=rkoGreen!75!black, fill=rkoLightGreen, rounded corners=3pt,
+          inner sep=10pt, text width=\dimexpr\linewidth-22pt\relax] \bgroup
+    \textbf{\color{rkoGreen!80!black}Exemplo Prático --- #1}\par\smallskip
+}{%
+    \egroup;
+  \end{tikzpicture}\par\medskip
+}
+
+\newenvironment{algobox}[1]{%
+  \par\medskip\noindent
+  \begin{tikzpicture}
+    \node[draw=rkoBlue!75!black, fill=rkoLightBlue, rounded corners=3pt,
+          inner sep=10pt, text width=\dimexpr\linewidth-22pt\relax] \bgroup
+    \textbf{\color{rkoBlue} Procedimento --- #1}\par\smallskip
+}{%
+    \egroup;
+  \end{tikzpicture}\par\medskip
+}
+
+\newtheorem{definition}{Definição}[section]
+\newtheorem{remark}{Observação Técnica}[section]
+
+\title{%
+  \vspace{-1.0cm}
+  {\Large\bfseries\color{rkoBlue} RKOSolver (C++20)}\\[0.35cm]
+  {\LARGE\bfseries Arquitetura de Plugins Dinâmicos, Escalarização Multiobjetivo,\\
+  Controle Online via Q-Learning e Meta-Heurísticas Cooperativas}\\[0.25cm]
+  {\normalsize Manual Técnico, Formulação Matemática e Guia de Exemplos Passo a Passo}
+}
+\author{Documentação Técnica do Projeto \texttt{rko-solver}}
+\date{Novembro de 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este documento apresenta a especificação matemática, algorítmica e de engenharia de software da versão moderna em \textbf{C++20} do framework \textbf{Random-Key Optimizer (\texttt{rko-solver})}. O sistema desacopla completamente o motor de otimização contínua em $[0,1)^n$ da lógica específica de cada problema combinatório por meio de \emph{plugins dinâmicos} (\texttt{.so}/\texttt{.dll}). São detalhados: (i) o modelo de concorrência assíncrona em OpenMP com geradores livres de \emph{false sharing} (\texttt{PaddedRng}) e seções críticas dedicadas; (ii) o núcleo de avaliação multiobjetivo com atualização dinâmica dos pontos Ideal e Nadir, re-escalarização atômica anti-\emph{drift} e quatro estratégias de escalarização (\emph{Tchebycheff}, \emph{Soma Ponderada}, \emph{Coeficiente de Gini Normalizado} e \emph{Lexicographic Min-Max}); (iii) o gerenciamento do pool cooperativo de elite com três políticas de diversidade (\emph{Similaridade de Cosseno}, \emph{NSGA-II} e \emph{Geometria Espacial de Nichos}); (iv) a busca local \texttt{RVND} desacoplada e o gatilho temporal determinístico para \texttt{NelderMeadSearch} com retroalimentação populacional/trajetória; (v) o controlador online por \emph{Q-Learning} com topologia adjacente M/D/A por \texttt{stride} em $O(|\mathcal{S}|\cdot m)$, limitador relativo \texttt{ComputeDelta} e persistência de tabela $Q$; e (vi) o catálogo completo das \textbf{15 meta-heurísticas} registradas (\textbf{14 meta-heurísticas ativas} em \texttt{config.yaml} mais \texttt{MultiStart}), incluindo \texttt{EILS} com 5 níveis progressivos de perturbação e Q-Learning por ciclo, \texttt{GRASP} contínuo com busca em linha bidirecional e RCL adaptativa, \texttt{IPR} com 6 estratégias de reconexão de caminhos, \texttt{DE}, \texttt{TS}, $\text{ACO}_{\mathbb{R}}$ e todos os alinhamentos algorítmicos com o RKO em C, acompanhados de seis exemplos numéricos resolvidos passo a passo e um tutorial completo de desenvolvimento de plugin.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Visão Geral e Arquitetura C++20 Baseada em Plugins Dinâmicos}
+\label{sec:arquitetura}
+% =============================================================================
+
+O paradigma \textbf{Random-Key Optimizer (RKO)}~\cite{chaves2025rko,bean1994rkga} resolve problemas de otimização combinatória $\min_{y \in \mathcal{Y}} \mathbf{f}(y)$ mapeando o espaço discreto e restrito $\mathcal{Y}$ para o hipercubo unitário contínuo semiaberto $[0,1)^n$. Uma solução candidata é codificada como um vetor de chaves aleatórias $\mathbf{x} = (x_0, x_1, \dots, x_{n-1}) \in [0,1)^n$. Um procedimento determinístico dependente do problema --- denominado \textbf{Decoder} ($\mathcal{D}: [0,1)^n \to \mathcal{Y}$) --- transforma qualquer vetor $\mathbf{x} \in [0,1)^n$ em uma solução viável $y = \mathcal{D}(\mathbf{x})$ e calcula seu vetor de objetivos $\mathbf{f}(y) = (f_0(y), \dots, f_{M-1}(y))$.
+
+\subsection{Desacoplamento Motor--Problema}
+
+Diferentemente de implementações monolíticas em que cada novo problema exige recompilar todo o solver, o \texttt{rko-solver} divide o sistema em dois binários independentes:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Motor Central (\texttt{rkosolver} + \texttt{librkolib.a})}: Compilado uma única vez em C++20. Gerencia leitura de parâmetros YAML/CLI, threads OpenMP, 15 meta-heurísticas registradas independentes do problema (14 ativas por padrão no \texttt{config.yaml} mais \texttt{MultiStart}), buscas locais no espaço $[0,1)^n$, escalarização multiobjetivo, Q-Learning e exportação de resultados.
+  \item \textbf{Plugin do Problema (\texttt{.so} no Linux / \texttt{.dll} no Windows)}: Biblioteca compartilhada carregada em tempo de execução via \texttt{dlopen}/\texttt{dlsym} (ou \texttt{LoadLibrary}/\texttt{GetProcAddress}) que implementa a interface abstrata \texttt{rkolib::core::IProblem}.
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.8cm and 1.1cm,
+  box/.style={draw=rkoBlue, fill=rkoLightBlue, rounded corners=3pt, minimum height=0.85cm, align=center, font=\footnotesize\sffamily, inner sep=5pt},
+  corebox/.style={draw=rkoBlue!90!black, fill=white, thick, rounded corners=4pt, inner sep=8pt},
+  plugbox/.style={draw=rkoGreen!80!black, fill=rkoLightGreen, thick, rounded corners=3pt, minimum height=0.95cm, align=center, font=\footnotesize\sffamily, inner sep=6pt},
+  arr/.style={-{Stealth[length=2.3mm]}, thick, color=rkoBlue!85!black}
+]
+  \node[box] (cli) {CLI (\texttt{CLI11}) + YAML\\(\texttt{config.yaml}, \texttt{param-*.yaml})};
+  \node[box, below=0.65cm of cli, minimum width=9.6cm] (solver) {\textbf{\texttt{rkolib::RkoSolver}} (Orquestrador Central)};
+
+  \node[box, below left=0.85cm and -1.5cm of solver, minimum width=4.4cm] (mh) {Threads OpenMP de Busca\\15 Meta-Heurísticas + \texttt{RVND} / \texttt{NM}\\Controle Online \texttt{Q-Learning}};
+  \node[box, below right=0.85cm and -1.5cm of solver, minimum width=4.4cm] (ctx) {\textbf{\texttt{SolverContext}} (Singleton)\\Pool de Elite (\texttt{SOLVER\_POOL})\\RNGs Alinhados (\texttt{PaddedRng})};
+
+  \node[box, below=2.35cm of solver, minimum width=9.6cm] (eval) {\texttt{RkoSolver::decodeSolution()} + \texttt{IScalarizer}\\(\texttt{Tchebycheff} $\mid$ \texttt{WeightedSum} $\mid$ \texttt{Gini} $\mid$ \texttt{Lexicographic\_MinMax})};
+
+  \node[plugbox, below=0.7cm of eval, minimum width=9.6cm] (plugin) {\textbf{Plugin Dinâmico (\texttt{tourist.so}, \texttt{kpproblem.so}, \dots)}\\Interface \texttt{IProblem::load()} e \texttt{IProblem::decode(TSol\&)}};
+
+  \draw[arr] (cli) -- (solver);
+  \draw[arr] (solver) -- (mh);
+  \draw[arr] (solver) -- (ctx);
+  \draw[arr, <->] (mh) -- node[above, font=\scriptsize\sffamily]{ Cooperam via \texttt{pool\_lock}} (ctx);
+  \draw[arr] (mh.south) |- ([yshift=2mm]eval.north west) -- (eval.north west);
+  \draw[arr] (ctx.south) |- ([yshift=2mm]eval.north east) -- (eval.north east);
+  \draw[arr, <->] (eval) -- node[right, font=\scriptsize\sffamily]{\texttt{dlopen / dlsym}} (plugin);
+\end{tikzpicture}
+\caption{Arquitetura desacoplada do \texttt{rko-solver}: o motor C++20 opera exclusivamente sobre chaves em $[0,1)^n$, comunicando-se com o decodificador via ABI C/C++.}
+\label{fig:arquitetura}
+\end{figure}
+
+\subsection{Estruturas de Dados Fundamentais}
+
+Toda solução que trafega pelo motor é representada pela estrutura \texttt{rkolib::core::TSol} (\texttt{include/rkolib/core/data.hpp}):
+\begin{lstlisting}[language=C++, caption={Estruturas \texttt{TSol} e \texttt{TRunData} em \texttt{include/rkolib/core/data.hpp}.}]
+struct TSol {
+    std::vector<double> rk;   // Vetor de chaves aleatorias em [0, 1)^n
+    double ofv = std::numeric_limits<double>::infinity(); // Fitness escalarizado
+    double best_time = 0.0;   // Tempo relativo (s) de descoberta na rodada
+    std::string nameMH;       // Nome da meta-heuristica que gerou a solucao
+    std::vector<double> objs; // Valores brutos dos objetivos (convencao: Minimizacao)
+};
+
+struct TRunData {
+    int strategy;             // Busca local: 1 = First Improvement, 2 = Best Improvement
+    int control;              // Parametros: 0 = Offline, 1 = Online (Q-Learning)
+    int MAXTIME;              // Tempo limite por execucao em segundos (CLI -t/--time)
+    int MAXRUNS;              // Numero de execucoes independentes
+    int debug;                // 0 = grava em arquivos results/, 1 = logs em tela
+    float restart;            // Fracao de MAXTIME para disparo de restart (ex.: 1.0)
+    int sizePool;             // Tamanho base do pool de elite (dobrado se M > 1)
+    int poolUpdateMethod = 0; // 0 = Cosseno, 1 = NSGA-II, 2 = Geometria Espacial
+    float tauMinNM = 0.005f;  // Fracao minima de MAXTIME entre chamadas Nelder-Mead
+    float tauMaxNM = 0.20f;   // Fracao maxima de MAXTIME sem chamada Nelder-Mead
+};
+\end{lstlisting}
+
+% =============================================================================
+\section{Concorrência OpenMP, \texttt{SolverContext} e Sincronização Thread-Safe}
+\label{sec:concorrencia}
+% =============================================================================
+
+Em uma rodada de otimização (\texttt{RkoSolver::executeSingleRun}), o solver instancia uma região paralela OpenMP com $K + 1$ threads, onde $K$ é o número de meta-heurísticas ativas no arquivo \texttt{config.yaml} e $1$ thread adicional executa o monitoramento temporal e a consolidação periódica dos pontos de referência multiobjetivo.
+
+\subsection{Eliminação de \emph{False Sharing} com \texttt{PaddedRng}}
+
+Como todas as $K$ meta-heurísticas sorteiam milhões de números pseudoaleatórios por segundo para mutações, cruzamentos e buscas locais, compartilhar um único \texttt{std::mt19937} causaria contenção severa de lock, enquanto armazenar um \texttt{std::vector<std::mt19937>} contíguo causaria \emph{false sharing} entre linhas de cache L1/L2 da CPU (tipicamente de 64 bytes). O \texttt{SolverContext} resolve ambos os problemas alinhando cada motor Mersenne Twister em sua própria linha de cache:
+\begin{lstlisting}[language=C++, caption={Gerador isolado e alinhado em linha de cache de 64 bytes (\texttt{context.hpp}).}]
+struct alignas(64) PaddedRng {
+    std::mt19937 engine;
+};
+\end{lstlisting}
+No início de cada rodada, \texttt{setSeed(baseSeed, min\_threads)} pré-aloca o vetor \texttt{rngs\_} com folga para todas as threads OpenMP e inicializa cada \texttt{engine} com semente determinística espaçada por multiplicador primo (\texttt{baseSeed + i * 104729}), garantindo sequências descorrelacionadas e velocidade máxima sem bloqueios na macro \texttt{SOLVER\_RNG}.
+
+\subsection{Protocolo de Seções Críticas Nomeadas}
+
+Para evitar condições de corrida (\emph{data races}) e \emph{deadlocks}, o \texttt{rko-solver} utiliza três travas OpenMP independentes com escopo estritamente delimitado:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{\#pragma omp critical(pool\_lock)}: Protege toda leitura e escrita no \texttt{SOLVER\_POOL}, incluindo \texttt{CreatePoolSolutions}, \texttt{UpdatePoolSolutions}, a amostragem de vértices em \texttt{NelderMeadSearch}, a seleção de pares em \texttt{IPR} e a re-escalarização em \texttt{SolverContext::rescalarizePool}.
+  \item \texttt{\#pragma omp critical(scalarization\_lock)}: Protege a atualização incremental de \texttt{candIdealPoint\_}, \texttt{idealPoint\_}, \texttt{nadirPoint\_} e a chamada a \texttt{scalarizer\_->scalarize(...)} dentro de \texttt{RkoSolver::decodeSolution}.
+  \item \texttt{\#pragma omp critical(qtable\_io\_lock)}: Serializa leituras e gravações em disco de \texttt{results/QTable\_<method>.txt}, permitindo inclusive múltiplas instâncias da mesma meta-heurística em paralelo sem corrupção de arquivo.
+\end{itemize}
+
+\begin{remark}[Prevenção de Deadlock]
+Nenhuma função executada sob \texttt{pool\_lock} adquire \texttt{scalarization\_lock} (por exemplo, tanto \texttt{NelderMeadSearch} quanto \texttt{IPR} copiam as soluções sob \texttt{pool\_lock}, fecham o bloco crítico e só então invocam \texttt{solver.decodeSolution} fora do \texttt{pool\_lock}). Isso garante um grafo de bloqueios acíclico.
+\end{remark}
+
+% =============================================================================
+\section{Avaliação Multiobjetivo, Pontos de Referência e Escalarizadores}
+\label{sec:escalarizacao}
+% =============================================================================
+
+Todo problema no \texttt{rko-solver} obedece à \textbf{convenção canônica de minimização}: se um objetivo original $g_k(y)$ deve ser maximizado (como lucro ou satisfação turística), o método \texttt{IProblem::decode} armazena $f_k(y) = -g_k(y)$ em \texttt{sol.objs[k]}.
+
+Quando $M = 1$, \texttt{decodeSolution} atribui diretamente $\text{sol.ofv} = \text{sol.objs}[0]$. Quando $M \ge 2$, o vetor $\mathbf{f}(\mathbf{x}) \in \mathbb{R}^M$ é convertido em um valor escalar $\text{ofv} \in \mathbb{R}$ por uma estratégia \texttt{IScalarizer} parametrizada pelo vetor de pesos $\mathbf{w} = (w_0, \dots, w_{M-1})$, pelo Ponto Ideal $\mathbf{z}^*$ e pelo Ponto Nadir $\mathbf{z}^{\text{nad}}$.
+
+\subsection{Gestão Dinâmica de Ideal/Nadir e Re-Escalarização Anti-\emph{Drift}}
+
+Em otimização heurística sem conhecimento a priori da fronteira de Pareto, $\mathbf{z}^*$ e $\mathbf{z}^{\text{nad}}$ evoluem durante a busca. Uma implementação ingênua sofre de três patologias clássicas, todas tratadas em \texttt{src/core/solver.cpp}:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Armadilha da 1ª Solução ($\mathbf{z}^* = \mathbf{z}^{\text{nad}}$)}: Na primeiríssima avaliação, $f_k(\mathbf{x}^{(1)})$ seria simultaneamente o mínimo e o máximo observado, zerando a distância normalizada ($\text{ofv} = 0$) e tornando a 1ª solução imbatível. O solver impõe uma margem mínima inicial:
+  \begin{equation}
+    \text{se } z^{\text{nad}}_k \le z^*_k + 10^{-7}, \quad \text{então } z^{\text{nad}}_k \leftarrow z^*_k + \max\!\big(1.0,\; 0.1\,|z^*_k|\big).
+  \end{equation}
+  Além disso, \texttt{CreatePoolSolutions} realiza \textbf{duas passadas}: a Passada 1 decodifica todas as soluções iniciais consolidando $\mathbf{z}^*$ e $\mathbf{z}^{\text{nad}}$, e a Passada 2 re-escalariza todas sob a mesma régua consolidada.
+  \item \textbf{Contaminação do Nadir por Soluções Penalizadas}: Soluções inviáveis frequentemente recebem penalidades da ordem de $10^{15}$, o que destruiria a escala $z^{\text{nad}}_k - z^*_k$. Durante o aquecimento inicial, valores $f_k \ge 10^{12}$ são ignorados para o Nadir; após a criação do pool (\texttt{boundsInitialized\_ = true}), o Nadir passa a ser extraído exclusivamente das soluções de elite do \texttt{SOLVER\_POOL} com suavização exponencial:
+  \begin{equation}
+    z^{\text{nad}}_k \leftarrow 0.8\, z^{\text{nad}}_k + 0.2\, \max_{\mathbf{s} \in \text{Pool}} f_k(\mathbf{s})
+    \quad \text{quando } \frac{|z^{\text{nad}}_{\text{pool},k} - z^{\text{nad}}_k|}{|z^{\text{nad}}_k - z^*_k|} > 0.005.
+  \end{equation}
+  \item \textbf{Eliminação de \emph{Fitness Drift} (\texttt{syncReferencePointsAndPool})}: Sempre que $\mathbf{z}^*$ ou $\mathbf{z}^{\text{nad}}$ se altera, a thread monitora invoca \texttt{ctx.rescalarizePool(...)}, recalculando o \texttt{ofv} de todos os membros do \texttt{SOLVER\_POOL} e do incumbente da rodada sob os novos limites e reordenando o pool. Assim, nenhuma solução permanece no topo graças a um \texttt{ofv} calculado em uma escala obsoleta.
+\end{enumerate}
+
+\subsection{As Quatro Estratégias de Escalarização}
+
+Definimos para cada objetivo $k \in \{0, \dots, M-1\}$ a amplitude $\Delta_k = \max(10^{-9},\, z^{\text{nad}}_k - z^*_k)$, o desvio normalizado não-negativo $\hat{d}_k(\mathbf{x})$ e o desvio ponderado $d_k(\mathbf{x})$:
+\begin{equation}
+  \hat{d}_k(\mathbf{x}) = \max\!\left(0.0,\; \frac{f_k(\mathbf{x}) - z^*_k}{\Delta_k}\right),
+  \qquad
+  d_k(\mathbf{x}) = w_k \, \hat{d}_k(\mathbf{x}),
+  \label{eq:regret_norm}
+\end{equation}
+onde $w_k = \lambda_k$ se um vetor de pesos de tamanho $M$ for fornecido, ou $w_k = 1/M$ caso contrário.
+
+\paragraph{1. Tchebycheff Ponderado Normalizado (\texttt{"Tchebycheff"}):}
+Capaz de encontrar soluções tanto em regiões convexas quanto não-convexas da fronteira de Pareto, acrescentando um termo de aumento $\rho = 10^{-4}$ para evitar soluções fracamente eficientes:
+\begin{equation}
+  F_{\text{Tcheb}}(\mathbf{x}) = \max_{0 \le k < M} \left\{ w_k \frac{|f_k(\mathbf{x}) - z^*_k|}{\Delta_k} \right\}
+  + 10^{-4} \sum_{k=0}^{M-1} \frac{|f_k(\mathbf{x}) - z^*_k|}{\Delta_k}.
+  \label{eq:tcheb}
+\end{equation}
+
+\paragraph{2. Soma Ponderada Direta (\texttt{"WeightedSum"}):}
+Combinação linear ponderada direta dos objetivos na convenção de minimização (sem depender de $\mathbf{z}^*$ ou $\mathbf{z}^{\text{nad}}$):
+\begin{equation}
+  F_{\text{WS}}(\mathbf{x}) = \sum_{k=0}^{M-1} w_k \, f_k(\mathbf{x}).
+  \label{eq:ws}
+\end{equation}
+
+\paragraph{3. Escalarização de Eficiência e Equidade de Gini (\texttt{"Gini\_Coefficient"}):}
+O coeficiente de Gini clássico $G(\mathbf{u}) = \frac{\sum_i \sum_j |u_i - u_j|}{2 M^2 \bar{u}}$ exige grandezas não-negativas e na mesma escala, além de medir apenas dispersão (uma solução péssima com $d = [0.9, 0.9]$ teria $G=0$). Em \texttt{GiniScalarizer}, combinamos a média dos desvios ponderados $\bar{d} = \frac{1}{M}\sum_{k=0}^{M-1} d_k(\mathbf{x})$ com o índice de Gini na forma da função de bem-estar social de Sen adaptada para minimização:
+\begin{equation}
+  F_{\text{Gini}}(\mathbf{x}) = \bar{d}\cdot\big(1 + G(\mathbf{d})\big)
+  = \frac{1}{M}\sum_{i=0}^{M-1} d_i(\mathbf{x})
+  + \frac{1}{2 M^2} \sum_{i=0}^{M-1}\sum_{j=0}^{M-1} \big|d_i(\mathbf{x}) - d_j(\mathbf{x})\big|.
+  \label{eq:gini}
+\end{equation}
+Note que $\bar{d}$ cancela no denominador de $G(\mathbf{d})$, eliminando qualquer singularidade $0/0$ perto do Ponto Ideal, preservando monotonicidade de Pareto e penalizando soluções desequilibradas entre objetivos.
+
+\paragraph{4. Min-Max Lexicográfico Suavizado (\texttt{"Lexicographic\_MinMax"}):}
+Ordena os desvios ponderados $d_k(\mathbf{x})$ em ordem decrescente $d_{(0)} \ge d_{(1)} \ge \dots \ge d_{(M-1)}$ e aplica pesos geométricos decrescentes governados por $\gamma = \text{\texttt{lexicographic\_decay}} \in (0,1)$ (padrão $\gamma = 0.05$), acrescidos de uma cauda de regularização de Pareto:
+\begin{equation}
+  F_{\text{Lex}}(\mathbf{x}) = \sum_{r=0}^{M-1} \gamma^{r} \, d_{(r)}(\mathbf{x})
+  + \frac{10^{-6}}{M} \sum_{r=1}^{M-1} d_{(r)}(\mathbf{x}).
+  \label{eq:lex}
+\end{equation}
+Isso desempata soluções que possuem o mesmo pior desvio $d_{(0)}$ priorizando sistematicamente o segundo pior desvio $d_{(1)}$, e assim sucessivamente, garantindo eficiência estrita de Pareto mesmo quando $\gamma^r$ decai abaixo da precisão de máquina para $M$ elevado.
+
+\begin{exemplobox}{Comparação dos 4 Escalarizadores em Duas Soluções do Problema Tourist}
+Considere uma instância bi-objetivo ($M=2$) do Problema de Roteamento Turístico onde $f_0$ é a qualidade negada (maximizar qualidade $\equiv$ minimizar $f_0 < 0$) e $f_1$ é a distância total percorrida ($f_1 > 0$). Suponha os pontos consolidados $\mathbf{z}^* = [-115.00,\; 20.00]$, $\mathbf{z}^{\text{nad}} = [-55.00,\; 60.00]$ e pesos iguais $\mathbf{w} = [0.5,\; 0.5]$. As amplitudes são $\Delta_0 = (-55) - (-115) = 60$ e $\Delta_1 = 60 - 20 = 40$.
+
+Avaliamos duas soluções não-dominadas:
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Solução $A$ (equilibrada)}: $\mathbf{f}(A) = [-91.00,\; 36.00]$.
+    \[
+      \hat{d}_0(A) = \frac{-91 - (-115)}{60} = \frac{24}{60} = 0.40, \quad
+      \hat{d}_1(A) = \frac{36 - 20}{40} = \frac{16}{40} = 0.40 \implies \mathbf{d}(A) = [0.20,\; 0.20].
+    \]
+  \item \textbf{Solução $B$ (alta qualidade, maior distância)}: $\mathbf{f}(B) = [-109.00,\; 46.00]$.
+    \[
+      \hat{d}_0(B) = \frac{-109 - (-115)}{60} = \frac{6}{60} = 0.10, \quad
+      \hat{d}_1(B) = \frac{46 - 20}{40} = \frac{26}{40} = 0.65 \implies \mathbf{d}(B) = [0.05,\; 0.325].
+    \]
+\end{itemize}
+
+Calculando o \texttt{ofv} de $A$ e $B$ nos quatro escalarizadores:
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item \textbf{WeightedSum}:
+    $F_{\text{WS}}(A) = 0.5(-91) + 0.5(36) = \mathbf{-27.50}$, enquanto $F_{\text{WS}}(B) = 0.5(-109) + 0.5(46) = \mathbf{-31.50}$ ($B$ vence pela menor soma ponderada bruta).
+  \item \textbf{Tchebycheff} ($\rho = 10^{-4}$):
+    $F_{\text{Tcheb}}(A) = \max(0.20, 0.20) + 10^{-4}(0.80) = \mathbf{0.200080}$, enquanto $F_{\text{Tcheb}}(B) = \max(0.05, 0.325) + 10^{-4}(0.75) = \mathbf{0.325075}$ ($A$ vence pelo menor pico).
+  \item \textbf{Gini\_Coefficient}:
+    Para $A$, $\bar{d}(A) = 0.20$ e $|0.20 - 0.20| = 0 \implies F_{\text{Gini}}(A) = \mathbf{0.200000}$.
+    Para $B$, $\bar{d}(B) = 0.1875$ e $\sum_{i,j}|d_i - d_j| = 2\times |0.05 - 0.325| = 0.55$, logo a penalidade de Gini é $\frac{0.55}{2 \times 2^2} = 0.06875 \implies F_{\text{Gini}}(B) = 0.1875 + 0.06875 = \mathbf{0.256250}$ ($A$ vence por aliar bom desempenho médio à equidade perfeita entre objetivos).
+  \item \textbf{Lexicographic\_MinMax} ($\gamma = 0.05$):
+    Ordenando $\mathbf{d}$ decrescentemente: em $A$, $[0.20, 0.20] \implies F_{\text{Lex}}(A) = 0.20 + 0.05(0.20) + 10^{-6}(0.20/2) \approx \mathbf{0.210000}$; em $B$, $[0.325, 0.05] \implies F_{\text{Lex}}(B) = 0.325 + 0.05(0.05) + 10^{-6}(0.05/2) \approx \mathbf{0.327500}$ ($A$ vence; e se houvesse $A'$ com $\mathbf{d}(A') = [0.20, 0.10]$, teríamos $F_{\text{Lex}}(A') \approx 0.205000 < F_{\text{Lex}}(A)$).
+\end{enumerate}
+\end{exemplobox}
+
+% =============================================================================
+\section{Gerenciamento do Pool de Soluções de Elite (\texttt{SOLVER\_POOL})}
+\label{sec:pool}
+% =============================================================================
+
+O \texttt{SOLVER\_POOL} é a estrutura central de cooperação assíncrona entre as meta-heurísticas: toda solução de destaque descoberta por uma thread é submetida a \texttt{UpdatePoolSolutions}, e operadores intensificadores como \texttt{NelderMeadSearch} e \texttt{IPR} amostram continuamente soluções do pool para guiar novas trajetórias.
+
+Para problemas mono-objetivo ($M=1$), o pool tem tamanho $P = \text{\texttt{sizePool}}$; para problemas multiobjetivo ($M > 1$), o tamanho é automaticamente dobrado ($P = 2 \cdot \text{\texttt{sizePool}}$) para acomodar uma representação bem distribuída da fronteira de Pareto.
+
+\subsection{Filtro Guardião e as Três Políticas de Atualização}
+
+Ao receber uma candidata $\mathbf{s}$, \texttt{UpdatePoolSolutions} executa inicialmente um \textbf{Filtro Global}:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Rejeição de Clones}: Rejeita $\mathbf{s}$ se já existir $\mathbf{p} \in \text{Pool}$ com $\max_k |p.\text{objs}[k] - s.\text{objs}[k]| \le 10^{-9}$ (multiobjetivo) ou $|p.\text{ofv} - s.\text{ofv}| < 10^{-9}$ (mono-objetivo).
+  \item \textbf{Rejeição por Dominância Estrita} ($M > 1$): Rejeita $\mathbf{s}$ se existir $\mathbf{p} \in \text{Pool}$ tal que $p.\text{objs}[k] \le s.\text{objs}[k] + 10^{-9}$ para todo $k$ e $p.\text{objs}[k'] < s.\text{objs}[k'] - 10^{-9}$ para algum $k'$.
+\end{itemize}
+
+Se aprovada, $\mathbf{s}$ recebe \texttt{s.best\_time} relativo ao início da rodada e \texttt{s.nameMH}, sendo avaliada conforme \texttt{poolUpdateMethod}:
+
+\paragraph{Método 0 --- Substituição Tática por Similaridade de Cosseno (Padrão / Mono-Objetivo):}
+Se $s.\text{ofv} < \text{Pool}[P-1].\text{ofv}$, em vez de simplesmente descartar a última posição, o solver protege a diversidade genética procurando na \textbf{metade inferior do pool} ($i \in \{\max(1, \lfloor P/2 \rfloor), \dots, P-1\}$ com $\text{Pool}[i].\text{ofv} > s.\text{ofv}$) o indivíduo mais similar a $\mathbf{s}$ no espaço de chaves aleatórias:
+\begin{equation}
+  i^* = \arg\max_{\substack{\lfloor P/2 \rfloor \le i < P \\ \text{Pool}[i].\text{ofv} > s.\text{ofv}}}
+  \frac{\langle \mathbf{s}.\text{rk},\; \text{Pool}[i].\text{rk} \rangle}{\|\mathbf{s}.\text{rk}\|_2 \, \|\text{Pool}[i].\text{rk}\|_2},
+\end{equation}
+substituindo $\text{Pool}[i^*] \leftarrow \mathbf{s}$ e reordenando o pool por \texttt{ofv}.
+
+\paragraph{Método 1 --- Classificação de Pareto NSGA-II~\cite{deb2002nsgaii}:}
+Forma a população combinada $\mathcal{C} = \text{Pool} \cup \{\mathbf{s}\}$ de tamanho $P+1$, executa o \emph{Fast Non-Dominated Sort} em fronteiras $\mathcal{F}_1, \mathcal{F}_2, \dots$, calcula a \emph{Crowding Distance} ($\text{cd}_i$, preservando os extremos de cada objetivo com $\text{cd} = \infty$) e retém os $P$ melhores segundo a ordem $(r_a < r_b) \lor (r_a = r_b \land \text{cd}_a > \text{cd}_b)$.
+
+\paragraph{Método 2 --- Memória Espacial da Fronteira (Geometria de Nichos, $M \ge 2$):}
+Identifica os extremos atuais da fronteira $E_0 = \arg\min_i f_1(\text{Pool}[i])$ e $E_1 = \arg\min_i f_0(\text{Pool}[i])$, definindo o segmento diretor $\mathbf{v} = \mathbf{f}(E_1) - \mathbf{f}(E_0)$. Para cada ponto $\mathbf{z} = (z_0, z_1)$, projeta sua coordenada longitudinal $t \in [0,1]$, sua distância ortogonal $d_\perp$ à corda $\overline{E_0 E_1}$ e seu nicho $R \in \{0, \dots, K-1\}$ ($K=5$, capacidade $C = \lceil P/K \rceil$):
+\begin{equation}
+  t = \text{clamp}\!\left(\frac{(\mathbf{z} - \mathbf{f}(E_0))\cdot \mathbf{v}}{\|\mathbf{v}\|_2^2},\; 0,\; 1\right),
+  \qquad
+  d_\perp = \big\|\mathbf{z} - \big(\mathbf{f}(E_0) + t\,\mathbf{v}\big)\big\|_2,
+  \qquad
+  R = \min(K-1, \lfloor K t \rfloor).
+\end{equation}
+Se o nicho $R(\mathbf{s})$ já atingiu capacidade $C$, $\mathbf{s}$ substitui o ponto de maior $d_\perp$ dentro do próprio nicho $R(\mathbf{s})$ (caso $d_\perp(\mathbf{s}) < \max_{i \in R(\mathbf{s})} d_\perp(i)$); se o nicho $R(\mathbf{s})$ está abaixo da capacidade, $\mathbf{s}$ desaloja o pior ponto ($d_\perp$ máximo) do nicho mais superlotado do pool, preenchendo lacunas vazias da fronteira de Pareto!
+
+\begin{exemplobox}{Substituição no Pool: Similaridade de Cosseno vs. Geometria de Nichos}
+Suponha um pool de tamanho $P=4$ ordenado por \texttt{ofv}, onde as duas últimas posições ($i \in \{2, 3\}$, metade inferior) têm chaves $\text{rk}^{(2)} = [0.10, 0.90, 0.20]$ ($\text{ofv}=0.28$) e $\text{rk}^{(3)} = [0.80, 0.20, 0.75]$ ($\text{ofv}=0.31$). Chega uma candidata $\mathbf{s}$ com $\text{rk}(\mathbf{s}) = [0.12, 0.88, 0.22]$ e $\text{ofv}=0.25$.
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item No \textbf{Método 0}, como $0.25 < 0.31$, calculamos $\cos(\mathbf{s}, \text{Pool}[2]) \approx 0.9994$ e $\cos(\mathbf{s}, \text{Pool}[3]) \approx 0.431$. Embora $\text{Pool}[3]$ tenha pior \texttt{ofv}, $\mathbf{s}$ substitui $\text{Pool}[2]$ (quase um clone genético de $\mathbf{s}$) e preserva a estrutura distinta de $\text{Pool}[3]$!
+  \item No \textbf{Método 2} ($K=5$), se todos os 4 indivíduos atuais estiverem concentrados nos nichos $R=0$ e $R=4$ (pontas da fronteira) e $\mathbf{s}$ cair no centro vazio ($t=0.52 \implies R=2$, contagem $0 < C=1$), $\mathbf{s}$ entra diretamente desalojando o ponto mais distante da corda no nicho mais populoso, cobrindo o centro da fronteira.
+\end{itemize}
+\end{exemplobox}
+
+% =============================================================================
+\section{Operadores Base, \texttt{RVND} Desacoplado e Gatilho \texttt{Nelder-Mead}}
+\label{sec:buscalocal}
+% =============================================================================
+
+Todas as meta-heurísticas compartilham um conjunto unificado de operadores contínuos sobre $[0,1)^n$ implementados em \texttt{src/core/method.cpp}.
+
+\subsection{Perturbação (\texttt{ShakeSolution}) e Combinação (\texttt{Blending})}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{ShakeSolution(s, betaMin, betaMax, n)}}: Sorteia a intensidade $I = \lfloor n \cdot \mathcal{U}(\beta_{\min}, \beta_{\max}) \rfloor + 1$. Em cada um dos $I$ passos, escolhe uniformemente uma modificação entre 4 movimentos: (1) reamostragem aleatória $x_i \leftarrow \mathcal{U}(0,1)$; (2) inversão complementar $x_i \leftarrow 1 - x_i$; (3) troca (\emph{swap}) entre duas posições aleatórias $x_i \leftrightarrow x_j$; ou (4) troca adjacente $x_i \leftrightarrow x_{(i+1) \bmod n}$.
+  \item \textbf{\texttt{Blending($\mathbf{s}^{(1)}, \mathbf{s}^{(2)}$, factor, n)}}: Combina duas soluções $\mathbf{s}^{(1)}$ e $\mathbf{s}^{(2)}$ chave a chave: com probabilidade $0.02$ aplica mutação $\mathcal{U}(0,1)$; caso contrário, com probabilidade $0.5$ herda $s^{(1)}_j$, e nos outros $50\%$ atribui $s^{(2)}_j$ (se $\text{factor} = 1$) ou o reflexo complementar $\text{clamp}(1.0 - s^{(2)}_j,\, 0,\, 0.9999999)$ (se $\text{factor} = -1$, usado na reflexão/expansão do Nelder-Mead).
+\end{itemize}
+
+\subsection{Busca em Vizinhança Variável Randomizada (\texttt{RVND}) Desacoplada}
+
+O procedimento \texttt{RVND} explora três vizinhanças dedicadas a chaves aleatórias sobre uma permutação embaralhada de índices \texttt{RKorder}, respeitando a estratégia global (\texttt{strategy = 1} para \emph{First Improvement} ou \texttt{2} para \emph{Best Improvement}):
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{\texttt{SwapLS}}: Testa trocas de pares $(x_{\pi(i)}, x_{\pi(j)})$ para $0 \le i < n-1$ e $i < j < n$ ($O(n^2)$ avaliações no pior caso).
+  \item \textbf{\texttt{InvertLS}}: Inverte individualmente cada chave $x_{\pi(i)} \leftarrow 1 - x_{\pi(i)}$ ($O(n)$ avaliações).
+  \item \textbf{\texttt{FareyLS}}: Para cada posição $\pi(i)$, amostra novos valores dentro dos 18 subintervalos consecutivos da sequência de Farey de ordem 7:
+  \[
+    \mathcal{F}_7 = \left\{0, \tfrac{1}{7}, \tfrac{1}{6}, \tfrac{1}{5}, \tfrac{1}{4}, \tfrac{2}{7}, \tfrac{1}{3}, \tfrac{2}{5}, \tfrac{3}{7}, \tfrac{1}{2}, \tfrac{4}{7}, \tfrac{3}{5}, \tfrac{2}{3}, \tfrac{5}{7}, \tfrac{3}{4}, \tfrac{4}{5}, \tfrac{5}{6}, \tfrac{6}{7}, 1\right\},
+  \]
+  explorando transições discretas de ordenação induzidas por limiares racionais ($18n$ avaliações).
+\end{enumerate}
+
+No \texttt{RVND}, a lista de vizinhanças candidatas é inicializada com $\text{NSL} = \{1, 2, 3\}$ (\texttt{SWAP}, \texttt{INVERT}, \texttt{FAREY}). A cada passo sorteia-se uniformemente $\text{pos} \in \{0, \dots, |\text{NSL}|-1\}$; se a vizinhança melhorar \texttt{s.ofv}, \texttt{NSL} é restaurada para $\{1, 2, 3\}$; caso contrário, \texttt{NSL[pos]} é removida até $\text{NSL} = \emptyset$. O \texttt{NelderMeadSearch} foi \textbf{removido de dentro do \texttt{RVND}} para evitar explosão combinatória de custo em meta-heurísticas baseadas em trajetória.
+
+\subsection{\texttt{NelderMeadSearch} Acoplado ao Pool e Gatilho Temporal (\texttt{tauMinNM} / \texttt{tauMaxNM})}
+
+O método \texttt{NelderMeadSearch($\mathbf{x}_1$, solver)} constrói um simplex de 3 vértices $(\mathbf{x}_1, \mathbf{x}_2, \mathbf{x}_3)$ sorteando $\mathbf{x}_2$ e $\mathbf{x}_3$ diretamente do \texttt{SOLVER\_POOL} (sob \texttt{pool\_lock}). Após ordenar $f(\mathbf{x}_1) \le f(\mathbf{x}_2) \le f(\mathbf{x}_3)$ e calcular o centroide $\mathbf{x}_0 = \text{Blending}(\mathbf{x}_1, \mathbf{x}_2, +1)$, executa até $\max(10, \lfloor n e^{-2} \rfloor)$ iterações sem melhoria usando operadores de \emph{Reflexão} ($\mathbf{x}_r = \text{Blending}(\mathbf{x}_0, \mathbf{x}_3, -1)$), \emph{Expansão} ($\mathbf{x}_e = \text{Blending}(\mathbf{x}_r, \mathbf{x}_0, -1)$), \emph{Contração Externa/Interna} e \emph{Encolhimento} (\emph{Shrink}).
+
+Para equilibrar intensificação e orçamento de tempo, todas as \textbf{13 meta-heurísticas de busca} (\texttt{SA}, \texttt{ILS}, \texttt{EILS}, \texttt{VNS}, \texttt{GRASP}, \texttt{LNS}, \texttt{TS}, \texttt{BRKGA}, \texttt{BRKGA-CS}, \texttt{GA}, \texttt{PSO}, \texttt{DE} e \texttt{ACO}) acionam o \texttt{NelderMeadSearch} por meio de um \textbf{gatilho determinístico baseado em tempo}:
+\begin{equation}
+  \text{Disparar NM} \iff
+  \big(\text{improv} = 1 \;\land\; \Delta t_{\text{NM}} \ge \tau_{\min} T_{\max}\big)
+  \;\lor\;
+  \big(\Delta t_{\text{NM}} \ge \tau_{\max} T_{\max}\big),
+  \label{eq:gatilho_nm}
+\end{equation}
+onde $\Delta t_{\text{NM}} = t_{\text{atual}} - t_{\text{último NM}}$, $\tau_{\min} = \text{\texttt{tau\_min\_nm}}$ (padrão $0.005$) e $\tau_{\max} = \text{\texttt{tau\_max\_nm}}$ (padrão $0.20$). Em todas as meta-heurísticas, a flag \texttt{improv} é explicitamente reiniciada (\texttt{improv = 0}) no início de cada iteração/geração; isso garante que, mesmo em modo offline (\texttt{control = 0}, onde o bloco de recompensa do Q-Learning não é executado), a condição $\text{improv} = 1$ reflita estritamente uma melhoria recém-descoberta na iteração corrente, evitando disparos contínuos a cada $\tau_{\min} T_{\max}$. Adicionalmente, toda melhoria obtida pelo \texttt{NelderMeadSearch} retroalimenta a trajetória ativa (\texttt{s} ou \texttt{sCurrent}) ou a população/enxame (\texttt{Pop} no \texttt{GA}, \texttt{Pbest} no \texttt{PSO}, \texttt{Pop[0]} no \texttt{BRKGA}/\texttt{BRKGA-CS}, \texttt{archive[0]} no \texttt{ACO}).
+
+\begin{exemplobox}{Linha do Tempo do Gatilho Determinístico do Nelder-Mead}
+Considere uma execução com $T_{\max} = 60\text{s}$, $\tau_{\min} = 0.005 \implies \tau_{\min} T_{\max} = 0.30\text{s}$ e $\tau_{\max} = 0.20 \implies \tau_{\max} T_{\max} = 12.0\text{s}$, iniciando com $t_{\text{último NM}} = 0.0\text{s}$:
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Em $t = 0.12\text{s}$, a meta-heurística encontra novo recorde ($\text{improv}=1$). Como $\Delta t_{\text{NM}} = 0.12\text{s} < 0.30\text{s}$, o Nelder-Mead \textbf{não} dispara (evitando saturar o início da busca quando melhorias triviais ocorrem a cada milissegundo).
+  \item Em $t = 0.38\text{s}$, ocorre nova melhoria ($\text{improv}=1$). Agora $\Delta t_{\text{NM}} = 0.38\text{s} \ge 0.30\text{s}$: o \texttt{NelderMeadSearch} \textbf{dispara} para refinar o novo ótimo, encerrando em $t = 0.45\text{s}$ ($t_{\text{último NM}} \leftarrow 0.45\text{s}$).
+  \item A busca entra em platô sem novas melhorias ($\text{improv}=0$) entre $t = 0.45\text{s}$ e $t = 12.44\text{s}$. Em $t = 12.46\text{s}$, mesmo com $\text{improv}=0$, atinge-se $\Delta t_{\text{NM}} = 12.01\text{s} \ge 12.0\text{s}$: o \texttt{NelderMeadSearch} \textbf{dispara por estagnação}, injetando intensificação guiada pelo pool de elite.
+\end{enumerate}
+\end{exemplobox}
+
+% =============================================================================
+\section{Motor de Controle Online de Parâmetros via Q-Learning}
+\label{sec:qlearning}
+% =============================================================================
+
+Quando \texttt{control\_mode: 1} está ativo, cada meta-heurística controla seus hiperparâmetros autonomamente durante a execução por meio de \textbf{Q-Learning tabular}~\cite{watkins1992qlearning} implementado em \texttt{include/rkolib/core/qlearning.hpp} e \texttt{src/core/qlearning.cpp}.
+
+\subsection{Espaço de Estados Cartesiano e Topologia Adjacente M/D/A por \texttt{stride}}
+
+Considere uma meta-heurística com $m$ hiperparâmetros controlados, onde cada parâmetro $j \in \{0, \dots, m-1\}$ possui uma lista ordenada em ordem estritamente crescente de $n_j = |P_j|$ valores candidatos:
+\begin{equation}
+  P_j = \big\{ v_{j,0} < v_{j,1} < \dots < v_{j, n_j - 1} \big\}.
+\end{equation}
+O espaço de estados $\mathcal{S} = P_0 \times P_1 \times \dots \times P_{m-1}$ possui cardinalidade $|\mathcal{S}| = \prod_{j=0}^{m-1} n_j$. Cada estado de índice linear $i \in \{0, \dots, |\mathcal{S}|-1\}$ corresponde bijetivamente à tupla de coordenadas $(c_0, c_1, \dots, c_{m-1})$ via passo (\texttt{stride}):
+\begin{equation}
+  \text{stride}[j] = \frac{|\mathcal{S}|}{\prod_{r=0}^{j} n_r},
+  \qquad
+  c_j(i) = \left\lfloor \frac{i}{\text{stride}[j]} \right\rfloor \bmod n_j,
+  \qquad
+  \text{par}_j(i) = v_{j,\, c_j(i)}.
+  \label{eq:stride}
+\end{equation}
+
+Em vez de conectar estados por distância de Hamming $\le 1$ em $O(|\mathcal{S}|^2)$ (o que permitiria saltos bruscos do menor para o maior valor de um parâmetro em uma única transição), \texttt{BuildStateConnections} constrói em tempo $O(|\mathcal{S}|\cdot m)$ uma \textbf{topologia adjacente M/D/A}:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Ação M (\emph{Maintain})}: permanece no estado atual ($i \to i$).
+  \item \textbf{Ação D (\emph{Decrease})}: para cada $j \in \{0,\dots,m-1\}$ com $c_j(i) > 0$, decrementa apenas o parâmetro $j$ para $v_{j, c_j(i)-1}$, transitando para $i - \text{stride}[j]$.
+  \item \textbf{Ação A (\emph{Increase})}: para cada $j \in \{0,\dots,m-1\}$ com $c_j(i) < n_j - 1$, incrementa apenas o parâmetro $j$ para $v_{j, c_j(i)+1}$, transitando para $i + \text{stride}[j]$.
+\end{itemize}
+O número de ações disponíveis em qualquer estado $s_i$ fica limitado ao intervalo $[1 + m,\; 1 + 2m]$ (com inicialização otimista leve $Q_0(s_i, a) \sim \mathcal{U}(0.005, 0.01)$).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  st/.style={circle, draw=rkoBlue, fill=rkoLightBlue, thick, minimum size=0.92cm, font=\scriptsize\sffamily, align=center},
+  centerst/.style={circle, draw=rkoGreen!80!black, fill=rkoLightGreen, very thick, minimum size=0.98cm, font=\scriptsize\sffamily\bfseries, align=center},
+  ed/.style={-{Stealth[length=2mm]}, semithick, color=gray!75!black},
+  act/.style={-{Stealth[length=2.3mm]}, very thick, color=rkoGreen!80!black}
+]
+  \foreach \r in {0,1,2} {
+    \foreach \c in {0,1,2} {
+      \pgfmathtruncatemacro{\idx}{\r*3 + \c}
+      \ifnum\idx=4
+        \node[centerst] (s\idx) at (\c*2.4, -\r*1.65) {$s_4$};
+      \else
+        \node[st] (s\idx) at (\c*2.4, -\r*1.65) {$s_{\idx}$};
+      \fi
+    }
+  }
+  % Arestas de fundo da malha
+  \foreach \r in {0,1,2} {
+    \pgfmathtruncatemacro{\a}{\r*3}
+    \pgfmathtruncatemacro{\b}{\r*3+1}
+    \pgfmathtruncatemacro{\c}{\r*3+2}
+    \ifnum\r=1\else
+      \draw[ed, <->] (s\a) -- (s\b);
+      \draw[ed, <->] (s\b) -- (s\c);
+    \fi
+  }
+  \foreach \col in {0,2} {
+    \pgfmathtruncatemacro{\top}{\col}
+    \pgfmathtruncatemacro{\mid}{\col+3}
+    \pgfmathtruncatemacro{\bot}{\col+6}
+    \draw[ed, <->] (s\top) -- (s\mid);
+    \draw[ed, <->] (s\mid) -- (s\bot);
+  }
+  % Destaque das 5 acoes do estado central s_4
+  \draw[act] (s4) -- node[above, font=\scriptsize\bfseries\color{rkoGreen!80!black}]{D ($j=1$)} (s3);
+  \draw[act] (s4) -- node[above, font=\scriptsize\bfseries\color{rkoGreen!80!black}]{A ($j=1$)} (s5);
+  \draw[act] (s4) -- node[right, font=\scriptsize\bfseries\color{rkoGreen!80!black}]{D ($j=0$)} (s1);
+  \draw[act] (s4) -- node[right, font=\scriptsize\bfseries\color{rkoGreen!80!black}]{A ($j=0$)} (s7);
+  \draw[act] (s4) edge[loop above, looseness=6, min distance=6mm] node[above, font=\scriptsize\bfseries\color{rkoGreen!80!black}]{M} (s4);
+\end{tikzpicture}
+\caption{Topologia adjacente M/D/A para $m=2$ parâmetros com $n_0=n_1=3$ ($|\mathcal{S}|=9$, $\text{stride}=[3, 1]$). Vértices possuem $1+2=3$ ações, bordas possuem $4$ ações e o estado central $s_4$ possui $1+2(2)=5$ ações.}
+\label{fig:mda_grid}
+\end{figure}
+
+\subsection{Melhoria Relativa Limitada (\texttt{ComputeDelta}) e Piso $\varepsilon_{\min}$}
+
+A política de seleção de ações \texttt{ChooseAction} é $\varepsilon$-gulosa: com probabilidade $1 - \varepsilon$ seleciona a ação gulosa $\text{maxA}(s_t)$, e com probabilidade $\varepsilon$ explora uniformemente em \texttt{Ai}. Sempre que a meta-heurística melhora seu melhor valor histórico ($f^*_{\text{new}} < f^*_{\text{old}}$), a melhoria relativa é limitada ao teto $\delta_{\max} = 0.1$ por \texttt{ComputeDelta}:
+\begin{equation}
+  \delta = \text{ComputeDelta}(f^*_{\text{old}}, f^*_{\text{new}}, \delta_{\max}) =
+  \begin{cases}
+    0, & \text{se } f^*_{\text{new}} \ge f^*_{\text{old}}, \\[4pt]
+    \delta_{\max}, & \text{se } f^*_{\text{new}} < f^*_{\text{old}} \text{ e } |f^*_{\text{old}}| < 10^{-12}, \\[4pt]
+    \min\!\left(\dfrac{f^*_{\text{old}} - f^*_{\text{new}}}{|f^*_{\text{old}}|},\; \delta_{\max}\right), & \text{caso contrário.}
+  \end{cases}
+  \label{eq:computedelta}
+\end{equation}
+O teto $\delta_{\max} = 0.1$ impede que um único salto abrupto (por exemplo, sair de uma solução inicial penalizada ou cruzar $f^*_{\text{old}} \approx 0$) colapse $\varepsilon \to 0$ logo nos primeiros segundos. Caso ocorram melhorias tanto na busca principal quanto no \texttt{NelderMeadSearch} na mesma geração, acumula-se $\delta \leftarrow \max(\delta, \text{ComputeDelta}(\cdot))$.
+
+No início da iteração seguinte, \texttt{SetQLParameter} atualiza $\varepsilon$, a taxa de aprendizado $\alpha_t$ (\texttt{lf}) e o fator de desconto $\gamma$ (\texttt{df}):
+\begin{equation}
+  \varepsilon \leftarrow \max\!\big(\varepsilon_{\min},\; \varepsilon \cdot (1 - \text{clamp}(\delta, 0, 1))\big),
+  \qquad
+  \text{lf} = \max\!\left(0.01,\; 1.0 - 0.9\,\frac{t}{T_{\max}}\right),
+  \qquad
+  \text{df} = 0.8,
+  \label{eq:setql}
+\end{equation}
+onde $\varepsilon_{\min} = 0.10$ na maioria das MHs ($\varepsilon_{\min} = 0.05$ no $\text{ACO}_{\mathbb{R}}$). O módulo também disponibiliza uma sobrecarga de \emph{Cosine Annealing with Warm Restarts} (passando \texttt{float \&epsilon\_max} por referência para decair $\varepsilon_{\max} \leftarrow \max(\varepsilon_{\min}, \varepsilon_{\max} - 0.1)$ a cada época $T_i = \max(1, \lfloor 0.1 T_{\max} \rfloor)$).
+
+\subsection{Atualização de Bellman Otimizada e Persistência (\texttt{SaveQTable} / \texttt{LoadQTable})}
+
+Após observar a recompensa $R_t$, \texttt{UpdateQValue} transita para $s_{t+1} = \text{Ai}[s_t][a_t]$ aplicando:
+\begin{equation}
+  Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \text{lf} \cdot \Big(R_t + \text{df} \cdot \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t)\Big).
+  \label{eq:bellman}
+\end{equation}
+A manutenção de $\text{maxQ}(s_t)$ e $\text{maxA}(s_t)$ é feita de forma condicional:
+\begin{itemize}[leftmargin=*]
+  \item Se o novo $Q(s_t, a_t) > \text{maxQ}(s_t)$, atualiza $\text{maxQ}$ e $\text{maxA}$ diretamente em $O(1)$;
+  \item \texttt{else if (at == S[st].maxA)}, \textbf{somente} quando a ação que detinha o máximo sofre redução de valor é que \texttt{UpdateMaxQ(S, st)} varre \texttt{S[st].Qa} em $O(|\text{Ai}|)$.
+\end{itemize}
+
+Ao encerrar a meta-heurística (inclusive quando interrompida por \texttt{SOLVER\_SHOULD\_STOP}), \texttt{SaveQTable} persiste a política aprendida em \texttt{results/QTable\_<method>.txt}. Em execuções subsequentes (\texttt{max\_runs > 1} ou novas rodadas), \texttt{LoadQTable} lê o arquivo para memória temporária e valida integralmente \texttt{numStates}, \texttt{numPar}, todos os vetores \texttt{par} ($|\Delta| \le 10^{-6}$) e todos os alvos \texttt{Ai} antes de adotar os valores \texttt{Qa}, garantindo imunidade a arquivos incompatíveis caso o usuário altere \texttt{param-online.yaml}.
+
+\begin{exemplobox}{Ciclo Completo do Q-Learning no ILS ($3 \times 3 = 9$ Estados)}
+Em \texttt{config/yaml/param-online.yaml}, o \texttt{ILS} define $P_0 = \beta_{\min} \in \{0.05, 0.10, 0.15\}$ ($n_0=3$) e $P_1 = \beta_{\max} \in \{0.15, 0.20, 0.25\}$ ($n_1=3$), gerando $|\mathcal{S}| = 9$ estados com $\text{stride} = [9/3,\; 9/9] = [3,\; 1]$:
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item \textbf{ Estado atual $s_t = 1$}: $c_0(1) = \lfloor 1/3 \rfloor \bmod 3 = 0 \implies \beta_{\min} = 0.05$; $c_1(1) = 1 \bmod 3 = 1 \implies \beta_{\max} = 0.20$. As ações em $s_1$ são $\text{Ai}[1] = [1\text{ (M)},\; 4\text{ (A em }P_0\text{)},\; 0\text{ (D em }P_1\text{)},\; 2\text{ (A em }P_1\text{)}]$.
+  \item Suponha $t = 5\text{s}$ de $T_{\max}=50\text{s}$, $\varepsilon = 0.90$, e que \texttt{ChooseAction} selecione $a_t = 1$, levando ao estado-alvo $s_{t+1} = \text{Ai}[1][1] = 4$ ($[0.10, 0.20]$), cujo $\text{maxQ}(s_4) = 0.25$. Suponha $Q(s_1, 1) = 0.10$.
+  \item A iteração do ILS reduz $f^*$ de $-80.0$ para $-100.0$ (melhoria bruta de $25\%$). Pela Eq.~\eqref{eq:computedelta}, $\delta = \min\big(\frac{-80 - (-100)}{|-80|}, 0.1\big) = \min(0.25, 0.1) = \mathbf{0.10}$, e $\text{improv} = 1 \implies R_t = 1.0$.
+  \item Com $\text{lf} = 1.0 - 0.9(5/50) = 0.91$ e $\text{df} = 0.8$, a Eq.~\eqref{eq:bellman} atualiza:
+  \[
+    Q(s_1, 1) \leftarrow 0.10 + 0.91 \cdot \big(1.0 + 0.8(0.25) - 0.10\big) = 0.10 + 0.91(1.10) = \mathbf{1.101},
+  \]
+  promovendo $\text{maxQ}(s_1) \leftarrow 1.101$, $\text{maxA}(s_1) \leftarrow 1$ em $O(1)$ e transitando $s_t \leftarrow 4$. Na iteração seguinte, $\varepsilon \leftarrow \max(0.10, 0.90 \times (1 - 0.10)) = \mathbf{0.81}$.
+\end{enumerate}
+\end{exemplobox}
+
+% =============================================================================
+\section{Catálogo Detalhado das 15 Meta-Heurísticas Integradas}
+\label{sec:metaheuristicas}
+% =============================================================================
+
+Todas as meta-heurísticas residem em \texttt{src/mh/} e seguem a assinatura uniforme \texttt{void MH(const TRunData \&runData, RkoSolver \&solver)}. Descrevemos a seguir cada uma das \textbf{15 meta-heurísticas} registradas em \texttt{RkoSolver::initializeRegistry()}.
+
+\subsection{Meta-Heurísticas Baseadas em Trajetória e Vizinhança}
+
+\paragraph{1. Simulated Annealing (\texttt{SA} --- \texttt{src/mh/sa.cpp}):}
+Controla 5 parâmetros ($SA_{\max}, \alpha_{\text{SA}}, \beta_{\min}, \beta_{\max}, T_0$). Em cada temperatura $T$, reinicia \texttt{improv = 0} e executa $SA_{\max}$ passos de Metropolis sobre a solução corrente $\mathbf{s}$ com \texttt{ShakeSolution($\beta_{\min}, \beta_{\max}$)}, aceitando movimentos de melhora ($\Delta < 0$) imediatamente ou movimentos de piora com probabilidade $\exp(-\Delta/T)$. Antes da fase de recompensa do Q-Learning e do resfriamento geométrico $T \leftarrow \alpha_{\text{SA}} T$, avalia o gatilho temporal do \texttt{NelderMeadSearch} diretamente sobre $\mathbf{s}$ (marcando \texttt{improv = 1} caso supere \texttt{sBest}). Quando $T \le 10^{-5}$ (\texttt{0.00001}), realiza \emph{reannealing} reiniciando a temperatura em $0.5\,T_0$. Recompensa online: $R=1$ se melhorou \texttt{sBest} na época, ou penalidade proporcional $(f^* - f_{\text{bestEpoch}})/(|f_{\text{bestEpoch}}| + \epsilon)$ caso contrário.
+
+\paragraph{2. Iterated Local Search (\texttt{ILS} --- \texttt{src/mh/ils.cpp}):}
+Controla 2 parâmetros ($\beta_{\min}, \beta_{\max}$). Gera uma solução inicial imediatamente refinada por \texttt{RVND} para inicializar tanto o ótimo local corrente aceito (\texttt{sCurrent}) quanto o recorde global (\texttt{sBest}). A cada iteração, perturba \texttt{sCurrent} via \texttt{ShakeSolution($\beta_{\min}, \beta_{\max}$)} e aplica \texttt{RVND} obtendo \texttt{sBestLine}. Emprega o critério de aceitação com reinício (\texttt{ILS\_ACCEPT\_RESTART}): atualiza $\mathbf{s}_{\text{Current}} \leftarrow \mathbf{s}_{\text{BestLine}}$ se $f(\mathbf{s}_{\text{BestLine}}) < f(\mathbf{s}_{\text{Current}})$ ou após $\text{ILS\_MAX\_NO\_IMPROV} = 10$ iterações sem avanço local ($\text{Iter} - \text{IterImprov} \ge 10$). Em seguida, verifica o gatilho temporal do \texttt{NelderMeadSearch} diretamente sobre \texttt{sCurrent} (renovando \texttt{IterImprov} caso melhore) e aplica recompensa binária $R \in \{0, 1\}$ no Q-Learning.
+
+\paragraph{3. Enhanced Iterated Local Search (\texttt{EILS} --- \texttt{src/mh/eils.cpp}):}
+Controla 3 parâmetros ($\beta_{\min}, \beta_{\max}, N_{\max}$) em 27 estados online. Mantém um ótimo local de elite $\mathbf{s}^*$ (\texttt{sBest}, inicializado com \texttt{RVND}) e organiza a perturbação em ciclos compostos por $L = 5$ níveis determinísticos linearmente interpolados (\texttt{EILS\_NUM\_LEVELS = 5}):
+\begin{equation}
+  \beta_\ell = \beta_{\min} + \ell \cdot \frac{\beta_{\max} - \beta_{\min}}{L - 1},
+  \qquad \ell \in \{0, 1, 2, 3, 4\}.
+  \label{eq:eils_levels}
+\end{equation}
+Em cada iteração, perturba sempre $\mathbf{s}^*$ com intensidade exata $\beta_\ell$ (\texttt{ShakeSolution($\mathbf{s}'$, $\beta_\ell, \beta_\ell, n$)}), refina via \texttt{RVND}, adota aceitação estritamente elitista ($f(\mathbf{s}'') < f(\mathbf{s}^*)$) e avalia o gatilho temporal \texttt{NelderMeadSearch($\mathbf{s}^*$)}. Qualquer melhoria global marca \texttt{cycleImprov = 1} e reinicia imediatamente um novo ciclo em $\ell = 0$; caso contrário, incrementa \texttt{numFail}, promovendo $\ell \leftarrow \ell + 1$ quando $\text{numFail} \ge N_{\max}$ e encerrando o ciclo ao ultrapassar $\ell = 4$. O Q-Learning opera sincronizado ao ciclo: seleciona $(\beta_{\min}, \beta_{\max}, N_{\max})$ na abertura de cada ciclo (mantendo o estado sorteado via ação \texttt{Maintain} no primeiro ciclo) e atualiza $Q(s_t, a_t)$ ao término do ciclo com recompensa binária $R = \text{cycleImprov} \in \{0, 1\}$.
+
+\paragraph{4. Variable Neighborhood Search (\texttt{VNS} --- \texttt{src/mh/vns.cpp}):}
+Controla 2 parâmetros ($k_{\max}, \beta_{\min}$). Na inicialização, amostra \textbf{10 soluções aleatórias} e adota a melhor como $\mathbf{s}_{\text{Best}}$ e $\mathbf{s}$. Em cada ciclo externo, explora níveis crescentes de perturbação $k \in \{1, \dots, k_{\max}\}$ sorteando $\beta \sim \mathcal{U}(k\beta_{\min},\, (k+1)\beta_{\min})$, aplicando \texttt{ShakeSolution($\beta, \beta$)} seguido de \texttt{RVND}. Se melhorar a solução corrente ($k \leftarrow 1$ ao superar \texttt{sBest}), reposiciona o centro de busca; caso contrário avança $k \leftarrow k + 1$. O gatilho determinístico de \texttt{NelderMeadSearch($\mathbf{s}$)} é avaliado \textbf{dentro} de cada passo do laço $k \le k_{\max}$ com flag por passo \texttt{iterImprov}, acumulando \texttt{cycleImprov} para a recompensa do Q-Learning ao fim do ciclo.
+
+\paragraph{5. Continuous Greedy Randomized Adaptive Search Procedure (\texttt{GRASP} --- \texttt{src/mh/grasp.cpp}):}
+Controla 3 parâmetros ($\alpha_{\text{GRASP}}, h_s, h_e$) com 12 estados online (no modo offline sorteia $\alpha_{\text{GRASP}} \sim \mathcal{U}(0.1, 0.9)$ a cada passo). A fase construtiva (\texttt{ConstrutiveGreedyRandomized}) reconstrói iterativamente um subconjunto embaralhado \texttt{UnFixed} de $\lceil n \cdot \mathcal{U}(0.3, 0.7) \rceil$ chaves:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{LineSearch} em Grade Bidirecional}: Para cada uma das $k_{\max} = \max(2, \lfloor 0.1\,|\text{UnFixed}| \rfloor)$ coordenadas amostradas, gera todos os pontos $s_i \pm \tau h \in [0, 1)$ ($\tau = 1, \dots, \lceil 1/h \rceil$), embaralha a malha via \texttt{SOLVER\_RNG} e avalia $q = \min(|\text{malha}|, \lceil \log_2(\lfloor 1/h \rfloor) \rceil + 1)$ candidatos para obter o melhor valor $z_i$ e custo $g_i$;
+  \item \textbf{Lista Restrita de Candidatos (RCL)}: Forma $\text{RCL} = \{i : g_i \le g_{\min} + \alpha_{\text{GRASP}}(g_{\max} - g_{\min})\}$, sorteia uniformemente $i^* \in \text{RCL}$, fixa $s_{i^*} \leftarrow z_{i^*}$ e remove $i^*$ de \texttt{UnFixed}.
+\end{itemize}
+Em \texttt{GraspInnerStep}, a solução construída passa por \texttt{RVND}; se não superar \texttt{sBest}, refina a escala $h \leftarrow h/2$. A solução de trabalho $\mathbf{s}$ aceita melhorias ou movimentos Metropolis com temperatura linear $T = 100(1 - t/(T_{\max}\cdot\text{restart}))$, e o gatilho \texttt{NelderMeadSearch($\mathbf{s}$)} é verificado a cada passo interno $h \ge h_e$, seguido de recompensa binária $R \in \{0, 1\}$ ao final do ciclo de escalas.
+
+\paragraph{6. Large Neighborhood Search (\texttt{LNS} --- \texttt{src/mh/lns.cpp}):}
+Controla 4 parâmetros ($\beta_{\min}, \beta_{\max}, T_0, \alpha_{\text{LNS}}$). A fase \emph{Destroy} seleciona $I \in [\lfloor \beta_{\min} n \rfloor, \lfloor \beta_{\max} n \rfloor]$ chaves aleatórias; a fase \emph{Repair} reconstrói cada chave selecionada avaliando amostras nos subintervalos da sequência de Farey $\mathcal{F}_7$ e mantendo a melhor atribuição. A solução reparada passa por aceitação tipo Simulated Annealing (com \emph{reannealing} $0.3\,T_0$) e pelo gatilho temporal \texttt{NelderMeadSearch} sobre $\mathbf{s}$.
+
+\paragraph{7. Tabu Search (\texttt{TS} --- \texttt{src/mh/ts.cpp}):}
+Controla 5 parâmetros ($\text{maxNoImp}, \text{tabuTenure}, \text{neighSize}, \beta_{\min}, \beta_{\max}$). Em cada iteração:
+\begin{itemize}[leftmargin=*]
+  \item Avalia $\lfloor n^2 \cdot \text{neighSize} \rfloor$ movimentos candidatos de troca $(i, j)$ entre chaves distintas;
+  \item Um par $(i,j)$ é marcado como \textbf{tabu} se $(i,j)$ ou $(j,i)$ constar na \texttt{tabuList} com $\text{iter} < \text{expiration}$, exceto quando satisfaz o \textbf{critério de aspiração} ($f(\mathbf{s}_{\text{viz}}) < f(\mathbf{s}_{\text{Best}})$);
+  \item Aplica o melhor movimento admissível, registra $\{i^*, j^*, \text{iter} + \text{tabuTenure}\}$ limpando mandatos expirados, executa diversificação via \texttt{ShakeSolution} quando $\text{noImp} \ge \text{maxNoImp}$, refina com \texttt{RVND} e avalia o gatilho \texttt{NelderMeadSearch}. Recompensa online: $R = 1.0$ (melhoria) ou $R = -0.01$.
+\end{itemize}
+
+\begin{exemplobox}{Escalonamento de 5 Níveis no EILS e Busca em Linha + RCL no GRASP Contínuo}
+\textbf{Parte A (\texttt{EILS}):} Suponha o estado $(\beta_{\min}=0.05,\; \beta_{\max}=0.25,\; N_{\max}=3)$. Pela Eq.~\eqref{eq:eils_levels}, os $L=5$ níveis de perturbação são:
+\[
+  \beta_0 = 0.05, \quad \beta_1 = 0.10, \quad \beta_2 = 0.15, \quad \beta_3 = 0.20, \quad \beta_4 = 0.25.
+\]
+O ciclo inicia em $\ell = 0$ (\texttt{numFail = 0}). Se 3 tentativas consecutivas com $\beta_0 = 0.05$ não superarem $\mathbf{s}^*$, atinge-se $\text{numFail} = 3 = N_{\max}$, promovendo $\ell \leftarrow 1$ ($\beta_1 = 0.10$, \texttt{numFail = 0}). Se na 2ª tentativa do nível $\ell = 1$ o \texttt{RVND} (ou o \texttt{NelderMeadSearch}) encontrar um novo recorde global, o \texttt{EILS} registra $\text{cycleImprov} = 1$, encerra imediatamente o ciclo (\texttt{newCycle = true}), recompensa o par estado-ação no Q-Learning com $R = 1.0$ e abre novo ciclo voltando ao nível suave $\ell = 0$. Se todos os 5 níveis esgotarem suas $3 \times 5 = 15$ tentativas sem recorde, o ciclo encerra com $R = 0.0$.
+\smallskip
+
+\textbf{Parte B (\texttt{GRASP}):} Para uma coordenada com $s_i = 0.40$ e passo inicial $h = h_s = 0.125$ ($1/h = 8$):
+\begin{itemize}[leftmargin=*, nosep]
+  \item \texttt{LineSearch} gera todos os deslocamentos $0.40 \pm 0.125\tau \in [0, 1)$, obtendo a malha de 8 pontos $\{0.40, 0.525, 0.275, 0.65, 0.15, 0.775, 0.025, 0.90\}$, embaralha-os via \texttt{SOLVER\_RNG} e avalia $q = \lceil \log_2(8) \rceil + 1 = 4$ candidatos.
+  \item Suponha que $k_{\max}=3$ coordenadas candidatas retornem custos $g = [0.22, 0.24, 0.32]$ ($g_{\min}=0.22, g_{\max}=0.32$) com $\alpha_{\text{GRASP}} = 0.20$. O limiar da RCL é $0.22 + 0.20(0.32 - 0.22) = \mathbf{0.24}$, admitindo as duas primeiras coordenadas ($0.22$ e $0.24$) para fixação aleatória.
+\end{itemize}
+\end{exemplobox}
+
+\subsection{Meta-Heurísticas Populacionais, Evolutivas e de Enxame}
+
+\paragraph{8. Biased Random-Key Genetic Algorithm (\texttt{BRKGA} --- \texttt{src/mh/brkga.cpp})~\cite{goncalves2011brkga}:}
+Controla 4 parâmetros ($p, p_e, p_m, \rho_e$) com redimensionamento dinâmico da população (\texttt{UpdatePopSize}). A cada geração copia os $\lfloor p \cdot p_e \rfloor$ indivíduos de elite, gera $\lfloor p(1 - p_e - p_m) \rfloor$ descendentes por \emph{Parametric Uniform Crossover} (\texttt{PUX}) e injeta $\lfloor p \cdot p_m \rfloor$ mutantes aleatórios. No \texttt{PUX}, \texttt{nonEliteParent} é sorteado de forma híbrida (50\% na faixa não-elite $[\text{eliteSize}, p-1]$ e 50\% na população inteira $[0, p-1]$), trocando os pais (\texttt{std::swap}) caso \texttt{Pop[eliteParent].ofv > Pop[nonEliteParent].ofv} para garantir que o viés $\rho_e > 0.5$ favoreça sempre o genitor mais apto. Ordena a população e aplica o gatilho \texttt{NelderMeadSearch} sobre \texttt{Pop[0]}. Recompensa: $R = 1 + 1/p$ em caso de melhoria global.
+
+\paragraph{9. BRKGA with Community Search (\texttt{BRKGA-CS} --- \texttt{src/mh/brkga\_cs.cpp}):}
+Controla 4 parâmetros ($p, p_e, p_m, \rho_e$). Estende o BRKGA construindo um grafo de correlação de Pearson ($\sigma > 0.6$) entre os cromossomos da elite (sempre que há melhoria ou após $>10$ gerações estagnadas) e identificando comunidades via propagação de rótulos (\texttt{LP}): indivíduos não-promissores da elite sofrem mutação caótica \texttt{ChaoticInd} (reamostrando cada chave quando $\mathcal{U}(0,1) > \rho_e$, preservando \texttt{double rhoe} fracionário), enquanto o representante da principal comunidade promissora (\texttt{i < 1}) recebe intensificação via \texttt{RVND}, além do gatilho temporal \texttt{NelderMeadSearch} sobre \texttt{Pop[0]}.
+
+\paragraph{10. Genetic Algorithm (\texttt{GA} --- \texttt{src/mh/ga.cpp}):}
+Controla 3 parâmetros ($\text{sizePop}, p_{\text{cros}}, p_{\text{mut}}$). Utiliza seleção por torneio binário, cruzamento uniforme com probabilidade $p_{\text{cros}}$, mutação uniforme gene a gene com probabilidade $p_{\text{mut}}$ e gatilho \texttt{NelderMeadSearch} sobre \texttt{bestInd}. Sempre que o \texttt{NelderMeadSearch} melhora \texttt{bestInd}, o indivíduo refinado é injetado em uma posição aleatória de \texttt{Pop} (\texttt{Pop[pos1] = bestInd}), propagando seus alelos nas próximas gerações.
+
+\paragraph{11. Particle Swarm Optimization (\texttt{PSO} --- \texttt{src/mh/pso.cpp}):}
+Controla 4 parâmetros ($P_{\text{size}}, c_1, c_2, w$). Mantém posição $\mathbf{X}_i \in [0,1)^n$, velocidade $\mathbf{V}_i$, melhor pessoal $\mathbf{P}_{\text{best},i}$ e melhor global $\mathbf{G}_{\text{best}}$, atualizando $v_{i,j} \leftarrow w v_{i,j} + c_1 r_1 (p_{i,j} - x_{i,j}) + c_2 r_2 (g_j - x_{i,j})$ com confinamento em $[0,1)$ e gatilho \texttt{NelderMeadSearch} sobre $\mathbf{G}_{\text{best}}$. Quando o \texttt{NelderMeadSearch} aprimora $\mathbf{G}_{\text{best}}$, a solução refinada também substitui um slot aleatório de \texttt{Pbest} (\texttt{Pbest[chosen] = Gbest}).
+
+\paragraph{12. Differential Evolution (\texttt{DE} --- \texttt{src/mh/de.cpp})~\cite{storn1997de}:}
+Controla 3 parâmetros ($\text{sizePop}, Cr, F$) com redimensionamento dinâmico (\texttt{UpdatePopulationDE}). Para cada indivíduo $i$, sorteia três índices mutuamente distintos $r_1, r_2, r_3 \ne i$ e $j_{\text{rand}} \in \{0, \dots, n-1\}$. No cruzamento binomial ($u \le Cr \lor j = j_{\text{rand}}$), alterna com probabilidade $0.5$ entre \texttt{DE/rand/1} e \texttt{DE/current-to-best/1}:
+\begin{equation}
+  v_j =
+  \begin{cases}
+    x_{r_1,j} + F\,(x_{r_2,j} - x_{r_3,j}), & \text{com prob. } 0.5, \\[4pt]
+    x_{i,j} + F\,(x_{\text{best},j} - x_{r_1,j}) + F\,(x_{r_2,j} - x_{r_3,j}), & \text{com prob. } 0.5,
+  \end{cases}
+  \qquad
+  \text{trial}_j = \text{clamp}\big(v_j - \lfloor v_j \rfloor,\; 0,\; 0.9999999\big).
+  \label{eq:de_mut}
+\end{equation}
+Com probabilidade $5\%$, refina \texttt{trial} via \texttt{RVND}; aceita \texttt{trial} se $f(\text{trial}) \le f(\mathbf{x}_i)$ ou segundo critério Metropolis com temperatura linear decrescente $1000(1 - t/(T_{\max}\cdot\text{restart}))$, seguido do gatilho \texttt{NelderMeadSearch} sobre \texttt{bestInd}.
+
+\paragraph{13. Ant Colony Optimization Contínuo (\texttt{ACO} / $\text{ACO}_{\mathbb{R}}$ --- \texttt{src/mh/aco.cpp})~\cite{socha2008acor}:}
+Controla 4 parâmetros ($k = \text{archive\_size},\; m = \text{num\_ants},\; q,\; \xi$) com piso $\varepsilon_{\min} = 0.05$ e recompensa binária $R \in \{0,1\}$. Mantém um arquivo ordenado de soluções $T = (\mathbf{s}_1, \dots, \mathbf{s}_k)$ como memória contínua de feromônio. Cada solução de rank $l \in \{1,\dots,k\}$ recebe peso Gaussiano:
+\begin{equation}
+  \omega_l = \frac{1}{q k \sqrt{2\pi}} \exp\!\left(-\frac{(l-1)^2}{2 q^2 k^2}\right),
+  \qquad
+  p_l = \frac{\omega_l}{\sum_{r=1}^{k} \omega_r}.
+\end{equation}
+Cada uma das $m$ formigas sorteia um guia $\mathbf{s}_l$ conforme $p_l$ e amostra cada coordenada $d \in \{0,\dots,n-1\}$ de $\mathcal{N}(\mu_d, \sigma_d^2)$ (com \emph{rejection sampling} em $[0,1)$ via \texttt{SOLVER\_RNG}), onde $\mu_d = s_{l,d}$ e:
+\begin{equation}
+  \sigma_d = \xi \sum_{\substack{e=1 \\ e \ne l}}^{k} \frac{|s_{e,d} - s_{l,d}|}{k - 1}.
+\end{equation}
+As $m$ novas soluções são fundidas a $T$, retendo-se as $k$ melhores, e o gatilho \texttt{NelderMeadSearch} atua sobre $T[0]$.
+
+\subsection{Hibridização de Trajetórias no Pool e Baseline}
+
+\paragraph{14. Implicit Path-Relinking (\texttt{IPR} --- \texttt{src/mh/ipr.cpp})~\cite{glover1989tabu}:}
+Opera diretamente sobre pares distintos $(\mathbf{x}^s, \mathbf{x}^g)$ sorteados do \texttt{SOLVER\_POOL} (aguardando cooperativamente caso $|\text{Pool}| < 2$). Dado $\alpha \in \{0.05, 0.10, 0.20\}$, particiona $[0, n)$ em $m = \lceil n/b \rceil = (n + b - 1)/b$ \textbf{blocos contíguos} de tamanho $b = \max(1, \lfloor \alpha n \rfloor)$, onde o bloco $\ell$ cobre $[\ell b,\, \min((\ell+1)b, n))$, identificando o conjunto $\Delta(\mathbf{x}^s, \mathbf{x}^g)$ dos $d$ blocos distintos. O Q-Learning controla online 18 estados ($3\text{ valores de }\alpha \times 6\text{ estratégias}$) com recompensa binária $R = \mathbb{I}[f(\mathbf{x}^*_{\text{path}}) < \min(f(\mathbf{x}^s), f(\mathbf{x}^g))]$:
+\begin{enumerate}[leftmargin=*, nosep]
+  \item \texttt{0 (PR\_ONE\_WAY)}: Caminho interno guloso $\mathbf{x}^s \to \mathbf{x}^g$ em $d-1$ passos.
+  \item \texttt{1 (PR\_BACK\_FORTH)}: Avalia os dois caminhos internos $\mathbf{x}^s \to \mathbf{x}^g$ e $\mathbf{x}^g \to \mathbf{x}^s$, retendo o melhor visitado.
+  \item \texttt{2 (PR\_MIXED)}: Alterna passos gulosos a partir das duas extremidades ($\mathbf{s}_A \to \mathbf{s}_B$ e $\mathbf{s}_B \to \mathbf{s}_A$) até se encontrarem no meio ($|\Delta| = 1$).
+  \item \texttt{3 (PR\_GRAPR)}: Caminho interno \emph{One-way} com escolha gulosa randomizada via RCL de tamanho $\lceil 0.3\,|\Delta| \rceil$.
+  \item \texttt{4 (PR\_TRUNCATED)}: Caminho interno guloso interrompido após $\max(1, \lceil 0.5\, d \rceil)$ movimentos.
+  \item \texttt{5 (PR\_EXTERNAL)}: Caminho \textbf{externo} guloso afastando-se do guia ($x_k \leftarrow \text{clamp}(1.0 - x^g_k,\, 0,\, 0.999999)$) ao longo de todos os $d$ blocos distintos.
+\end{enumerate}
+
+\paragraph{15. MultiStart (\texttt{MultiStart} --- \texttt{src/mh/multistart.cpp}):}
+Amostrador contínuo puro sem parâmetros que gera e decodifica soluções independentes em $[0,1)^n$, alimentando o pool como linha de base e fonte permanente de diversidade global.
+
+\begin{exemplobox}{Blocos Contíguos no IPR ($n=18, \alpha=0.20$) e Reparo \emph{Wrap-Around} no DE}
+\textbf{Parte A (\texttt{IPR}):} Em uma instância com $n=18$ chaves e $\alpha = 0.20$:
+\[
+  b = \max(1, \lfloor 0.20 \times 18 \rfloor) = 3, \qquad m = \frac{18 + 3 - 1}{3} = 6 \text{ blocos contíguos}: \; [0..2], [3..5], [6..8], [9..11], [12..14], [15..17].
+\]
+(Se $n=20$ e $b=3$, teríamos $m = \lceil 20/3 \rceil = 7$, com o último bloco cobrindo $[18..19]$ sem perder nenhuma chave!). Suponha que $\mathbf{x}^s$ e $\mathbf{x}^g$ difiram em $d=4$ blocos $\Delta = \{0, 2, 3, 5\}$:
+\begin{itemize}[leftmargin=*, nosep]
+  \item Em \texttt{PR\_ONE\_WAY}, testam-se os 4 blocos em $\mathbf{x}^s$ (4 decodificações), fixa-se o melhor (digamos bloco 2), depois 3 blocos (3 decodificações) e 2 blocos ($d-1=3$ passos internos, 9 decodificações no total).
+  \item Em \texttt{PR\_TRUNCATED}, executa-se apenas $\max(1, \lceil 0.5 \times 4 \rceil) = 2$ passos (7 decodificações).
+  \item Em \texttt{PR\_EXTERNAL}, substitui-se cada bloco escolhido por $1 - \mathbf{x}^g_{\text{bloco}}$ durante todos os $d=4$ passos, extrapolando para fora do segmento entre $\mathbf{x}^s$ e $\mathbf{x}^g$.
+\end{itemize}
+\smallskip
+\textbf{Parte B (\texttt{DE}):} Suponha na coordenada $j$ que $x_{r_1,j}=0.85$, $x_{r_2,j}=0.70$, $x_{r_3,j}=0.20$ e $F=0.60$. Pela mutação \texttt{DE/rand/1}:
+\[
+  v_j = 0.85 + 0.60(0.70 - 0.20) = 1.15 \notin [0,1).
+\]
+Em vez de truncar artificialmente para $0.9999999$ (o que acumularia massa de probabilidade nas bordas $0$ e $1$), o reparo toroidal (\emph{wrap-around}) da Eq.~\eqref{eq:de_mut} calcula $v_j - \lfloor v_j \rfloor = 1.15 - 1 = \mathbf{0.15} \in [0,1)$ (e se $v_j = -0.22$, então $-0.22 - (-1) = \mathbf{0.78}$), preservando uniformidade no hipercubo!
+\end{exemplobox}
+
+\subsection{Tabela Consolidada de Hiperparâmetros Offline e Online}
+
+A Tabela~\ref{tab:parametros} resume todos os espaços de estados configurados em \texttt{config/yaml/param-offline.yaml} e \texttt{config/yaml/param-online.yaml}.
+
+\begin{small}
+\begin{longtable}{@{}llp{4.3cm}p{5.5cm}r@{}}
+\caption{Hiperparâmetros padrão de cada meta-heurística nos modos Offline e Online (Q-Learning).}
+\label{tab:parametros}\\
+\toprule
+\textbf{MH} & \textbf{Parâmetros} & \textbf{Offline (\texttt{control=0})} & \textbf{Online (\texttt{control=1})} & $|\mathcal{S}|$ \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{MH} & \textbf{Parâmetros} & \textbf{Offline (\texttt{control=0})} & \textbf{Online (\texttt{control=1})} & $|\mathcal{S}|$ \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{BRKGA} & $p, p_e, p_m, \rho_e$ & $987,\; 0.20,\; 0.15,\; 0.65$ & $\{300,400,500\}\times\{0.10,0.15,0.20\}^2\times\{0.60,0.65,0.70\}$ & $81$ \\
+\texttt{BRKGA-CS} & $p, p_e, p_m, \rho_e$ & $610,\; 0.20,\; 0.001,\; 0.65$ & $\{377,610,987\}\times\{0.15,0.20,0.25\}\times\{0.01,0.02,0.03\}\times\{0.60,0.65,0.70\}$ & $81$ \\
+\texttt{SA} & $SA_{\max}, \alpha, \beta_{\min}, \beta_{\max}, T_0$ & $1000, 0.99, 0.01, 0.05, 10^6$ & $\{300,500,1000\}\times\{0.95,0.98,0.99\}\times\{0.03,0.04,0.05\}\times\{0.08,0.09,0.10\}\times\{10^6\}$ & $81$ \\
+\texttt{GRASP} & $\alpha_G, h_s, h_e$ & $0.10,\; 0.125,\; 0.00098$ & $\{0.10,0.15,0.20\}\times\{0.0625,0.125\}\times\{0.00049,0.00098\}$ & $12$ \\
+\texttt{ILS} & $\beta_{\min}, \beta_{\max}$ & $0.10,\; 0.20$ & $\{0.05,0.10,0.15\}\times\{0.15,0.20,0.25\}$ & $9$ \\
+\texttt{EILS} & $\beta_{\min}, \beta_{\max}, N_{\max}$ & $0.10,\; 0.20,\; 3$ & $\{0.05,0.07,0.10\}\times\{0.15,0.20,0.25\}\times\{3,5,10\}$ & $27$ \\
+\texttt{VNS} & $k_{\max}, \beta_{\min}$ & $5,\; 0.05$ & $\{5,8,10\}\times\{0.02,0.04,0.05\}$ & $9$ \\
+\texttt{PSO} & $P_{\text{size}}, c_1, c_2, w$ & $200,\; 2.05,\; 2.05,\; 0.73$ & $\{100,200,300\}\times\{1.5,2.0,2.5\}^2\times\{0.5,0.7,0.9\}$ & $81$ \\
+\texttt{GA} & $\text{Pop}, p_c, p_m$ & $400,\; 0.98,\; 0.005$ & $\{200,400,600\}\times\{0.90,0.95,0.98\}\times\{0.02,0.03,0.05\}$ & $27$ \\
+\texttt{LNS} & $\beta_{\min}, \beta_{\max}, T_0, \alpha$ & $0.10,\; 0.30,\; 10^4,\; 0.95$ & $\{0.05,0.10,0.15\}\times\{0.15,0.20,0.25,0.30\}\times\{100,10^4\}\times\{0.95,0.96\}$ & $48$ \\
+\texttt{DE} & $\text{Pop}, Cr, F$ & $200,\; 0.50,\; 0.50$ & $\{100,200,300\}\times\{0.40,0.50,0.60\}\times\{0.50,0.55,0.60\}$ & $27$ \\
+\texttt{TS} & $\text{maxNoImp}, \text{ten}, \text{ng}, \beta_{\min}, \beta_{\max}$ & $10, 1000, 0.50, 0.05, 0.25$ & $\{500,1000\}\times\{200,300\}\times\{0.70,0.80,0.90\}\times\{0.05\}\times\{0.25\}$ & $12$ \\
+\texttt{ACO} & $k, m, q, \xi$ & $50,\; 2,\; 0.01,\; 0.85$ & $\{50,75\}\times\{2,3\}\times\{0.01,0.1,0.3\}\times\{0.80,0.85\}$ & $24$ \\
+\texttt{IPR} & $\alpha_{\text{block}}, \text{typePR}$ & $0.10,\; 0\text{ (\texttt{ONE\_WAY})}$ & $\{0.05,0.10,0.20\}\times\{0,1,2,3,4,5\}$ (embutido) & $18$ \\
+\texttt{MultiStart} & --- & Sem parâmetros & Sem parâmetros & --- \\
+\end{longtable}
+\end{small}
+
+% =============================================================================
+\section{Tutorial Completo: Criação de Plugin (\texttt{IProblem}), Configuração e Saídas}
+\label{sec:tutorial}
+% =============================================================================
+
+\subsection{Implementando um Problema Multiobjetivo em C++20}
+
+Para resolver um novo problema combinatório sem tocar no código-fonte do motor, basta criar \texttt{problems/bi\_knapsack.cpp} herdando de \texttt{rkolib::core::IProblem} e exportando a fábrica com \texttt{REGISTER\_RKO\_PROBLEM}:
+
+\begin{lstlisting}[language=C++, caption={Exemplo completo de plugin C++20 para o Problema da Mochila Bi-Objetivo (Lucro e Risco).}]
+#include "rkolib/core/problem.hpp"
+#include <algorithm>
+#include <fstream>
+#include <numeric>
+#include <vector>
+
+class BiObjectiveKnapsack : public rkolib::core::IProblem {
+private:
+    int n_ = 0;
+    double capacity_ = 0.0;
+    std::vector<double> weight_, profit_, risk_;
+
+public:
+    void load(const std::string &filename) override {
+        std::ifstream in(filename);
+        in >> n_ >> capacity_;
+        weight_.resize(n_); profit_.resize(n_); risk_.resize(n_);
+        for (int i = 0; i < n_; ++i) {
+            in >> weight_[i] >> profit_[i] >> risk_[i];
+        }
+    }
+
+    void decode(rkolib::core::TSol &sol) const override {
+        // Ordena os itens em ordem decrescente das chaves aleatorias sol.rk
+        std::vector<int> order(n_);
+        std::iota(order.begin(), order.end(), 0);
+        std::sort(order.begin(), order.end(),
+                  [&sol](int a, int b) { return sol.rk[a] > sol.rk[b]; });
+
+        double usedW = 0.0, totalProfit = 0.0, totalRisk = 0.0;
+        for (int idx : order) {
+            // Chave >= 0.5 indica intencao de inserir caso haja capacidade
+            if (sol.rk[idx] >= 0.5 && usedW + weight_[idx] <= capacity_) {
+                usedW += weight_[idx];
+                totalProfit += profit_[idx];
+                totalRisk += risk_[idx];
+            }
+        }
+
+        // Convencao canonica de MINIMIZACAO:
+        // Obj 0: Maximizar Lucro -> minimizar -totalProfit
+        // Obj 1: Minimizar Risco -> +totalRisk
+        sol.objs = {-totalProfit, totalRisk};
+    }
+
+    int getDimension() const override { return n_; }
+    int getNumObjectives() const override { return 2; }
+};
+
+REGISTER_RKO_PROBLEM(BiObjectiveKnapsack)
+\end{lstlisting}
+
+\subsection{Compilação, Configuração YAML e Execução CLI}
+
+A partir do diretório raiz do repositório:
+\begin{lstlisting}[language=bash, caption={Compilação do motor, compilação ágil do plugin e execução via CLI.}]
+# 1. Compila o motor central (build/bin/rkosolver) - necessario apenas uma vez
+make build
+
+# 2. Compila isoladamente o plugin dinamico -> build/plugins/bi_knapsack.so
+make plugin PROB=bi_knapsack
+
+# 3. Executa por 30 segundos usando a configuracao YAML
+./build/bin/rkosolver \
+  --instance instances/knapsack/inst_100.txt \
+  --config config/yaml/config.yaml \
+  --plugin build/plugins/bi_knapsack.so \
+  --time 30
+\end{lstlisting}
+
+\subsection{Anatomia dos Arquivos Gerados em \texttt{results/}}
+
+Ao término das \texttt{max\_runs} rodadas, o \texttt{rko-solver} grava automaticamente na pasta \texttt{results/} (relativa à raiz do projeto):
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{\texttt{results/Results\_RKO.csv}} e \textbf{\texttt{results/Results\_MO\_RKO.csv}}: Resumo estatístico tabular mono-objetivo ou multiobjetivo contendo instância, lista de meta-heurísticas ativas, melhor \texttt{ofv}, objetivos brutos, média de \texttt{ofv} entre as runs, tempo médio de execução e tempo exato de descoberta (\texttt{best\_time}).
+  \item \textbf{\texttt{results/Solutions\_RKO.txt}}: Registro detalhado da melhor solução global encontrada, incluindo a meta-heurística autora, o vetor bruto \texttt{objs} e todas as chaves aleatórias \texttt{rk}.
+  \item \textbf{\texttt{results/Pool\_Solutions\_RKO.txt}}: Exportação integral do \texttt{SOLVER\_POOL} de elite ordenada por rank (\texttt{[\#01] .. [\#20]}), exibindo para cada solução \texttt{OFV}, \texttt{MH} de origem, \texttt{Best time} relativo, \texttt{Objs} e \texttt{RK} (ideal para reconstrução de fronteiras de Pareto empíricas e cálculo de hipervolume).
+  \item \textbf{\texttt{results/Convergence\_Log.csv}}: Histórico temporal de melhorias globais do incumbente ao longo das rodadas.
+  \item \textbf{\texttt{results/QTable\_<method>.txt}}: Tabela $Q(s,a)$ persistida por cada meta-heurística online (\texttt{numStates}, \texttt{numPar}, \texttt{lastState}, vetores de estado \texttt{S} e pares \texttt{alvo:valorQ} em \texttt{A}), pronta para \emph{warm-start} automático em novas execuções.
+\end{enumerate}
+
+% =============================================================================
+\begin{thebibliography}{99}
+
+\bibitem{chaves2025rko}
+A.~A. Chaves, M.~G.~C. Resende, M.~J.~A. Schuetz, J.~K. Brubaker, H.~G. Katzgraber, E.~F. Arruda, and R.~M.~A. Silva.
+\newblock A Random-Key Optimizer for Combinatorial Optimization.
+\newblock \emph{Journal of Heuristics}, 31(4):32, 2025.
+\newblock DOI: \href{https://doi.org/10.1007/s10732-025-09568-z}{10.1007/s10732-025-09568-z}.
+
+\bibitem{bean1994rkga}
+J.~C. Bean.
+\newblock Genetic algorithms and random keys for sequencing and optimization.
+\newblock \emph{ORSA Journal on Computing}, 6(2):154--160, 1994.
+
+\bibitem{goncalves2011brkga}
+J.~F. Gon{\c{c}}alves and M.~G.~C. Resende.
+\newblock Biased random-key genetic algorithms for combinatorial optimization.
+\newblock \emph{Journal of Heuristics}, 17(5):487--525, 2011.
+
+\bibitem{deb2002nsgaii}
+K.~Deb, A.~Pratap, S.~Agarwal, and T.~Meyarivan.
+\newblock A fast and elitist multiobjective genetic algorithm: NSGA-II.
+\newblock \emph{IEEE Transactions on Evolutionary Computation}, 6(2):182--197, 2002.
+
+\bibitem{storn1997de}
+R.~Storn and K.~Price.
+\newblock Differential evolution -- a simple and efficient heuristic for global optimization over continuous spaces.
+\newblock \emph{Journal of Global Optimization}, 11(4):341--359, 1997.
+
+\bibitem{socha2008acor}
+K.~Socha and M.~Dorigo.
+\newblock Ant colony optimization for continuous domains.
+\newblock \emph{European Journal of Operational Research}, 185(3):1155--1173, 2008.
+
+\bibitem{glover1989tabu}
+F.~Glover.
+\newblock Tabu search --- Part I.
+\newblock \emph{ORSA Journal on Computing}, 1(3):190--206, 1989.
+
+\bibitem{watkins1992qlearning}
+C.~J.~C.~H. Watkins and P.~Dayan.
+\newblock Q-learning.
+\newblock \emph{Machine Learning}, 8(3--4):279--292, 1992.
+
+\end{thebibliography}
+
+\end{document}

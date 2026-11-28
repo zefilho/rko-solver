@@ -1,0 +1,1020 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Random-Key Optimizer Framework with Modern C++20 Dynamic Plugin Architecture">
+      
+      
+      
+        <link rel="canonical" href="https://docs.rkosolver.github.io/algorithms/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../metaheuristics/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Algorithms & Control - RKOSolver</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#algorithms-control-mechanisms" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="RKOSolver" class="md-header__button md-logo" aria-label="RKOSolver" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RKOSolver
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Algorithms & Control
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/zefilho/rko-solver" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zefilho/rko-solver
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RKOSolver" class="md-nav__button md-logo" aria-label="RKOSolver" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RKOSolver
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/zefilho/rko-solver" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zefilho/rko-solver
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms & Control
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms & Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-online-q-learning-parameter-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Online Q-Learning Parameter Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Online Q-Learning Parameter Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-mda-adjacent-action-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 M/D/A Adjacent Action Topology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-capped-relative-improvement-computedelta-and-exploration-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Capped Relative Improvement (ComputeDelta) and Exploration Floor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-bellman-update-conditional-updatemaxq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Bellman Update &amp; Conditional UpdateMaxQ
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-q-table-persistence-saveqtable-loadqtable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Q-Table Persistence (SaveQTable / LoadQTable)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-local-search-rvnd-deterministic-nelder-mead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Local Search: RVND &amp; Deterministic Nelder-Mead
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Local Search: RVND &amp; Deterministic Nelder-Mead">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-decoupled-rvnd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Decoupled RVND
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-time-gated-neldermeadsearch-trigger-feedback-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Time-Gated NelderMeadSearch Trigger &amp; Feedback Injection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-implicit-path-relinking-ipr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Implicit Path-Relinking (IPR)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Implicit Path-Relinking (IPR)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-contiguous-block-partitioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Contiguous Block Partitioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-six-path-relinking-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Six Path-Relinking Strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-online-q-learning-in-ipr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Online Q-Learning in IPR
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-multi-objective-scalarization-reference-point-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Multi-Objective Scalarization &amp; Reference Point Sync
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Multi-Objective Scalarization &amp; Reference Point Sync">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#anti-drift-reference-point-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Anti-Drift Reference Point Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-elite-pool-diversity-policies-poolupdatemethod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Elite Pool Diversity Policies (poolUpdateMethod)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../metaheuristics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metaheuristics Catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-online-q-learning-parameter-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Online Q-Learning Parameter Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Online Q-Learning Parameter Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-mda-adjacent-action-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 M/D/A Adjacent Action Topology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-capped-relative-improvement-computedelta-and-exploration-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Capped Relative Improvement (ComputeDelta) and Exploration Floor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-bellman-update-conditional-updatemaxq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Bellman Update &amp; Conditional UpdateMaxQ
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-q-table-persistence-saveqtable-loadqtable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Q-Table Persistence (SaveQTable / LoadQTable)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-local-search-rvnd-deterministic-nelder-mead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Local Search: RVND &amp; Deterministic Nelder-Mead
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Local Search: RVND &amp; Deterministic Nelder-Mead">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-decoupled-rvnd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Decoupled RVND
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-time-gated-neldermeadsearch-trigger-feedback-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Time-Gated NelderMeadSearch Trigger &amp; Feedback Injection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-implicit-path-relinking-ipr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Implicit Path-Relinking (IPR)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Implicit Path-Relinking (IPR)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-contiguous-block-partitioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Contiguous Block Partitioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-six-path-relinking-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Six Path-Relinking Strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-online-q-learning-in-ipr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Online Q-Learning in IPR
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-multi-objective-scalarization-reference-point-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Multi-Objective Scalarization &amp; Reference Point Sync
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Multi-Objective Scalarization &amp; Reference Point Sync">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#anti-drift-reference-point-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Anti-Drift Reference Point Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-elite-pool-diversity-policies-poolupdatemethod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Elite Pool Diversity Policies (poolUpdateMethod)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="algorithms-control-mechanisms">Algorithms &amp; Control Mechanisms<a class="headerlink" href="#algorithms-control-mechanisms" title="Permanent link">&para;</a></h1>
+<p>This page documents the transversal mathematical and algorithmic mechanisms shared across <strong>RKOSolver</strong>: <strong>Online Q-Learning</strong>, <strong>Local Search (<code>RVND</code> &amp; Time-Gated <code>NelderMeadSearch</code>)</strong>, <strong>Implicit Path-Relinking (<code>IPR</code>)</strong>, <strong>Multi-Objective Scalarization</strong>, and <strong>Elite Pool Diversity Management</strong>.</p>
+<p>For individual algorithm mechanics and parameter grids of all 15 registered metaheuristics, see the <a href="../metaheuristics/">Metaheuristics Catalog</a>.</p>
+<hr />
+<h2 id="1-online-q-learning-parameter-control">1. Online Q-Learning Parameter Control<a class="headerlink" href="#1-online-q-learning-parameter-control" title="Permanent link">&para;</a></h2>
+<p>When <code>control_mode: 1</code> is enabled in <code>config/yaml/config.yaml</code>, each metaheuristic adapts its hyperparameters online by navigating a discrete Markov Decision Process (MDP) over parameter configurations.</p>
+<h3 id="11-mda-adjacent-action-topology">1.1 M/D/A Adjacent Action Topology<a class="headerlink" href="#11-mda-adjacent-action-topology" title="Permanent link">&para;</a></h3>
+<p>Each parameter <span class="arithmatex">\(j \in \{0, \dots, m - 1\}\)</span> has an ordered list of candidate values <span class="arithmatex">\(P_j = \{v_{j,0} &lt; \dots &lt; v_{j,n_j - 1}\}\)</span>, forming the Cartesian state space <span class="arithmatex">\(\mathcal{S} = P_0 \times \dots \times P_{m-1}\)</span> of size <span class="arithmatex">\(|\mathcal{S}| = \prod_{j=0}^{m-1} n_j\)</span>. Rather than connecting every state to all Hamming-distance-1 neighbors in <span class="arithmatex">\(O(|\mathcal{S}|^2)\)</span>, <code>CreateStates</code> builds an adjacent transition graph via <code>stride</code> in <span class="arithmatex">\(O(|\mathcal{S}| \cdot m)\)</span>:</p>
+<div class="arithmatex">\[\text{stride}[j] = \frac{|\mathcal{S}|}{\prod_{r=0}^{j} n_r}, \qquad c_j(i) = \left\lfloor \frac{i}{\text{stride}[j]} \right\rfloor \bmod n_j\]</div>
+<ul>
+<li><strong>Maintain (<code>M</code>)</strong>: Stay in the current state <span class="arithmatex">\(i \to i\)</span>.</li>
+<li><strong>Decrease (<code>D</code>)</strong>: Step one parameter <span class="arithmatex">\(j\)</span> down to <span class="arithmatex">\(v_{j, c_j(i) - 1}\)</span> (<code>i - stride[j]</code>) when <span class="arithmatex">\(c_j(i) &gt; 0\)</span>.</li>
+<li><strong>Increase (<code>A</code>)</strong>: Step one parameter <span class="arithmatex">\(j\)</span> up to <span class="arithmatex">\(v_{j, c_j(i) + 1}\)</span> (<code>i + stride[j]</code>) when <span class="arithmatex">\(c_j(i) &lt; n_j - 1\)</span>.</li>
+</ul>
+<p>Every state therefore has between <span class="arithmatex">\(1 + m\)</span> (grid corners) and <span class="arithmatex">\(1 + 2m\)</span> (interior states) feasible actions (initialized with optimistic priors <span class="arithmatex">\(Q_0(s, a) \sim \mathcal{U}(0.005, 0.01)\)</span>), ensuring smooth, physically meaningful parameter transitions.</p>
+<h3 id="12-capped-relative-improvement-computedelta-and-exploration-floor">1.2 Capped Relative Improvement (<code>ComputeDelta</code>) and Exploration Floor<a class="headerlink" href="#12-capped-relative-improvement-computedelta-and-exploration-floor" title="Permanent link">&para;</a></h3>
+<p>To prevent a single large jump (e.g., leaving a penalized infeasible region or crossing zero) from collapsing exploration <span class="arithmatex">\(\varepsilon \to 0\)</span>, relative improvement is computed by <code>ComputeDelta</code>:</p>
+<div class="arithmatex">\[\delta = \min\!\left(\frac{f^*_{\text{old}} - f^*_{\text{new}}}{|f^*_{\text{old}}|}, \; \delta_{\max}\right), \quad \delta_{\max} = 0.1\]</div>
+<ul>
+<li>Returns <code>0.0</code> if <span class="arithmatex">\(f^*_{\text{new}} \ge f^*_{\text{old}}\)</span>.</li>
+<li>Returns <span class="arithmatex">\(\delta_{\max} = 0.1\)</span> if <span class="arithmatex">\(f^*_{\text{new}} &lt; f^*_{\text{old}}\)</span> and <span class="arithmatex">\(|f^*_{\text{old}}| &lt; 10^{-12}\)</span>.</li>
+</ul>
+<p>Before choosing the next action, <code>SetQLParameter</code> updates <span class="arithmatex">\(\varepsilon\)</span>, learning rate <span class="arithmatex">\(\alpha_t\)</span> (<code>lf</code>), and discount factor <span class="arithmatex">\(\gamma\)</span> (<code>df</code>):</p>
+<div class="arithmatex">\[\varepsilon \leftarrow \max\!\big(\varepsilon_{\min}, \; \varepsilon \cdot (1 - \text{clamp}(\delta, 0, 1))\big)\]</div>
+<div class="arithmatex">\[\text{lf} = \max\!\left(0.01, \; 1.0 - 0.9 \cdot \frac{t}{\text{MAXTIME}}\right), \qquad \text{df} = 0.8\]</div>
+<p>where <span class="arithmatex">\(\varepsilon_{\min} = 0.10\)</span> by default (<code>0.05</code> in <code>ACO</code>). Depending on the metaheuristic's temporal granularity, Q-Learning actions and rewards operate either <strong>per iteration/generation</strong> (e.g., <code>SA</code>, <code>ILS</code>, <code>LNS</code>, <code>TS</code>, <code>BRKGA</code>, <code>BRKGA-CS</code>, <code>GA</code>, <code>PSO</code>, <code>DE</code>, <code>ACO</code>, <code>IPR</code>) or <strong>per complete multi-step cycle</strong> (<code>VNS</code> over <span class="arithmatex">\(k=1..k_{\max}\)</span>, <code>GRASP</code> over grid scales <span class="arithmatex">\(h_s \to h_e\)</span>, and <code>EILS</code> over its 5 perturbation levels).</p>
+<h3 id="13-bellman-update-conditional-updatemaxq">1.3 Bellman Update &amp; Conditional <code>UpdateMaxQ</code><a class="headerlink" href="#13-bellman-update-conditional-updatemaxq" title="Permanent link">&para;</a></h3>
+<p>After observing reward <span class="arithmatex">\(R\)</span>, <code>UpdateQValue</code> transitions <span class="arithmatex">\(s_t \to s_{t+1} = \text{Ai}[s_t][a_t]\)</span> and applies the Bellman update:</p>
+<div class="arithmatex">\[Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \text{lf} \cdot \big(R + \text{df} \cdot \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t)\big)\]</div>
+<ul>
+<li>If the updated <span class="arithmatex">\(Q(s_t, a_t) &gt; \text{maxQ}(s_t)\)</span>, both <code>maxQ</code> and <code>maxA</code> are updated in <span class="arithmatex">\(O(1)\)</span>.</li>
+<li>Only when the previously greedy action (<code>at == S[st].maxA</code>) decreases in value does <code>UpdateMaxQ</code> rescan <code>S[st].Qa</code> in <span class="arithmatex">\(O(|\text{Ai}|)\)</span>.</li>
+</ul>
+<h3 id="14-q-table-persistence-saveqtable-loadqtable">1.4 Q-Table Persistence (<code>SaveQTable</code> / <code>LoadQTable</code>)<a class="headerlink" href="#14-q-table-persistence-saveqtable-loadqtable" title="Permanent link">&para;</a></h3>
+<ul>
+<li>At startup (right after <code>CreateStates</code>), each online metaheuristic calls <code>LoadQTable(S, method)</code> to check <code>results/QTable_&lt;method&gt;.txt</code>.</li>
+<li>The file is loaded <strong>only if</strong> the saved topology (<code>numStates</code>, <code>numPar</code>, parameter values per state, and action targets <code>Ai</code>) matches the current state space within <span class="arithmatex">\(10^{-6}\)</span>.</li>
+<li>On exit (including time-limit termination via <code>SOLVER_SHOULD_STOP</code>), <code>SaveQTable(S, st, method)</code> persists the learned Q-Table under <code>#pragma omp critical(qtable_io_lock)</code>.</li>
+</ul>
+<hr />
+<h2 id="2-local-search-rvnd-deterministic-nelder-mead">2. Local Search: <code>RVND</code> &amp; Deterministic Nelder-Mead<a class="headerlink" href="#2-local-search-rvnd-deterministic-nelder-mead" title="Permanent link">&para;</a></h2>
+<h3 id="21-decoupled-rvnd">2.1 Decoupled <code>RVND</code><a class="headerlink" href="#21-decoupled-rvnd" title="Permanent link">&para;</a></h3>
+<p><code>RVND</code> (<code>src/core/method.cpp</code>) explores three fast random-key neighborhoods over a shuffled permutation <code>RKorder</code>, resetting the active neighborhood list whenever an improvement is found and honoring <code>local_search_strategy</code> (<code>1</code> = First Improvement, <code>2</code> = Best Improvement):</p>
+<ol>
+<li><strong><code>SwapLS</code></strong>: Pairwise swap of random-key positions (<span class="arithmatex">\(O(n^2)\)</span>).</li>
+<li><strong><code>InvertLS</code></strong>: Complementary mirror inversion <span class="arithmatex">\(r_k \leftarrow 1.0 - r_k\)</span> (<span class="arithmatex">\(O(n)\)</span>).</li>
+<li><strong><code>FareyLS</code></strong>: Sampling across the 18 subintervals of the order-7 Farey sequence <span class="arithmatex">\(\mathcal{F}_7\)</span> (<span class="arithmatex">\(18n\)</span> evaluations).</li>
+</ol>
+<p><code>NelderMeadSearch</code> is decoupled from <code>RVND</code> so it never inflates the cost of inner local-search calls.</p>
+<h3 id="22-time-gated-neldermeadsearch-trigger-feedback-injection">2.2 Time-Gated <code>NelderMeadSearch</code> Trigger &amp; Feedback Injection<a class="headerlink" href="#22-time-gated-neldermeadsearch-trigger-feedback-injection" title="Permanent link">&para;</a></h3>
+<p>Across all <strong>13 search metaheuristics</strong> (<code>SA</code>, <code>ILS</code>, <code>EILS</code>, <code>VNS</code>, <code>GRASP</code>, <code>LNS</code>, <code>TS</code>, <code>BRKGA</code>, <code>BRKGA-CS</code>, <code>GA</code>, <code>PSO</code>, <code>DE</code>, <code>ACO</code>), <code>NelderMeadSearch</code> builds a 3-vertex simplex using two elite solutions sampled under <code>pool_lock</code> from <code>SOLVER_POOL</code> and executes deterministically based on elapsed time (<span class="arithmatex">\(\Delta t_{\text{NM}}\)</span>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kt">double</span><span class="w"> </span><span class="n">deltaT_NM</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">currentTime</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lastNM_time</span><span class="p">;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="n">improv</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">deltaT_NM</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">tauMinNM_sec</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">deltaT_NM</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">tauMaxNM_sec</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="n">NelderMeadSearch</span><span class="p">(</span><span class="n">targetSol</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">);</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="n">currentTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="p">(</span><span class="n">get_time_in_seconds</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start_timeMH</span><span class="p">);</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="n">lastNM_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">currentTime</span><span class="p">;</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><strong>Per-Iteration <code>improv = 0</code> Reset</strong>: Every metaheuristic resets <code>improv = 0</code> at the top of each iteration/generation, ensuring that even in offline mode (<code>control_mode: 0</code>), <code>improv == 1</code> strictly reflects a fresh improvement rather than firing continuously every <code>tau_min_nm</code>.</li>
+<li><strong>Population &amp; Trajectory Feedback</strong>:</li>
+<li>Trajectory MHs (<code>SA</code>, <code>ILS</code>, <code>VNS</code>, <code>GRASP</code>, <code>LNS</code>, <code>TS</code>) apply <code>NelderMeadSearch</code> directly to the active working trajectory (<code>s</code> or <code>sCurrent</code>) before evaluating the Q-Learning reward.</li>
+<li>Population/Swarm MHs (<code>GA</code>, <code>PSO</code>, <code>BRKGA</code>, <code>BRKGA-CS</code>, <code>DE</code>, <code>ACO</code>) refine the elite incumbent and feed improvements back into the active population (<code>Pop[pos1] = bestInd</code> in <code>GA</code>, <code>Pbest[chosen] = Gbest</code> in <code>PSO</code>, <code>Pop[0]</code> in <code>BRKGA</code>/<code>BRKGA-CS</code>, <code>archive[0]</code> in <code>ACO</code>).</li>
+</ul>
+<hr />
+<h2 id="3-implicit-path-relinking-ipr">3. Implicit Path-Relinking (<code>IPR</code>)<a class="headerlink" href="#3-implicit-path-relinking-ipr" title="Permanent link">&para;</a></h2>
+<p><code>IPR</code> (<code>src/mh/ipr.cpp</code>) runs concurrently on its own OpenMP thread, pairing distinct elite solutions <span class="arithmatex">\((x^s, x^g)\)</span> sampled from <code>SOLVER_POOL</code> under <code>#pragma omp critical(pool_lock)</code>. If the pool has fewer than 2 solutions at startup, the thread waits cooperatively instead of terminating.</p>
+<h3 id="31-contiguous-block-partitioning">3.1 Contiguous Block Partitioning<a class="headerlink" href="#31-contiguous-block-partitioning" title="Permanent link">&para;</a></h3>
+<p>Given dimension <span class="arithmatex">\(n\)</span> and block fraction <span class="arithmatex">\(\alpha \in \{0.05, 0.10, 0.20\}\)</span>:</p>
+<div class="arithmatex">\[b = \max(1, \lfloor \alpha n \rfloor), \qquad m = \left\lceil \frac{n}{b} \right\rceil = \frac{n + b - 1}{b}\]</div>
+<p>Each block <span class="arithmatex">\(\ell \in \{0, \dots, m - 1\}\)</span> covers the contiguous slice <span class="arithmatex">\([\ell b, \min((\ell + 1)b, n))\)</span>, ensuring 100% key coverage even when <span class="arithmatex">\(n\)</span> is not divisible by <span class="arithmatex">\(b\)</span>.</p>
+<h3 id="32-six-path-relinking-strategies">3.2 Six Path-Relinking Strategies<a class="headerlink" href="#32-six-path-relinking-strategies" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">ID</th>
+<th style="text-align: left;">Enum</th>
+<th style="text-align: left;">Strategy</th>
+<th style="text-align: left;">Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><code>0</code></td>
+<td style="text-align: left;"><code>PR_ONE_WAY</code></td>
+<td style="text-align: left;">One-way</td>
+<td style="text-align: left;">Greedy internal path <span class="arithmatex">\(x^s \to x^g\)</span> (<span class="arithmatex">\(d - 1\)</span> steps).</td>
+</tr>
+<tr>
+<td style="text-align: center;"><code>1</code></td>
+<td style="text-align: left;"><code>PR_BACK_FORTH</code></td>
+<td style="text-align: left;">Back-and-Forth</td>
+<td style="text-align: left;">Evaluates both <span class="arithmatex">\(x^s \to x^g\)</span> and <span class="arithmatex">\(x^g \to x^s\)</span>, keeping the best visited solution.</td>
+</tr>
+<tr>
+<td style="text-align: center;"><code>2</code></td>
+<td style="text-align: left;"><code>PR_MIXED</code></td>
+<td style="text-align: left;">Mixed</td>
+<td style="text-align: left;">Alternates greedy moves from both ends (<span class="arithmatex">\(s_A \to s_B\)</span>, <span class="arithmatex">\(s_B \to s_A\)</span>) until meeting in the middle.</td>
+</tr>
+<tr>
+<td style="text-align: center;"><code>3</code></td>
+<td style="text-align: left;"><code>PR_GRAPR</code></td>
+<td style="text-align: left;">GRAPR</td>
+<td style="text-align: left;">Randomized greedy One-way selecting from an RCL of the top $\lceil 0.3</td>
+</tr>
+<tr>
+<td style="text-align: center;"><code>4</code></td>
+<td style="text-align: left;"><code>PR_TRUNCATED</code></td>
+<td style="text-align: left;">Truncated</td>
+<td style="text-align: left;">Greedy One-way stopped after <span class="arithmatex">\(\max(1, \lceil 0.5 d \rceil)\)</span> moves.</td>
+</tr>
+<tr>
+<td style="text-align: center;"><code>5</code></td>
+<td style="text-align: left;"><code>PR_EXTERNAL</code></td>
+<td style="text-align: left;">External</td>
+<td style="text-align: left;">Greedy external path moving away from <span class="arithmatex">\(x^g\)</span> (<span class="arithmatex">\(x_k \leftarrow \text{clamp}(1.0 - x_k^g, 0, 0.999999)\)</span>) for <span class="arithmatex">\(d\)</span> steps.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-online-q-learning-in-ipr">3.3 Online Q-Learning in <code>IPR</code><a class="headerlink" href="#33-online-q-learning-in-ipr" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Offline (<code>control_mode: 0</code>)</strong>: Uses <span class="arithmatex">\(\alpha = 0.10\)</span> and <code>PR_ONE_WAY</code>.</li>
+<li><strong>Online (<code>control_mode: 1</code>)</strong>: Controls an 18-state space (<span class="arithmatex">\(\alpha \in \{0.05, 0.10, 0.20\} \times \text{typePR} \in \{0, \dots, 5\}\)</span>) with binary reward (evaluated when <code>numDiff &gt; 0</code>):</li>
+</ul>
+<div class="arithmatex">\[r_t = \begin{cases} 1, &amp; \text{if } f(x^*_{\text{path}}) &lt; \min(f(x^s), f(x^g)), \\ 0, &amp; \text{otherwise.} \end{cases}\]</div>
+<hr />
+<h2 id="4-multi-objective-scalarization-reference-point-sync">4. Multi-Objective Scalarization &amp; Reference Point Sync<a class="headerlink" href="#4-multi-objective-scalarization-reference-point-sync" title="Permanent link">&para;</a></h2>
+<p>All multi-objective scalarizers follow the canonical <strong>minimization</strong> convention (maximization objectives are negated by the problem decoder) and normalize raw objective vectors using the Ideal (<span class="arithmatex">\(z^*\)</span>) and Nadir (<span class="arithmatex">\(z^{\text{nad}}\)</span>) reference points:</p>
+<div class="arithmatex">\[d_i = w_i \cdot \max\!\left(0.0, \; \frac{f_i(x) - z^*_i}{\max(10^{-9}, \; z^{\text{nad}}_i - z^*_i)}\right)\]</div>
+<ol>
+<li><strong><code>Tchebycheff</code> (<code>NormalizedWeightedTchebycheff</code>)</strong>:
+   $<span class="arithmatex">\(F(x) = \max_{i} d_i + 10^{-4} \sum_{i} \frac{\max(0.0, \; f_i(x) - z^*_i)}{\max(10^{-9}, \; z^{\text{nad}}_i - z^*_i)}\)</span>$</li>
+<li><strong><code>WeightedSum</code> (<code>WeightedSumScalarizer</code>)</strong>:
+   $<span class="arithmatex">\(F(x) = \sum_{i} w_i \cdot f_i(x)\)</span>$</li>
+<li><strong><code>Gini_Coefficient</code> (<code>GiniScalarizer</code>)</strong>:
+   Minimizes mean normalized weighted regret combined with Gini inequality across objectives (Sen welfare form, singularity-free and Pareto-monotonic):
+   $<span class="arithmatex">\(F(x) = \bar{d} \cdot (1 + G(d)) = \frac{1}{M}\sum_{i=0}^{M-1} d_i + \frac{1}{2 M^2} \sum_{i=0}^{M-1} \sum_{j=0}^{M-1} |d_i - d_j|\)</span>$</li>
+<li><strong><code>Lexicographic_MinMax</code> (<code>LexicographicMinMaxScalarizer</code>)</strong>:
+   Sorts normalized weighted regrets in descending order <span class="arithmatex">\(d_{(0)} \ge d_{(1)} \ge \dots \ge d_{(M-1)}\)</span> and aggregates them with geometric decay <span class="arithmatex">\(\gamma = \text{lexicographic\_decay}\)</span> (default <code>0.05</code>) plus a Pareto tie-breaking regularization tail:
+   $<span class="arithmatex">\(F(x) = \sum_{r=0}^{M-1} \gamma^{r} d_{(r)} + \frac{10^{-6}}{M} \sum_{r=1}^{M-1} d_{(r)}\)</span>$</li>
+</ol>
+<h3 id="anti-drift-reference-point-management">Anti-Drift Reference Point Management<a class="headerlink" href="#anti-drift-reference-point-management" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Two-Pass Pool Initialization</strong>: <code>CreatePoolSolutions</code> first decodes all initial candidates to consolidate non-degenerate <span class="arithmatex">\(z^*\)</span> and <span class="arithmatex">\(z^{\text{nad}}\)</span> bounds (ignoring penalized outliers <span class="arithmatex">\(\ge 10^{12}\)</span>), and then re-scalarizes all solutions under the unified bounds.</li>
+<li><strong>Exponential Pool-Nadir Smoothing &amp; <code>rescalarizePool</code></strong>: During optimization, the monitor thread tracks <span class="arithmatex">\(z^*\)</span> improvements and smooths <span class="arithmatex">\(z^{\text{nad}}\)</span> from the non-dominated elite pool (<span class="arithmatex">\(0.8 z^{\text{nad}} + 0.2 z^{\text{nad}}_{\text{pool}}\)</span>), invoking <code>SolverContext::rescalarizePool</code> whenever reference points shift so no stale <code>ofv</code> survives in <code>SOLVER_POOL</code>.</li>
+</ul>
+<hr />
+<h2 id="5-elite-pool-diversity-policies-poolupdatemethod">5. Elite Pool Diversity Policies (<code>poolUpdateMethod</code>)<a class="headerlink" href="#5-elite-pool-diversity-policies-poolupdatemethod" title="Permanent link">&para;</a></h2>
+<p>Every candidate submitted to <code>UpdatePoolSolutions</code> must first pass a <strong>Global Guardian Filter</strong> that rejects objective/OFV clones (<span class="arithmatex">\(|\Delta| \le 10^{-9}\)</span>) and strictly Pareto-dominated solutions (<span class="arithmatex">\(M &gt; 1\)</span>). Accepted candidates update <code>SOLVER_POOL</code> (capacity <span class="arithmatex">\(P = \text{sizePool}\)</span> for <span class="arithmatex">\(M=1\)</span>, or <span class="arithmatex">\(P = 2 \cdot \text{sizePool}\)</span> for <span class="arithmatex">\(M &gt; 1\)</span>) under one of three policies:</p>
+<ul>
+<li><strong><code>0</code> — Tactical Cosine Similarity Replacement (Default)</strong>: If <span class="arithmatex">\(f(s) &lt; f(\text{Pool}[P-1])\)</span>, replaces the individual in the <strong>lower half</strong> of the pool (<span class="arithmatex">\(\lfloor P/2 \rfloor \le i &lt; P\)</span> with <span class="arithmatex">\(f(\text{Pool}[i]) &gt; f(s)\)</span>) that maximizes cosine similarity <span class="arithmatex">\(\cos(s.\text{rk}, \text{Pool}[i].\text{rk})\)</span>, preserving diverse genetic structures.</li>
+<li><strong><code>1</code> — NSGA-II Pareto Ranking &amp; Crowding Distance</strong>: Merges <span class="arithmatex">\(\text{Pool} \cup \{s\}\)</span>, performs Fast Non-Dominated Sorting (<span class="arithmatex">\(\mathcal{F}_1, \mathcal{F}_2, \dots\)</span>) and Crowding Distance assignment, and retains the top <span class="arithmatex">\(P\)</span> individuals.</li>
+<li><strong><code>2</code> — Spatial Frontier Niche Geometry (<span class="arithmatex">\(M \ge 2\)</span>)</strong>: Projects solutions onto the chord connecting extreme Pareto anchors <span class="arithmatex">\((E_0, E_1)\)</span>, partitioning <span class="arithmatex">\([0, 1]\)</span> into <span class="arithmatex">\(K = 5\)</span> niches of capacity <span class="arithmatex">\(C = \lceil P / K \rceil\)</span>. Under-populated niches evict the worst orthogonal-distance point from overcrowded niches to fill gaps along the Pareto front.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

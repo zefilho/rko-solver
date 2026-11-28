@@ -1,0 +1,1060 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Random-Key Optimizer Framework with Modern C++20 Dynamic Plugin Architecture">
+      
+      
+      
+        <link rel="canonical" href="https://docs.rkosolver.github.io/metaheuristics/">
+      
+      
+        <link rel="prev" href="../algorithms/">
+      
+      
+        <link rel="next" href="../reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Metaheuristics Catalog - RKOSolver</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#metaheuristics-catalog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="RKOSolver" class="md-header__button md-logo" aria-label="RKOSolver" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RKOSolver
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Metaheuristics Catalog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/zefilho/rko-solver" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zefilho/rko-solver
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RKOSolver" class="md-nav__button md-logo" aria-label="RKOSolver" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RKOSolver
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/zefilho/rko-solver" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zefilho/rko-solver
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms & Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metaheuristics Catalog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metaheuristics Catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-trajectory-neighborhood-metaheuristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Trajectory &amp; Neighborhood Metaheuristics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Trajectory &amp; Neighborhood Metaheuristics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-simulated-annealing-sa-srcmhsacpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Simulated Annealing (SA — src/mh/sa.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-iterated-local-search-ils-srcmhilscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Iterated Local Search (ILS — src/mh/ils.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-enhanced-iterated-local-search-eils-srcmheilscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Enhanced Iterated Local Search (EILS — src/mh/eils.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-variable-neighborhood-search-vns-srcmhvnscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Variable Neighborhood Search (VNS — src/mh/vns.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-continuous-greedy-randomized-adaptive-search-procedure-grasp-srcmhgraspcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 Continuous Greedy Randomized Adaptive Search Procedure (GRASP — src/mh/grasp.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-large-neighborhood-search-lns-srcmhlnscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Large Neighborhood Search (LNS — src/mh/lns.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-tabu-search-ts-srcmhtscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.7 Tabu Search (TS — src/mh/ts.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-population-evolutionary-swarm-metaheuristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Population, Evolutionary &amp; Swarm Metaheuristics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Population, Evolutionary &amp; Swarm Metaheuristics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-biased-random-key-genetic-algorithm-brkga-srcmhbrkgacpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Biased Random-Key Genetic Algorithm (BRKGA — src/mh/brkga.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-brkga-with-community-search-brkga-cs-srcmhbrkga_cscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 BRKGA with Community Search (BRKGA-CS — src/mh/brkga_cs.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-genetic-algorithm-ga-srcmhgacpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Genetic Algorithm (GA — src/mh/ga.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-particle-swarm-optimization-pso-srcmhpsocpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Particle Swarm Optimization (PSO — src/mh/pso.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-differential-evolution-de-srcmhdecpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Differential Evolution (DE — src/mh/de.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-continuous-ant-colony-optimization-aco-textaco_mathbbr-srcmhacocpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 Continuous Ant Colony Optimization (ACO / \(\text{ACO}_{\mathbb{R}}\) — src/mh/aco.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-pool-trajectory-hybridization-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Pool Trajectory Hybridization &amp; Baseline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Pool Trajectory Hybridization &amp; Baseline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-implicit-path-relinking-ipr-srcmhiprcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Implicit Path-Relinking (IPR — src/mh/ipr.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-multistart-multistart-srcmhmultistartcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 MultiStart (MultiStart — src/mh/multistart.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-consolidated-hyperparameter-grid-param-offlineyaml-param-onlineyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Consolidated Hyperparameter Grid (param-offline.yaml &amp; param-online.yaml)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-trajectory-neighborhood-metaheuristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Trajectory &amp; Neighborhood Metaheuristics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Trajectory &amp; Neighborhood Metaheuristics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-simulated-annealing-sa-srcmhsacpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Simulated Annealing (SA — src/mh/sa.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-iterated-local-search-ils-srcmhilscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Iterated Local Search (ILS — src/mh/ils.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-enhanced-iterated-local-search-eils-srcmheilscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Enhanced Iterated Local Search (EILS — src/mh/eils.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-variable-neighborhood-search-vns-srcmhvnscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Variable Neighborhood Search (VNS — src/mh/vns.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-continuous-greedy-randomized-adaptive-search-procedure-grasp-srcmhgraspcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 Continuous Greedy Randomized Adaptive Search Procedure (GRASP — src/mh/grasp.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-large-neighborhood-search-lns-srcmhlnscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Large Neighborhood Search (LNS — src/mh/lns.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-tabu-search-ts-srcmhtscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.7 Tabu Search (TS — src/mh/ts.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-population-evolutionary-swarm-metaheuristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Population, Evolutionary &amp; Swarm Metaheuristics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Population, Evolutionary &amp; Swarm Metaheuristics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-biased-random-key-genetic-algorithm-brkga-srcmhbrkgacpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Biased Random-Key Genetic Algorithm (BRKGA — src/mh/brkga.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-brkga-with-community-search-brkga-cs-srcmhbrkga_cscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 BRKGA with Community Search (BRKGA-CS — src/mh/brkga_cs.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-genetic-algorithm-ga-srcmhgacpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Genetic Algorithm (GA — src/mh/ga.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-particle-swarm-optimization-pso-srcmhpsocpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Particle Swarm Optimization (PSO — src/mh/pso.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-differential-evolution-de-srcmhdecpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Differential Evolution (DE — src/mh/de.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-continuous-ant-colony-optimization-aco-textaco_mathbbr-srcmhacocpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 Continuous Ant Colony Optimization (ACO / \(\text{ACO}_{\mathbb{R}}\) — src/mh/aco.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-pool-trajectory-hybridization-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Pool Trajectory Hybridization &amp; Baseline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Pool Trajectory Hybridization &amp; Baseline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-implicit-path-relinking-ipr-srcmhiprcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Implicit Path-Relinking (IPR — src/mh/ipr.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-multistart-multistart-srcmhmultistartcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 MultiStart (MultiStart — src/mh/multistart.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-consolidated-hyperparameter-grid-param-offlineyaml-param-onlineyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Consolidated Hyperparameter Grid (param-offline.yaml &amp; param-online.yaml)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="metaheuristics-catalog">Metaheuristics Catalog<a class="headerlink" href="#metaheuristics-catalog" title="Permanent link">&para;</a></h1>
+<p><code>RKOSolver</code> registers <strong>15 metaheuristics</strong> in <code>RkoSolver::initializeRegistry()</code> (<code>src/mh/</code>), all operating purely on continuous random-key vectors <span class="arithmatex">\(\mathbf{x} \in [0, 1)^n\)</span> and conforming to the uniform signature:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kt">void</span><span class="w"> </span><span class="nf">MH</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">rkolib</span><span class="o">::</span><span class="n">core</span><span class="o">::</span><span class="n">TRunData</span><span class="w"> </span><span class="o">&amp;</span><span class="n">runData</span><span class="p">,</span><span class="w"> </span><span class="n">rkolib</span><span class="o">::</span><span class="n">RkoSolver</span><span class="w"> </span><span class="o">&amp;</span><span class="n">solver</span><span class="p">);</span>
+</code></pre></div>
+<p>Each active metaheuristic listed in <code>config/yaml/config.yaml</code> executes asynchronously in its own dedicated OpenMP thread, cooperating through the thread-safe <code>SOLVER_POOL</code>.</p>
+<hr />
+<h2 id="1-trajectory-neighborhood-metaheuristics">1. Trajectory &amp; Neighborhood Metaheuristics<a class="headerlink" href="#1-trajectory-neighborhood-metaheuristics" title="Permanent link">&para;</a></h2>
+<h3 id="11-simulated-annealing-sa-srcmhsacpp">1.1 Simulated Annealing (<code>SA</code> — <code>src/mh/sa.cpp</code>)<a class="headerlink" href="#11-simulated-annealing-sa-srcmhsacpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (5)</strong>: <span class="arithmatex">\(SA_{\max}, \alpha_{\text{SA}}, \beta_{\min}, \beta_{\max}, T_0\)</span>.</li>
+<li><strong>Mechanics</strong>: At each temperature <span class="arithmatex">\(T\)</span>, executes <span class="arithmatex">\(SA_{\max}\)</span> Metropolis steps perturbing the current solution <code>s</code> with <code>ShakeSolution(betaMin, betaMax)</code> and accepting worsening moves (<span class="arithmatex">\(\Delta &gt; 0\)</span>) with probability <span class="arithmatex">\(\exp(-\Delta / T)\)</span>.</li>
+<li><strong>Intensification &amp; Reannealing</strong>: Before Q-Learning reward evaluation and geometric cooling (<span class="arithmatex">\(T \leftarrow \alpha_{\text{SA}} T\)</span>), evaluates the time-gated <code>NelderMeadSearch(s, solver)</code> directly on <code>s</code> (marking <code>improv = 1</code> if <code>sBest</code> improves). Cools until <span class="arithmatex">\(T \le 10^{-5}\)</span> (<code>0.00001</code>), then reanneals at <span class="arithmatex">\(T \leftarrow 0.5 \, T_0\)</span>.</li>
+<li><strong>Online Reward</strong>: <span class="arithmatex">\(R = 1\)</span> if <code>sBest</code> improved in the epoch; otherwise <span class="arithmatex">\((f(\mathbf{s}_{\text{Best}}) - f_{\text{bestEpoch}}) / (|f_{\text{bestEpoch}}| + 10^{-9})\)</span>.</li>
+</ul>
+<h3 id="12-iterated-local-search-ils-srcmhilscpp">1.2 Iterated Local Search (<code>ILS</code> — <code>src/mh/ils.cpp</code>)<a class="headerlink" href="#12-iterated-local-search-ils-srcmhilscpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (2)</strong>: <span class="arithmatex">\(\beta_{\min}, \beta_{\max}\)</span>.</li>
+<li><strong>Mechanics</strong>: Generates an initial random-key vector refined immediately by <code>RVND</code> to initialize both the accepted local optimum <code>sCurrent</code> and the global incumbent <code>sBest</code>. Each iteration perturbs <code>sCurrent</code> via <code>ShakeSolution(betaMin, betaMax)</code> and applies <code>RVND</code> to obtain <code>sBestLine</code>.</li>
+<li><strong>Restart Acceptance &amp; Intensification</strong>: Uses <code>ILS_ACCEPT_RESTART</code>, updating <code>sCurrent = sBestLine</code> whenever <span class="arithmatex">\(f(\mathbf{s}_{\text{BestLine}}) &lt; f(\mathbf{s}_{\text{Current}})\)</span> or after <code>ILS_MAX_NO_IMPROV = 10</code> stagnant iterations (<code>Iter - IterImprov &gt;= 10</code>). Time-gated <code>NelderMeadSearch</code> acts directly on <code>sCurrent</code> (resetting <code>IterImprov</code> if improved).</li>
+<li><strong>Online Reward</strong>: Binary reward <span class="arithmatex">\(R \in \{0, 1\}\)</span> per iteration.</li>
+</ul>
+<h3 id="13-enhanced-iterated-local-search-eils-srcmheilscpp">1.3 Enhanced Iterated Local Search (<code>EILS</code> — <code>src/mh/eils.cpp</code>)<a class="headerlink" href="#13-enhanced-iterated-local-search-eils-srcmheilscpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (3)</strong>: <span class="arithmatex">\(\beta_{\min}, \beta_{\max}, N_{\max}\)</span>.</li>
+<li><strong>Mechanics</strong>: Maintains an elite local optimum <span class="arithmatex">\(\mathbf{s}^*\)</span> (<code>sBest</code>, initialized via <code>RVND</code>) and escalates perturbation across <span class="arithmatex">\(L = 5\)</span> deterministic linear levels (<code>EILS_NUM_LEVELS = 5</code>):</li>
+</ul>
+<div class="arithmatex">\[\beta_\ell = \beta_{\min} + \ell \cdot \frac{\beta_{\max} - \beta_{\min}}{L - 1}, \qquad \ell \in \{0, 1, 2, 3, 4\}\]</div>
+<ul>
+<li><strong>Level Escalation Schedule</strong>: Every iteration perturbs <span class="arithmatex">\(\mathbf{s}^*\)</span> with fixed intensity <span class="arithmatex">\(\beta_\ell\)</span> (<code>ShakeSolution(sLine, beta, beta, n)</code>), applies <code>RVND</code>, and checks time-gated <code>NelderMeadSearch(sBest, solver)</code>. Any strict improvement over <span class="arithmatex">\(\mathbf{s}^*\)</span> sets <code>cycleImprov = 1</code> and immediately restarts a fresh cycle at <span class="arithmatex">\(\ell = 0\)</span>; otherwise <code>numFail</code> increments, advancing <span class="arithmatex">\(\ell \leftarrow \ell + 1\)</span> after <span class="arithmatex">\(N_{\max}\)</span> consecutive failures and completing the cycle once <span class="arithmatex">\(\ell = 5\)</span>.</li>
+<li><strong>Cycle-Synchronized Q-Learning</strong>: Selects <span class="arithmatex">\((\beta_{\min}, \beta_{\max}, N_{\max})\)</span> at the start of each level cycle (<code>Maintain</code> on the first cycle) and updates <span class="arithmatex">\(Q(s_t, a_t)\)</span> at cycle completion with binary reward <span class="arithmatex">\(R = \text{cycleImprov} \in \{0, 1\}\)</span>.</li>
+</ul>
+<h3 id="14-variable-neighborhood-search-vns-srcmhvnscpp">1.4 Variable Neighborhood Search (<code>VNS</code> — <code>src/mh/vns.cpp</code>)<a class="headerlink" href="#14-variable-neighborhood-search-vns-srcmhvnscpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (2)</strong>: <span class="arithmatex">\(k_{\max}, \beta_{\min}\)</span>.</li>
+<li><strong>Initialization</strong>: Samples <strong>10</strong> random initial solutions and initializes both <code>sBest</code> and <code>s</code> with the best candidate.</li>
+<li><strong>Mechanics</strong>: Iterates over neighborhoods <span class="arithmatex">\(k \in \{1, \dots, k_{\max}\}\)</span>, sampling <span class="arithmatex">\(\beta \sim \mathcal{U}(k\beta_{\min}, (k+1)\beta_{\min})\)</span>, perturbing <code>s</code> via <code>ShakeSolution(beta, beta)</code>, and applying <code>RVND</code>. Accepts any improvement over <code>s</code> (resetting <span class="arithmatex">\(k \leftarrow 1\)</span> when <code>sBest</code> improves; otherwise <span class="arithmatex">\(k \leftarrow k + 1\)</span>).</li>
+<li><strong>Inner Intensification &amp; Reward</strong>: Evaluates the deterministic <code>NelderMeadSearch(s, solver)</code> trigger <strong>inside</strong> the inner <code>while (k &lt;= kMax)</code> loop using per-step <code>iterImprov</code>, while accumulating <code>cycleImprov</code> for the Q-Learning reward at the end of the neighborhood cycle.</li>
+</ul>
+<h3 id="15-continuous-greedy-randomized-adaptive-search-procedure-grasp-srcmhgraspcpp">1.5 Continuous Greedy Randomized Adaptive Search Procedure (<code>GRASP</code> — <code>src/mh/grasp.cpp</code>)<a class="headerlink" href="#15-continuous-greedy-randomized-adaptive-search-procedure-grasp-srcmhgraspcpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (3)</strong>: <span class="arithmatex">\(\alpha_{\text{GRASP}}, h_s, h_e\)</span>.</li>
+<li><strong>Bidirectional Grid <code>LineSearch</code></strong>: For coordinate <span class="arithmatex">\(i\)</span> and step <span class="arithmatex">\(h\)</span>, builds the full candidate grid <span class="arithmatex">\(\{s_i\} \cup \{s_i \pm \tau h \in [0, 1) : \tau = 1, \dots, \lceil 1/h \rceil\}\)</span>, shuffles it via <code>SOLVER_RNG</code>, and evaluates <span class="arithmatex">\(q = \min(|\text{grid}|, \lceil \log_2(\lfloor 1/h \rfloor) \rceil + 1)\)</span> candidates.</li>
+<li><strong>Randomized Adaptive Reconstruction</strong>: Partially randomizes <span class="arithmatex">\(\lceil n \cdot \mathcal{U}(0.3, 0.7) \rceil\)</span> keys (<code>UnFixed</code>). At each constructive step, evaluates <span class="arithmatex">\(k_{\max} = \max(2, \lfloor 0.1 |\text{UnFixed}| \rfloor)\)</span> unfixed coordinates via <code>LineSearch</code>, builds <span class="arithmatex">\(\text{RCL} = \{i : g_i \le g_{\min} + \alpha_{\text{GRASP}}(g_{\max} - g_{\min})\}\)</span>, and fixes one randomly chosen RCL coordinate.</li>
+<li><strong>Scale Halving &amp; Inner Intensification</strong>: Applies <code>RVND</code> to the constructed solution; halves <span class="arithmatex">\(h \leftarrow h / 2\)</span> whenever <code>sBest</code> does not improve, updates working solution <code>s</code> via greedy + linear Metropolis acceptance <span class="arithmatex">\(T = 100(1 - t / (T_{\max} \cdot \text{restart}))\)</span>, and checks time-gated <code>NelderMeadSearch(s, solver)</code> at every scale step <span class="arithmatex">\(h \ge h_e\)</span>.</li>
+<li><strong>Control Modes</strong>: Offline mode randomizes <span class="arithmatex">\(\alpha_{\text{GRASP}} \sim \mathcal{U}(0.1, 0.9)\)</span> per step; online Q-Learning tunes 12 states with binary reward <span class="arithmatex">\(R \in \{0, 1\}\)</span>.</li>
+</ul>
+<h3 id="16-large-neighborhood-search-lns-srcmhlnscpp">1.6 Large Neighborhood Search (<code>LNS</code> — <code>src/mh/lns.cpp</code>)<a class="headerlink" href="#16-large-neighborhood-search-lns-srcmhlnscpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (4)</strong>: <span class="arithmatex">\(\beta_{\min}, \beta_{\max}, T_0, \alpha_{\text{LNS}}\)</span>.</li>
+<li><strong>Mechanics</strong>: Destroys <span class="arithmatex">\(I \in [\lfloor \beta_{\min} n \rfloor, \lfloor \beta_{\max} n \rfloor]\)</span> randomly chosen keys and repairs each key greedily by sampling inside the 18 subintervals of the Farey sequence <span class="arithmatex">\(\mathcal{F}_7\)</span>. Uses SA-style acceptance (cooling until <span class="arithmatex">\(T \le 0.01\)</span>, reannealing at <span class="arithmatex">\(0.3 \, T_0\)</span>) and time-gated <code>NelderMeadSearch(s, solver)</code>.</li>
+</ul>
+<h3 id="17-tabu-search-ts-srcmhtscpp">1.7 Tabu Search (<code>TS</code> — <code>src/mh/ts.cpp</code>)<a class="headerlink" href="#17-tabu-search-ts-srcmhtscpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (5)</strong>: <span class="arithmatex">\(\text{maxNoImprovement}, \text{tabuTenure}, \text{neighborhoodSize}, \beta_{\min}, \beta_{\max}\)</span>.</li>
+<li><strong>Mechanics</strong>: Evaluates <span class="arithmatex">\(\lfloor n^2 \cdot \text{neighborhoodSize} \rfloor\)</span> pairwise swap moves <span class="arithmatex">\((i, j)\)</span>. A swap is forbidden if <span class="arithmatex">\((i, j)\)</span> or <span class="arithmatex">\((j, i)\)</span> is active in <code>tabuList</code> (<span class="arithmatex">\(\text{iter} &lt; \text{expiration}\)</span>), unless it satisfies the <strong>aspiration criterion</strong> (<span class="arithmatex">\(f(\mathbf{s}_{\text{viz}}) &lt; f(\mathbf{s}_{\text{Best}})\)</span>).</li>
+<li><strong>Diversification &amp; Reward</strong>: Applies the best admissible swap, records <span class="arithmatex">\(\{i^*, j^*, \text{iter} + \text{tabuTenure}\}\)</span> while purging expired entries, triggers <code>ShakeSolution(betaMin, betaMax)</code> when <span class="arithmatex">\(\text{noImp} \ge \text{maxNoImprovement}\)</span>, refines via <code>RVND</code>, and checks time-gated <code>NelderMeadSearch</code>. Online reward: <span class="arithmatex">\(R = 1.0\)</span> on global improvement, or <span class="arithmatex">\(R = -0.01\)</span> otherwise.</li>
+</ul>
+<hr />
+<h2 id="2-population-evolutionary-swarm-metaheuristics">2. Population, Evolutionary &amp; Swarm Metaheuristics<a class="headerlink" href="#2-population-evolutionary-swarm-metaheuristics" title="Permanent link">&para;</a></h2>
+<h3 id="21-biased-random-key-genetic-algorithm-brkga-srcmhbrkgacpp">2.1 Biased Random-Key Genetic Algorithm (<code>BRKGA</code> — <code>src/mh/brkga.cpp</code>)<a class="headerlink" href="#21-biased-random-key-genetic-algorithm-brkga-srcmhbrkgacpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (4)</strong>: <span class="arithmatex">\(p, p_e, p_m, \rho_e\)</span> (with dynamic <code>UpdatePopSize</code>).</li>
+<li><strong>Hybrid <code>PUX</code> Crossover</strong>: Copies the top <span class="arithmatex">\(\lfloor p \cdot p_e \rfloor\)</span> elite individuals, generates <span class="arithmatex">\(\lfloor p(1 - p_e - p_m) \rfloor\)</span> offspring via Parametric Uniform Crossover (<code>PUX</code>), and injects <span class="arithmatex">\(\lfloor p \cdot p_m \rfloor\)</span> random mutants. In <code>PUX</code>, <code>nonEliteParent</code> is sampled 50% of the time from <span class="arithmatex">\([\text{eliteSize}, p - 1]\)</span> and 50% of the time from the full population <span class="arithmatex">\([0, p - 1]\)</span>, swapping parents if <code>Pop[eliteParent].ofv &gt; Pop[nonEliteParent].ofv</code> so <span class="arithmatex">\(\rho_e\)</span> always favors the fitter parent. Applies time-gated <code>NelderMeadSearch</code> to <code>Pop[0]</code>.</li>
+</ul>
+<h3 id="22-brkga-with-community-search-brkga-cs-srcmhbrkga_cscpp">2.2 BRKGA with Community Search (<code>BRKGA-CS</code> — <code>src/mh/brkga_cs.cpp</code>)<a class="headerlink" href="#22-brkga-with-community-search-brkga-cs-srcmhbrkga_cscpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (4)</strong>: <span class="arithmatex">\(p, p_e, p_m, \rho_e\)</span>.</li>
+<li><strong>Community Detection &amp; Selective <code>RVND</code></strong>: Whenever an improvement occurs or stagnation exceeds 10 generations, builds a Pearson correlation graph (<span class="arithmatex">\(\sigma &gt; 0.6\)</span>) across the elite set and runs Label Propagation (<code>LP</code>) clustering. Non-representative elite members undergo chaotic mutation <code>ChaoticInd</code> (re-sampling keys with probability <span class="arithmatex">\(1 - \rho_e\)</span> using fractional <code>double rhoe</code>), while <code>RVND</code> refines the top promising community representative (<code>i &lt; 1</code>), complemented by time-gated <code>NelderMeadSearch</code> on <code>Pop[0]</code>.</li>
+</ul>
+<h3 id="23-genetic-algorithm-ga-srcmhgacpp">2.3 Genetic Algorithm (<code>GA</code> — <code>src/mh/ga.cpp</code>)<a class="headerlink" href="#23-genetic-algorithm-ga-srcmhgacpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (3)</strong>: <span class="arithmatex">\(\text{sizePop}, p_{\text{cros}}, p_{\text{mut}}\)</span>.</li>
+<li><strong>Mechanics</strong>: Binary tournament selection, uniform crossover (<span class="arithmatex">\(p_{\text{cros}}\)</span>), gene-wise uniform mutation (<span class="arithmatex">\(p_{\text{mut}}\)</span>), and generational replacement. Whenever time-gated <code>NelderMeadSearch</code> improves <code>bestInd</code>, the refined individual is injected back into a random slot of <code>Pop</code> (<code>Pop[pos1] = bestInd</code>).</li>
+</ul>
+<h3 id="24-particle-swarm-optimization-pso-srcmhpsocpp">2.4 Particle Swarm Optimization (<code>PSO</code> — <code>src/mh/pso.cpp</code>)<a class="headerlink" href="#24-particle-swarm-optimization-pso-srcmhpsocpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (4)</strong>: <span class="arithmatex">\(P_{\text{size}}, c_1, c_2, w\)</span>.</li>
+<li><strong>Mechanics</strong>: Evolves particle positions <span class="arithmatex">\(\mathbf{X}_i \in [0, 1)^n\)</span> and velocities <span class="arithmatex">\(\mathbf{V}_i\)</span> toward personal bests <span class="arithmatex">\(\mathbf{P}_{\text{best}, i}\)</span> and global best <span class="arithmatex">\(\mathbf{G}_{\text{best}}\)</span>. Whenever time-gated <code>NelderMeadSearch</code> improves <span class="arithmatex">\(\mathbf{G}_{\text{best}}\)</span>, the refined vector is injected into a random slot of <code>Pbest</code> (<code>Pbest[chosen] = Gbest</code>) to propagate elite genetic information across the swarm.</li>
+</ul>
+<h3 id="25-differential-evolution-de-srcmhdecpp">2.5 Differential Evolution (<code>DE</code> — <code>src/mh/de.cpp</code>)<a class="headerlink" href="#25-differential-evolution-de-srcmhdecpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (3)</strong>: <span class="arithmatex">\(\text{sizePop}, Cr, F\)</span> (with dynamic <code>UpdatePopulationDE</code>).</li>
+<li><strong>Hybrid Mutation &amp; Toroidal Repair</strong>: For each target vector <span class="arithmatex">\(\mathbf{x}_i\)</span>, selects three distinct indices <span class="arithmatex">\(r_1, r_2, r_3 \ne i\)</span> and <span class="arithmatex">\(j_{\text{rand}} \in \{0, \dots, n - 1\}\)</span>. Under binomial crossover (<span class="arithmatex">\(u \le Cr \lor j = j_{\text{rand}}\)</span>), alternates 50/50 between <code>DE/rand/1</code> and <code>DE/current-to-best/1</code>, wrapping out-of-bounds keys toroidally via <span class="arithmatex">\(\text{trial}_j = \text{clamp}(v_j - \lfloor v_j \rfloor, 0, 0.9999999)\)</span>.</li>
+<li><strong>Refinement &amp; Acceptance</strong>: Applies <code>RVND</code> to 5% of trial vectors, accepts improvements or Metropolis moves under linear cooling <span class="arithmatex">\(T = 1000(1 - t / (T_{\max} \cdot \text{restart}))\)</span>, and applies time-gated <code>NelderMeadSearch</code> on <code>bestInd</code>.</li>
+</ul>
+<h3 id="26-continuous-ant-colony-optimization-aco-textaco_mathbbr-srcmhacocpp">2.6 Continuous Ant Colony Optimization (<code>ACO</code> / <span class="arithmatex">\(\text{ACO}_{\mathbb{R}}\)</span> — <code>src/mh/aco.cpp</code>)<a class="headerlink" href="#26-continuous-ant-colony-optimization-aco-textaco_mathbbr-srcmhacocpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (4)</strong>: <span class="arithmatex">\(k = \text{archive\_size}, m = \text{num\_ants}, q, \xi\)</span> (<span class="arithmatex">\(\varepsilon_{\min} = 0.05\)</span>, binary reward <span class="arithmatex">\(R \in \{0, 1\}\)</span>).</li>
+<li><strong>Gaussian Solution Archive</strong>: Maintains a sorted archive <span class="arithmatex">\(T = (\mathbf{s}_1, \dots, \mathbf{s}_k)\)</span> with rank-based Gaussian weights <span class="arithmatex">\(\omega_l = \frac{1}{q k \sqrt{2\pi}} \exp\!\big(-\frac{(l - 1)^2}{2 q^2 k^2}\big)\)</span>. Each of the <span class="arithmatex">\(m\)</span> ants selects a guide <span class="arithmatex">\(\mathbf{s}_l\)</span> proportionally to <span class="arithmatex">\(\omega_l\)</span> and samples each coordinate <span class="arithmatex">\(d\)</span> from <span class="arithmatex">\(\mathcal{N}(s_{l,d}, \sigma_d^2)\)</span> with rejection sampling in <span class="arithmatex">\([0, 1)\)</span>, where <span class="arithmatex">\(\sigma_d = \xi \sum_{e \ne l} \frac{|s_{e,d} - s_{l,d}|}{k - 1}\)</span>. Merges the <span class="arithmatex">\(m\)</span> ants into <span class="arithmatex">\(T\)</span>, retains the best <span class="arithmatex">\(k\)</span> solutions, and applies time-gated <code>NelderMeadSearch</code> to <span class="arithmatex">\(T[0]\)</span>.</li>
+</ul>
+<hr />
+<h2 id="3-pool-trajectory-hybridization-baseline">3. Pool Trajectory Hybridization &amp; Baseline<a class="headerlink" href="#3-pool-trajectory-hybridization-baseline" title="Permanent link">&para;</a></h2>
+<h3 id="31-implicit-path-relinking-ipr-srcmhiprcpp">3.1 Implicit Path-Relinking (<code>IPR</code> — <code>src/mh/ipr.cpp</code>)<a class="headerlink" href="#31-implicit-path-relinking-ipr-srcmhiprcpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Controlled Parameters (2, embedded)</strong>: <span class="arithmatex">\(\alpha_{\text{block}} \in \{0.05, 0.10, 0.20\}\)</span> and <span class="arithmatex">\(\text{typePR} \in \{0, \dots, 5\}\)</span> (18 online states; offline uses <span class="arithmatex">\(\alpha = 0.10\)</span>, <code>PR_ONE_WAY</code>). Relinks elite pairs <span class="arithmatex">\((\mathbf{x}^s, \mathbf{x}^g)\)</span> from <code>SOLVER_POOL</code> over contiguous key blocks across 6 strategies (see <a href="../algorithms/#3-implicit-path-relinking-ipr">Algorithms &amp; Control — IPR</a>).</li>
+</ul>
+<h3 id="32-multistart-multistart-srcmhmultistartcpp">3.2 MultiStart (<code>MultiStart</code> — <code>src/mh/multistart.cpp</code>)<a class="headerlink" href="#32-multistart-multistart-srcmhmultistartcpp" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Parameter-free pure random-key sampler in <span class="arithmatex">\([0, 1)^n\)</span>, serving as an optimization baseline and continuous source of global diversity for <code>SOLVER_POOL</code>.</li>
+</ul>
+<hr />
+<h2 id="4-consolidated-hyperparameter-grid-param-offlineyaml-param-onlineyaml">4. Consolidated Hyperparameter Grid (<code>param-offline.yaml</code> &amp; <code>param-online.yaml</code>)<a class="headerlink" href="#4-consolidated-hyperparameter-grid-param-offlineyaml-param-onlineyaml" title="Permanent link">&para;</a></h2>
+<p>| Metaheuristic | Parameters | Offline (<code>control_mode: 0</code>) | Online Grid (<code>control_mode: 1</code>) | <span class="arithmatex">\(|\mathcal{S}|\)</span> |
+| :--- | :--- | :--- | :--- | :---: |
+| <strong><code>BRKGA</code></strong> | <span class="arithmatex">\(p, p_e, p_m, \rho_e\)</span> | <code>987, 0.20, 0.15, 0.65</code> | <code>{300, 400, 500} × {0.10, 0.15, 0.20}² × {0.60, 0.65, 0.70}</code> | <code>81</code> |
+| <strong><code>BRKGA-CS</code></strong> | <span class="arithmatex">\(p, p_e, p_m, \rho_e\)</span> | <code>610, 0.20, 0.001, 0.65</code> | <code>{377, 610, 987} × {0.15, 0.20, 0.25} × {0.01, 0.02, 0.03} × {0.60, 0.65, 0.70}</code> | <code>81</code> |
+| <strong><code>SA</code></strong> | <span class="arithmatex">\(SA_{\max}, \alpha, \beta_{\min}, \beta_{\max}, T_0\)</span> | <code>1000, 0.99, 0.01, 0.05, 1e6</code> | <code>{300, 500, 1000} × {0.95, 0.98, 0.99} × {0.03, 0.04, 0.05} × {0.08, 0.09, 0.10} × {1e6}</code> | <code>81</code> |
+| <strong><code>GRASP</code></strong> | <span class="arithmatex">\(\alpha_G, h_s, h_e\)</span> | <code>0.10, 0.125, 0.00098</code> | <code>{0.10, 0.15, 0.20} × {0.0625, 0.125} × {0.00049, 0.00098}</code> | <code>12</code> |
+| <strong><code>ILS</code></strong> | <span class="arithmatex">\(\beta_{\min}, \beta_{\max}\)</span> | <code>0.10, 0.20</code> | <code>{0.05, 0.10, 0.15} × {0.15, 0.20, 0.25}</code> | <code>9</code> |
+| <strong><code>EILS</code></strong> | <span class="arithmatex">\(\beta_{\min}, \beta_{\max}, N_{\max}\)</span> | <code>0.10, 0.20, 3</code> | <code>{0.05, 0.07, 0.10} × {0.15, 0.20, 0.25} × {3, 5, 10}</code> | <code>27</code> |
+| <strong><code>VNS</code></strong> | <span class="arithmatex">\(k_{\max}, \beta_{\min}\)</span> | <code>5, 0.05</code> | <code>{5, 8, 10} × {0.02, 0.04, 0.05}</code> | <code>9</code> |
+| <strong><code>PSO</code></strong> | <span class="arithmatex">\(P_{\text{size}}, c_1, c_2, w\)</span> | <code>200, 2.05, 2.05, 0.73</code> | <code>{100, 200, 300} × {1.5, 2.0, 2.5}² × {0.5, 0.7, 0.9}</code> | <code>81</code> |
+| <strong><code>GA</code></strong> | <span class="arithmatex">\(\text{sizePop}, p_c, p_m\)</span> | <code>400, 0.98, 0.005</code> | <code>{200, 400, 600} × {0.90, 0.95, 0.98} × {0.02, 0.03, 0.05}</code> | <code>27</code> |
+| <strong><code>LNS</code></strong> | <span class="arithmatex">\(\beta_{\min}, \beta_{\max}, T_0, \alpha\)</span> | <code>0.10, 0.30, 10000, 0.95</code> | <code>{0.05, 0.10, 0.15} × {0.15, 0.20, 0.25, 0.30} × {100, 10000} × {0.95, 0.96}</code> | <code>48</code> |
+| <strong><code>DE</code></strong> | <span class="arithmatex">\(\text{sizePop}, Cr, F\)</span> | <code>200, 0.50, 0.50</code> | <code>{100, 200, 300} × {0.40, 0.50, 0.60} × {0.50, 0.55, 0.60}</code> | <code>27</code> |
+| <strong><code>TS</code></strong> | <span class="arithmatex">\(\text{maxNoImp}, \text{ten}, \text{ng}, \beta_{\min}, \beta_{\max}\)</span> | <code>10, 1000, 0.50, 0.05, 0.25</code> | <code>{500, 1000} × {200, 300} × {0.70, 0.80, 0.90} × {0.05} × {0.25}</code> | <code>12</code> |
+| <strong><code>ACO</code></strong> | <span class="arithmatex">\(k, m, q, \xi\)</span> | <code>50, 2, 0.01, 0.85</code> | <code>{50, 75} × {2, 3} × {0.01, 0.1, 0.3} × {0.80, 0.85}</code> | <code>24</code> |
+| <strong><code>IPR</code></strong> | <span class="arithmatex">\(\alpha_{\text{block}}, \text{typePR}\)</span> | <code>0.10, 0 (PR_ONE_WAY)</code> | <code>{0.05, 0.10, 0.20} × {0, 1, 2, 3, 4, 5}</code> <em>(embedded)</em> | <code>18</code> |
+| <strong><code>MultiStart</code></strong> | — | Parameter-free | Parameter-free | — |</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
