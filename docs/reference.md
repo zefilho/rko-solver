@@ -1,6 +1,6 @@
 # API & Component Reference (`rkolib`)
 
-This document provides a technical reference for the core classes, data structures, plugin interfaces, scalarizers, Q-Learning routines, IO utilities, and metaheuristics implemented in **RKOSolver** (`rkolib`).
+This document provides a technical reference for the core classes, data structures, plugin interfaces, scalarizers, Q-Learning routines, IO utilities, and all 15 metaheuristics implemented in **RKOSolver** (`rkolib`).
 
 ---
 
@@ -9,7 +9,7 @@ This document provides a technical reference for the core classes, data structur
 ### `rkolib::RkoSolver`
 *Header: [`include/rkolib/core/solver.hpp`](https://github.com/zefilho/rko-solver/blob/main/include/rkolib/core/solver.hpp)*
 
-Central orchestrator class responsible for CLI parsing, YAML configuration loading, dynamic plugin loading, reference point initialization, parallel OpenMP execution, and statistical output.
+Central orchestrator class responsible for CLI parsing, YAML configuration loading, dynamic plugin loading, reference point initialization and synchronization, parallel OpenMP execution, and statistical output.
 
 #### Key Public Methods
 ```cpp
@@ -38,28 +38,35 @@ const std::vector<double> &getNadirPoint() const;
 ### `rkolib::core::SolverContext`
 *Header: [`include/rkolib/core/context.hpp`](https://github.com/zefilho/rko-solver/blob/main/include/rkolib/core/context.hpp)*
 
-Thread-safe Singleton managing shared solver state across OpenMP threads: the elite solution pool (`SOLVER_POOL`), 64-byte cache-line-aligned per-thread RNGs (`PaddedRng` / `SOLVER_RNG`), run start timestamps, and cooperative stop flags (`SOLVER_SHOULD_STOP`).
+Thread-safe Singleton managing shared solver state across OpenMP threads: the elite solution pool (`SOLVER_POOL`), 64-byte cache-line-aligned per-thread RNGs (`PaddedRng` / `SOLVER_RNG`), run start timestamps, anti-drift pool re-scalarization, and cooperative stop flags (`SOLVER_SHOULD_STOP`).
 
 #### Key Public Methods
 ```cpp
 // Returns singleton instance
 static SolverContext &instance();
 
-// Elite Solution Pool Access (protect with #pragma omp critical(pool_lock))
+// Elite Solution Pool Access & Re-Scalarization (protect with #pragma omp critical(pool_lock))
 std::vector<TSol> &getPool();
+const std::vector<TSol> &getPool() const;
 void initializePool(size_t size);
-TSol getBestSolution();
+void clearPool();
+void sortPool();
+void rescalarizePool(IScalarizer &scalarizer,
+                     const std::vector<double> &lambda,
+                     const std::vector<double> &idealPoint,
+                     const std::vector<double> &nadirPoint);
+TSol getBestSolution() const;
 
 // Run timing helpers (used for relative best_time tracking)
-void setRunStartTime(double startTime);
+void setRunStartTime(double t);
 double getRunStartTime() const;
 
 // OpenMP Synchronization & Stop Control
 void signalStop();
-bool isStopped() const;
+bool shouldStop() const;
 void resetStopFlag();
 
-// Thread-Safe Cache-Aligned Random Number Generator (PaddedRng)
+// Thread-Safe Cache-Aligned Random Number Generator (PaddedRng, prime-strided seeds)
 std::mt19937 &getRng();
 void setSeed(unsigned int baseSeed, int min_threads = 32);
 ```
@@ -141,8 +148,8 @@ struct TRunData {
   int MAXRUNS;               // Maximum number of independent runs
   int debug;                 // Debug output level (0 = File output, 1 = Terminal logs)
   float restart;             // Restart threshold multiplier
-  int sizePool;              // Base elite solution pool size
-  int poolUpdateMethod = 0;  // Pool update policy (0 = Cosine Diversity, 1 = NSGA-II)
+  int sizePool;              // Base elite solution pool size (doubled when M > 1)
+  int poolUpdateMethod = 0;  // Pool policy (0 = Cosine Diversity, 1 = NSGA-II, 2 = Spatial Niche Geometry)
   float tauMinNM = 0.005f;   // Minimum fraction of MAXTIME between Nelder-Mead calls
   float tauMaxNM = 0.20f;    // Maximum fraction of MAXTIME without a Nelder-Mead call
 };
@@ -170,10 +177,10 @@ public:
 
 | Class | Config Key (`scalarization`) | Formula |
 | :--- | :--- | :--- |
-| **`NormalizedWeightedTchebycheff`** | `"Tchebycheff"` | $\max_k d_k + \rho \sum_k \frac{f_k(x) - z^*_k}{z^{\text{nad}}_k - z^*_k}$ |
+| **`NormalizedWeightedTchebycheff`** | `"Tchebycheff"` | $\max_k d_k + 10^{-4} \sum_k \frac{\max(0, f_k(x) - z^*_k)}{z^{\text{nad}}_k - z^*_k}$ |
 | **`WeightedSumScalarizer`** | `"WeightedSum"` | $\sum_k w_k \cdot f_k(x)$ |
-| **`GiniScalarizer`** | `"Gini_Coefficient"` | $\bar{d} \cdot (1 + G(d)) = \bar{d} + \frac{1}{2 n^2} \sum_i \sum_j \|d_i - d_j\|$ over normalized regrets $d_k \ge 0$ |
-| **`LexicographicMinMaxScalarizer`** | `"Lexicographic_MinMax"` | $\sum_{k=1}^{n} \gamma^{k-1} d_{(k)}$ with sorted $d_{(1)} \ge \dots \ge d_{(n)}$ and `lexicographic_decay` $\gamma$ |
+| **`GiniScalarizer`** | `"Gini_Coefficient"` | $\bar{d} \cdot (1 + G(d)) = \bar{d} + \frac{1}{2 M^2} \sum_i \sum_j \|d_i - d_j\|$ over normalized regrets $d_k \ge 0$ |
+| **`LexicographicMinMaxScalarizer`** | `"Lexicographic_MinMax"` | $\sum_{r=0}^{M-1} \gamma^{r} d_{(r)} + \frac{10^{-6}}{M}\sum_{r=1}^{M-1} d_{(r)}$ with sorted $d_{(0)} \ge \dots \ge d_{(M-1)}$ |
 
 ---
 
@@ -230,30 +237,37 @@ void PrintPolicy(const std::vector<TState> &S, int st);
 
 ### Core Search & Pool Functions (`rkolib::core`)
 - **`CreatePoolSolutions(solver, sizePool)`**: Two-pass pool initialization ensuring consolidated Ideal/Nadir reference points and clone mutation.
-- **`UpdatePoolSolutions(sol, method, debug, poolUpdateMethod)`**: Thread-safe (`pool_lock`) elite pool update supporting Cosine Similarity diversity (`0`) and NSGA-II (`1`).
+- **`UpdatePoolSolutions(sol, method, debug, poolUpdateMethod)`**: Thread-safe (`pool_lock`) elite pool update supporting Cosine Similarity diversity (`0`), NSGA-II (`1`), and Spatial Frontier Niche Geometry (`2`).
 - **`RVND(s, solver, strategy, RKorder)`**: Randomized Variable Neighborhood Descent over `SwapLS`, `InvertLS`, and `FareyLS`.
 - **`NelderMeadSearch(x1, solver)`**: Simplex search over random keys using thread-safe pool sampling (`pool_lock`).
 
 ### IO Utilities (`rkolib::utils`)
+- **`WriteResults(...)` / `WriteMultiObjectiveResults(...)`**: Appends single-objective (`Results_RKO.csv`) or multi-objective (`Results_MO_RKO.csv`) run statistics.
+- **`WriteSolution(...)` / `WriteSolutionScreen(...)`**: Logs detailed global best solution and terminal summary.
 - **`PrintPoolSolutions(pool, dimension)`**: Prints the formatted elite pool summary (`OFV`, `MH`, `Best time`, `Objs`, `RK`) to stdout.
 - **`WritePoolSolutions(algorithms, pool, instance, dimension, outDir = "results")`**: Appends the full elite pool to `results/Pool_Solutions_RKO.txt`.
+- **`WriteConvergenceLog(history, outDir = "results")`**: Exports timestamped incumbent improvement points to `results/Convergence_Log.csv`.
 
 ---
 
-## 7. Integrated Metaheuristics
+## 7. Registered Metaheuristics (15 Total)
 
-All metaheuristics conform to `std::function<void(const core::TRunData &, RkoSolver &)>`:
+All metaheuristics conform to `std::function<void(const core::TRunData &, RkoSolver &)>` (see [Metaheuristics Catalog](metaheuristics.md) for mathematical details):
 
 | Metaheuristic | Description | Source |
 | :--- | :--- | :--- |
-| **`SA`** | Simulated Annealing with geometric cooling, Q-Learning, and time-gated Nelder-Mead | [`src/mh/sa.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/sa.cpp) |
-| **`ILS`** | Iterated Local Search with `RVND`, Q-Learning, and time-gated Nelder-Mead | [`src/mh/ils.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ils.cpp) |
-| **`VNS`** | Variable Neighborhood Search with `RVND`, Q-Learning, and time-gated Nelder-Mead | [`src/mh/vns.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/vns.cpp) |
-| **`BRKGA`** | Biased Random-Key Genetic Algorithm with Q-Learning and time-gated Nelder-Mead | [`src/mh/brkga.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/brkga.cpp) |
-| **`BRKGA-CS`** | BRKGA with Community Search (`RVND`), Q-Learning, and time-gated Nelder-Mead | [`src/mh/brkga_cs.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/brkga_cs.cpp) |
-| **`PSO`** | Particle Swarm Optimization with Q-Learning and time-gated Nelder-Mead | [`src/mh/pso.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/pso.cpp) |
-| **`GA`** | Genetic Algorithm with tournament selection, Q-Learning, and time-gated Nelder-Mead | [`src/mh/ga.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ga.cpp) |
-| **`LNS`** | Large Neighborhood Search with Farey repair, Q-Learning, and time-gated Nelder-Mead | [`src/mh/lns.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/lns.cpp) |
-| **`GRASP`** | Greedy Randomized Adaptive Search with `RVND`, Q-Learning, and time-gated Nelder-Mead | [`src/mh/grasp.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/grasp.cpp) |
-| **`IPR`** | Implicit Path-Relinking with 6 strategies (`One-way`, `Back-and-Forth`, `Mixed`, `GRAPR`, `Truncated`, `External`) and 18-state Q-Learning | [`src/mh/ipr.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ipr.cpp) |
-| **`MultiStart`** | Multi-start random-key sampling baseline | [`src/mh/multistart.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/multistart.cpp) |
+| **`SA`** | Simulated Annealing ($T > 10^{-5}$, $0.5 \, T_0$ reannealing, pre-reward `NelderMeadSearch(s)`, Q-Learning) | [`src/mh/sa.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/sa.cpp) |
+| **`ILS`** | Iterated Local Search (`sCurrent`/`sBest`, `ILS_ACCEPT_RESTART`, `RVND`, `NelderMeadSearch(sCurrent)`, binary Q-Learning) | [`src/mh/ils.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ils.cpp) |
+| **`EILS`** | Enhanced Iterated Local Search (5 perturbation levels, `Nmax` failures, `RVND`, `NelderMeadSearch`, cycle-based Q-Learning) | [`src/mh/eils.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/eils.cpp) |
+| **`VNS`** | Variable Neighborhood Search (best-of-10 init, `RVND`, inner-loop `NelderMeadSearch(s)`, Q-Learning) | [`src/mh/vns.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/vns.cpp) |
+| **`GRASP`** | Continuous GRASP (bidirectional grid `LineSearch`, RCL, `RVND`, inner `NelderMeadSearch(s)`, 12-state Q-Learning) | [`src/mh/grasp.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/grasp.cpp) |
+| **`LNS`** | Large Neighborhood Search (Farey $\mathcal{F}_7$ repair, SA cooling, `NelderMeadSearch(s)`, Q-Learning) | [`src/mh/lns.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/lns.cpp) |
+| **`TS`** | Tabu Search (bidirectional tenure list, aspiration, diversification + `RVND`, `NelderMeadSearch`, Q-Learning) | [`src/mh/ts.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ts.cpp) |
+| **`BRKGA`** | Biased Random-Key Genetic Algorithm (hybrid `PUX` with fitness swap, Q-Learning, `NelderMeadSearch`) | [`src/mh/brkga.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/brkga.cpp) |
+| **`BRKGA-CS`** | BRKGA with Community Search (Pearson LP clustering, `double rhoe` `ChaoticInd`, selective `RVND`, `NelderMeadSearch`) | [`src/mh/brkga_cs.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/brkga_cs.cpp) |
+| **`PSO`** | Particle Swarm Optimization (Q-Learning, `NelderMeadSearch` with `Pbest` feedback injection) | [`src/mh/pso.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/pso.cpp) |
+| **`GA`** | Genetic Algorithm (tournament selection, Q-Learning, `NelderMeadSearch` with `Pop` feedback injection) | [`src/mh/ga.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ga.cpp) |
+| **`DE`** | Differential Evolution (50/50 `rand/1` & `current-to-best/1`, toroidal wrap-around, 5% `RVND`, `NelderMeadSearch`, Q-Learning) | [`src/mh/de.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/de.cpp) |
+| **`ACO`** | Continuous Ant Colony Optimization $\text{ACO}_{\mathbb{R}}$ (Gaussian archive, rejection sampling, $\varepsilon_{\min}=0.05$, `NelderMeadSearch`, Q-Learning) | [`src/mh/aco.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/aco.cpp) |
+| **`IPR`** | Implicit Path-Relinking (contiguous blocks, 6 strategies `0..5`, 18-state online Q-Learning) | [`src/mh/ipr.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/ipr.cpp) |
+| **`MultiStart`** | Parameter-free continuous random-key sampling baseline | [`src/mh/multistart.cpp`](https://github.com/zefilho/rko-solver/blob/main/src/mh/multistart.cpp) |

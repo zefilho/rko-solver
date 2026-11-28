@@ -229,6 +229,7 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
+    improv = 0;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
@@ -276,6 +277,10 @@ void PSO(const TRunData &runData, RkoSolver &solver) {
       if (sNM.ofv < Gbest.ofv) {
         delta = std::max(delta, ComputeDelta(Gbest.ofv, sNM.ofv));
         Gbest = sNM;
+        if (!Pbest.empty()) {
+          int chosen = irandomico(0, static_cast<int>(Pbest.size()) - 1);
+          Pbest[chosen] = Gbest;
+        }
         bestGeneration = numGenerations;
         improv = 1;
 

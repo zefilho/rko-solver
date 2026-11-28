@@ -75,7 +75,7 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
                                const rkolib::core::TRunData &runData, const char *method) {
   using namespace rkolib::core;
 
-  while (T > 0.0001 && currentTime < runData.MAXTIME * runData.restart) {
+  while (T > 0.00001 && currentTime < runData.MAXTIME * runData.restart) {
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
                      currentTime, static_cast<float>(delta_q), 0.1);
@@ -92,6 +92,7 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
     }
 
     double bestOFV = INFINITY;
+    improv = 0;
 
     if (RunMetropolisEpoch(s, sBest, T, SAmax, IterT, betaMin, betaMax,
                            bestOFV, delta_q, currentTime, solver, runData, method)) {
@@ -102,7 +103,25 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
       return false;
     }
 
-    bool improvedEpoch = (improv != 0);
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    double deltaT_NM = currentTime - lastNM_time;
+    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+      NelderMeadSearch(s, solver);
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      lastNM_time = currentTime;
+
+      if (s.ofv < sBest.ofv) {
+        delta_q = std::max(delta_q, ComputeDelta(sBest.ofv, s.ofv));
+        sBest = s;
+        improv = 1;
+
+        if (runData.debug > 0) {
+          std::cout << "[DEBUG][MH] SA (LS) encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
+        }
+
+        UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
+      }
+    }
 
     if (runData.control == 1 && !S.empty()) {
       double R = 0.0;
@@ -118,26 +137,7 @@ static bool RunTemperatureLoop(rkolib::core::TSol &s, rkolib::core::TSol &sBest,
 
     T = T * alphaSA;
     IterT = 0;
-
     currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
-    double deltaT_NM = currentTime - lastNM_time;
-    if ((improvedEpoch && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
-      TSol sViz = s;
-      NelderMeadSearch(sViz, solver);
-      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
-      lastNM_time = currentTime;
-
-      if (sViz.ofv < sBest.ofv) {
-        delta_q = std::max(delta_q, ComputeDelta(sBest.ofv, sViz.ofv));
-        sBest = sViz;
-
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] SA (LS) encontrou nova melhor solucao: ofv=" << sBest.ofv << std::endl;
-        }
-
-        UpdatePoolSolutions(sBest, method, runData.debug, runData.poolUpdateMethod);
-      }
-    }
   }
   return true;
 }
@@ -230,7 +230,7 @@ void SA(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
   while (currentTime < runData.MAXTIME * runData.restart) {
     IterT = 0;
-    T = (!reanneling) ? T0 : (T0 * 0.3);
+    T = (!reanneling) ? T0 : (T0 * 0.5);
 
     if (!RunTemperatureLoop(s, sBest, T, alphaSA, betaMin, betaMax, SAmax,
                             IterT, improv, delta_q, st, at, S, epsilon, lf,

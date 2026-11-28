@@ -71,9 +71,9 @@ static TSol ParametricUniformCrossover(int eliteSize, int popSize, double pm,
 // -------------------------------------------------------------------------
 // Method: ChaoticInd
 // -------------------------------------------------------------------------
-static void ChaoticInd(TSol &s, int rhoe, const int n) {
+static void ChaoticInd(TSol &s, double rhoe, const int n) {
   for (int k = 0; k < n; k++) {
-    if (randomico(0, 1) > (double)rhoe) {
+    if (randomico(0, 1) > rhoe) {
       s.rk[k] = randomico(0, 1);
     }
   }
@@ -312,7 +312,7 @@ static bool ApplyCommunityLocalSearch(std::vector<TSol> &Pop, TSol &bestInd,
     if (promising[i] == 1) {
       promisingSol.push_back(i);
     } else {
-      ChaoticInd(Pop[i], (int)rhoe, solver.getProblemDimension());
+      ChaoticInd(Pop[i], rhoe, solver.getProblemDimension());
       solver.decodeSolution(Pop[i]);
     }
   }
@@ -326,7 +326,9 @@ static bool ApplyCommunityLocalSearch(std::vector<TSol> &Pop, TSol &bestInd,
     }
 
     int solIndex = promisingSol[i];
-    RVND(Pop[solIndex], solver, runData.strategy, RKorder);
+    if (i < 1) {
+      RVND(Pop[solIndex], solver, runData.strategy, RKorder);
+    }
 
     if (Pop[solIndex].ofv < bestInd.ofv) {
       delta = std::max(delta, ComputeDelta(bestInd.ofv, Pop[solIndex].ofv));
@@ -452,6 +454,7 @@ void BRKGA_CS(const TRunData &runData, RkoSolver &solver) {
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
     noImprovBRKGA++;
+    improv = 0;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)

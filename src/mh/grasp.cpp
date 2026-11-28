@@ -1,8 +1,16 @@
 #include "rkolib/mh/grasp.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <limits>
+#include <numeric>
+#include <vector>
+
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
 #include "rkolib/core/solver.hpp"
+#include "rkolib/utils/io.hpp"
 
 namespace rkolib::mh {
 
@@ -13,45 +21,38 @@ using namespace rkolib::core;
 // -------------------------------------------------------------------------
 static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF,
                        RkoSolver &solver) {
-  bestZ = 0;
-  bestF = INFINITY;
+  bestZ = 0.0;
+  bestF = std::numeric_limits<double>::infinity();
 
-  double tau = 0;
   std::vector<double> rk;
-  rk.reserve((int)(1.0 / h) + 2);
+  rk.push_back(s.rk[i]);
 
-  rk.push_back(s.rk[i] + tau * h);
+  int maxTau = (h > 1e-9f) ? static_cast<int>(std::ceil(1.0 / h)) : 1;
+  for (int tau = 1; tau <= maxTau; tau++) {
+    double up = s.rk[i] + tau * h;
+    double down = s.rk[i] - tau * h;
 
-  int steps = (int)(1.0 / h) + 1;
-  for (int j = 0; j < steps; j += 2) {
-    tau++;
-
-    double val_pos = s.rk[i] + tau * h;
-    if (val_pos >= 0.0 && val_pos < 1.0) {
-      rk.push_back(val_pos);
+    if (up >= 0.0 && up < 1.0) {
+      rk.push_back(up);
     }
-
-    double val_neg = s.rk[i] - tau * h;
-    if (val_neg >= 0.0 && val_neg < 1.0) {
-      rk.push_back(val_neg);
+    if (down >= 0.0 && down < 1.0) {
+      rk.push_back(down);
     }
   }
 
   int q = 1;
-  if (h > 1e-9) {
-    q = (int)ceil(log2(1.0 / h)) + 1;
+  if (h > 1e-9f) {
+    q = static_cast<int>(std::ceil(std::log2(static_cast<int>(1.0 / h)))) + 1;
+  }
+  if (q > static_cast<int>(rk.size())) {
+    q = static_cast<int>(rk.size());
   }
 
-  if (q > (int)rk.size()) {
-    q = (int)rk.size();
-  }
-
-  static std::mt19937 local_rng(std::random_device{}());
-  std::shuffle(rk.begin(), rk.end(), local_rng);
+  std::shuffle(rk.begin(), rk.end(), SOLVER_RNG);
 
   for (int j = 0; j < q; j++) {
     if (SOLVER_SHOULD_STOP) {
-      return;
+      break;
     }
 
     s.rk[i] = rk[j];
@@ -62,7 +63,6 @@ static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF,
       bestF = s.ofv;
     }
   }
-  rk.clear();
 }
 
 // -------------------------------------------------------------------------
@@ -70,38 +70,50 @@ static void LineSearch(TSol s, float h, int i, double &bestZ, double &bestF,
 // -------------------------------------------------------------------------
 static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
                                         RkoSolver &solver) {
-  std::vector<int> UnFixed(solver.getProblemDimension());
+  int n = solver.getProblemDimension();
+  std::vector<int> UnFixed(n);
   std::vector<int> chosenRK;
-  std::vector<double> z(solver.getProblemDimension());
-  std::vector<double> g(solver.getProblemDimension(), INFINITY);
+  std::vector<int> RCL;
+  std::vector<double> z(n);
+  std::vector<double> g(n, std::numeric_limits<double>::infinity());
 
-  double min;
   double betaMin = 0.3;
   double betaMax = 0.7;
+  double intensity = randomico(betaMin, betaMax);
 
   std::iota(UnFixed.begin(), UnFixed.end(), 0);
-  double intensity = randomico(betaMin, betaMax);
-  int kBest = 0;
+  std::shuffle(UnFixed.begin(), UnFixed.end(), SOLVER_RNG);
 
-  int limit = (int)(solver.getProblemDimension() * intensity);
-  for (int j = 0; j < limit; j++) {
+  int numRebuild = std::min(n, static_cast<int>(std::ceil(n * intensity)));
+  UnFixed.resize(numRebuild);
+
+  for (int k = 0; k < numRebuild; k++) {
+    s.rk[UnFixed[k]] = randomico(0.0, 0.999999);
+  }
+  solver.decodeSolution(s);
+
+  while (!UnFixed.empty()) {
     if (SOLVER_SHOULD_STOP) {
       return;
     }
 
-    min = INFINITY;
-    chosenRK.clear();
+    double minG = std::numeric_limits<double>::infinity();
+    double maxG = -std::numeric_limits<double>::infinity();
 
-    int kMax = (int)(UnFixed.size() * 0.1);
+    int kMax = static_cast<int>(UnFixed.size() * 0.1);
     if (kMax < 2) {
-      kMax = (int)UnFixed.size();
+      kMax = 2;
+    }
+    if (kMax > static_cast<int>(UnFixed.size())) {
+      kMax = static_cast<int>(UnFixed.size());
     }
 
     chosenRK = UnFixed;
     std::shuffle(chosenRK.begin(), chosenRK.end(), SOLVER_RNG);
-    if (kMax < (int)chosenRK.size()) {
-      chosenRK.resize(kMax);
-    }
+    chosenRK.resize(kMax);
+
+    std::fill(z.begin(), z.end(), 0.0);
+    std::fill(g.begin(), g.end(), std::numeric_limits<double>::infinity());
 
     for (int k = 0; k < kMax; k++) {
       int i = chosenRK[k];
@@ -109,20 +121,37 @@ static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
 
       LineSearch(sAux, h, i, z[i], g[i], solver);
 
-      if (min > g[i]) {
-        min = g[i];
-        kBest = i;
+      if (g[i] < minG) {
+        minG = g[i];
+      }
+      if (g[i] > maxG && g[i] < std::numeric_limits<double>::infinity()) {
+        maxG = g[i];
       }
     }
 
+    if (minG == std::numeric_limits<double>::infinity()) {
+      break;
+    }
+
+    RCL.clear();
+    double threshold = minG + alpha * (maxG - minG);
+    for (int k = 0; k < kMax; k++) {
+      if (g[chosenRK[k]] <= threshold) {
+        RCL.push_back(chosenRK[k]);
+      }
+    }
+
+    if (RCL.empty()) {
+      break;
+    }
+
+    int kBest = RCL[irandomico(0, static_cast<int>(RCL.size()) - 1)];
     s.rk[kBest] = z[kBest];
     s.ofv = g[kBest];
 
-    for (int i = 0; i < (int)UnFixed.size(); i++) {
-      if (UnFixed[i] == kBest) {
-        UnFixed.erase(UnFixed.begin() + i);
-        break;
-      }
+    auto it = std::find(UnFixed.begin(), UnFixed.end(), kBest);
+    if (it != UnFixed.end()) {
+      UnFixed.erase(it);
     }
   }
 
@@ -134,13 +163,15 @@ static void ConstrutiveGreedyRandomized(TSol &s, float h, float alpha,
 // -------------------------------------------------------------------------
 static bool GraspInnerStep(TSol &s, TSol &sBest, float &h, float alphaGrasp,
                            int &iter, int &improv, double &delta,
-                           const double math_eps, float currentTime,
-                           std::vector<int> &RKorder, RkoSolver &solver,
-                           const TRunData &runData, const char *method,
-                           TSol &sLineBest) {
+                           float &currentTime, double start_timeMH,
+                           double &lastNM_time, double tauMinNM_sec,
+                           double tauMaxNM_sec, std::vector<int> &RKorder,
+                           RkoSolver &solver, const TRunData &runData,
+                           const char *method, TSol &sLineBest) {
   if (SOLVER_SHOULD_STOP) {
     if (runData.debug > 0) {
-      std::cout << "[DEBUG][MH] GRASP interrompido via SOLVER_SHOULD_STOP." << std::endl;
+      std::cout << "[DEBUG][MH] GRASP interrompido via SOLVER_SHOULD_STOP."
+                << std::endl;
     }
     return false;
   }
@@ -159,11 +190,11 @@ static bool GraspInnerStep(TSol &s, TSol &sBest, float &h, float alphaGrasp,
     improv = 1;
 
     if (runData.debug > 0) {
-      std::cout << "[DEBUG][MH] GRASP encontrou nova melhor solucao na iteracao " 
+      std::cout << "[DEBUG][MH] GRASP encontrou nova melhor solucao na iteracao "
                 << iter << ": ofv=" << sBest.ofv << std::endl;
     }
-
-    UpdatePoolSolutions(sLineBest, method, runData.debug, runData.poolUpdateMethod);
+    UpdatePoolSolutions(sLineBest, method, runData.debug,
+                        runData.poolUpdateMethod);
   } else {
     h = h / 2.0f;
   }
@@ -171,17 +202,36 @@ static bool GraspInnerStep(TSol &s, TSol &sBest, float &h, float alphaGrasp,
   if (sLineBest.ofv < s.ofv) {
     s = sLineBest;
   } else {
-    double x = randomico(0.0, 1.0);
-    double timeFactor = 100.0 - 100.0 * (currentTime / (runData.MAXTIME * runData.restart + math_eps));
-    if (timeFactor < 1.0) {
-      timeFactor = 1.0;
-    }
-
-    if (x < exp(-(sLineBest.ofv - s.ofv) / timeFactor)) {
+    double T = 100.0 * (1.0 - currentTime / (runData.MAXTIME * runData.restart));
+    if (T > 0.0 &&
+        randomico(0.0, 1.0) < std::exp(-(sLineBest.ofv - s.ofv) / T)) {
       s = sLineBest;
     }
   }
 
+  currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+  double deltaT_NM = currentTime - lastNM_time;
+  if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+    NelderMeadSearch(s, solver);
+    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+    lastNM_time = currentTime;
+
+    if (s.ofv < sBest.ofv) {
+      delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
+      sBest = s;
+      improv = 1;
+
+      if (runData.debug > 0) {
+        std::cout
+            << "[DEBUG][MH] GRASP (LS) encontrou nova melhor solucao na iteracao "
+            << iter << ": ofv=" << sBest.ofv << std::endl;
+      }
+    }
+  }
+
+  UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
+
+  currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
   return true;
 }
 
@@ -190,152 +240,132 @@ static bool GraspInnerStep(TSol &s, TSol &sBest, float &h, float alphaGrasp,
 // -------------------------------------------------------------------------
 void GRASP(const TRunData &runData, RkoSolver &solver) {
   const char *method = "GRASP";
-  TSol s;         // current solution
-  TSol sLineBest; // local search solution
-  TSol sBest;     // best solution of GRASP
+  TSol s;
+  TSol sLineBest;
+  TSol sBest;
 
-  float currentTime = 0; // computational time of the search process
-  int improv = 0;        // improvement flag
+  float currentTime = 0.0f;
+  int improv = 0;
 
   double start_timeMH = get_time_in_seconds();
   double end_timeMH = get_time_in_seconds();
 
-  std::vector<int> RKorder(solver.getProblemDimension());
+  int dim = solver.getProblemDimension();
+  std::vector<int> RKorder(dim);
   std::iota(RKorder.begin(), RKorder.end(), 0);
 
   float alphaGrasp = 0.1f;
-  float h = 0;
-  float hs = 0;
-  float he = 0;
+  float h = 0.0f;
+  float hs = 0.125f;
+  float he = 0.00098f;
 
-  // ---------------------------------------------------------------------
   // Q-Learning parameters
-  // ---------------------------------------------------------------------
   std::vector<TState> S;
-  int numPar = 0;
+  int numPar = 3;
   int numStates = 0;
   int iCurr = 0;
-  double epsilon = 0;
-  double lf = 0;
-  double df = 0;
-  double R = 0;
-
-  const double math_eps = 1e-9;
+  double epsilon = 0.0;
+  double lf = 0.0;
+  double df = 0.0;
+  double R = 0.0;
   double delta = 0.0;
+  const double epsilon_min = 0.1;
   int st = 0;
   int at = 0;
 
-  numPar = 3;
-  std::vector<std::vector<double>> parameters;
-  parameters.resize(numPar);
-
+  std::vector<std::vector<double>> parameters(numPar);
   readParametersYaml(method, runData.control, parameters, numPar);
 
-  // offline control
   if (runData.control == 0) {
-    if (!parameters[0].empty()) { alphaGrasp = (float)parameters[0][0]; }
-    if (!parameters[1].empty()) { hs = (float)parameters[1][0]; }
-    if (!parameters[2].empty()) { he = (float)parameters[2][0]; }
+    if (!parameters[0].empty())
+      alphaGrasp = static_cast<float>(parameters[0][0]);
+    if (!parameters[1].empty())
+      hs = static_cast<float>(parameters[1][0]);
+    if (!parameters[2].empty())
+      he = static_cast<float>(parameters[2][0]);
   } else if (runData.control == 1) {
     CreateStates(parameters, numStates, numPar, S);
     LoadQTable(S, method);
     epsilon = 0.95;
     delta = 0.0;
 
-    iCurr = irandomico(0, numStates - 1);
-    st = iCurr;
-
     if (!S.empty()) {
-      alphaGrasp = (float)S[iCurr].par[0];
-      hs = (float)S[iCurr].par[1];
-      he = (float)S[iCurr].par[2];
+      iCurr = irandomico(0, numStates - 1);
+      st = iCurr;
+      alphaGrasp = static_cast<float>(S[iCurr].par[0]);
+      hs = static_cast<float>(S[iCurr].par[1]);
+      he = static_cast<float>(S[iCurr].par[2]);
     }
   }
 
   if (runData.debug > 0) {
-    std::cout << "[DEBUG][MH] GRASP iniciado. alphaGrasp=" << alphaGrasp << ", hs=" << hs 
-              << ", he=" << he << std::endl;
+    std::cout << "[DEBUG][MH] GRASP iniciado. alphaGrasp=" << alphaGrasp
+              << ", hs=" << hs << ", he=" << he << std::endl;
   }
 
-  CreateInitialSolutions(s, solver.getProblemDimension());
+  CreateInitialSolutions(s, dim);
   solver.decodeSolution(s);
   sBest = s;
+  sLineBest = s;
 
   int iter = 0;
   double lastNM_time = 0.0;
-  const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
-  const double tauMaxNM_sec = static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
+  const double tauMinNM_sec =
+      static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
+  const double tauMaxNM_sec =
+      static_cast<double>(runData.tauMaxNM) * runData.MAXTIME;
 
-  while (currentTime < runData.MAXTIME * runData.restart) {
+  while (currentTime < runData.MAXTIME * runData.restart &&
+         !SOLVER_SHOULD_STOP) {
+    improv = 0;
+
     if (runData.control == 1 && !S.empty()) {
-      SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
-                     currentTime, static_cast<float>(delta), 0.1);
+      SetQLParameter(epsilon, lf, df,
+                     static_cast<int>(runData.MAXTIME * runData.restart),
+                     currentTime, static_cast<float>(delta), epsilon_min);
       delta = 0.0;
       at = ChooseAction(S, st, epsilon);
 
-      if (at >= 0 && at < (int)S[st].Ai.size()) {
+      if (at >= 0 && at < static_cast<int>(S[st].Ai.size())) {
         iCurr = S[st].Ai[at];
-        alphaGrasp = (float)S[iCurr].par[0];
-        hs = (float)S[iCurr].par[1];
-        he = (float)S[iCurr].par[2];
+        alphaGrasp = static_cast<float>(S[iCurr].par[0]);
+        hs = static_cast<float>(S[iCurr].par[1]);
+        he = static_cast<float>(S[iCurr].par[2]);
       }
+    }
+
+    if (hs < he) {
+      std::swap(hs, he);
     }
 
     h = hs;
     bool stopped = false;
-    while (h >= he && currentTime < runData.MAXTIME * runData.restart) {
+    while (h >= he && h > 1e-9f &&
+           currentTime < runData.MAXTIME * runData.restart &&
+           !SOLVER_SHOULD_STOP) {
       if (runData.control == 0) {
-        alphaGrasp = (float)randomico(0.1, 0.9);
+        alphaGrasp = static_cast<float>(randomico(0.1, 0.9));
       }
 
       if (!GraspInnerStep(s, sBest, h, alphaGrasp, iter, improv, delta,
-                          math_eps, currentTime, RKorder, solver, runData,
-                          method, sLineBest)) {
+                          currentTime, start_timeMH, lastNM_time, tauMinNM_sec,
+                          tauMaxNM_sec, RKorder, solver, runData, method,
+                          sLineBest)) {
         stopped = true;
         break;
       }
-
-      end_timeMH = get_time_in_seconds();
-      currentTime = (float)(end_timeMH - start_timeMH);
     }
     if (stopped) {
       break;
     }
 
-    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
-    double deltaT_NM = currentTime - lastNM_time;
-    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
-      NelderMeadSearch(s, solver);
-      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
-      lastNM_time = currentTime;
-
-      if (s.ofv < sBest.ofv) {
-        delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
-        sBest = s;
-        improv = 1;
-
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] GRASP (LS) encontrou nova melhor solucao na iteracao "
-                    << iter << ": ofv=" << sBest.ofv << std::endl;
-        }
-
-        UpdatePoolSolutions(s, method, runData.debug, runData.poolUpdateMethod);
-      }
-    }
-
     if (runData.control == 1 && !S.empty()) {
-      if (improv) {
-        R = 1;
-        improv = 0;
-      } else {
-        R = (std::abs(sLineBest.ofv) > math_eps) ? (sBest.ofv - sLineBest.ofv) / (std::abs(sLineBest.ofv) + math_eps) : 0;
-      }
-
+      R = improv ? 1.0 : 0.0;
       UpdateQValue(S, st, at, R, lf, df);
     }
 
     end_timeMH = get_time_in_seconds();
-    currentTime = (float)(end_timeMH - start_timeMH);
+    currentTime = static_cast<float>(end_timeMH - start_timeMH);
   }
 
   if (runData.control == 1 && !S.empty()) {

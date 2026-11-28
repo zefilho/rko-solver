@@ -64,3 +64,8 @@ ACO:
   - [2]     # num_ants
   - [0.01]  # q_param
   - [0.85]  # xi_param
+
+EILS:
+  - [0.10]  # betaMin
+  - [0.20]  # betaMax
+  - [3]     # Nmax

@@ -2,7 +2,7 @@
 
 Welcome to the documentation for the modernized C++20 implementation of the **RKO framework**.
 
-This framework has been refactored around a **Dynamic Plugin Architecture** that decouples the core optimization engine from problem-specific logic. Users no longer need to recompile the solver to test new combinatorial optimization problems; they compile their problem as a shared library (`.so` or `.dll`) and load it at runtime.
+This framework is built around a **Dynamic Plugin Architecture** that decouples the core optimization engine in $[0, 1)^n$ from problem-specific logic. Users no longer need to recompile the solver to test new combinatorial optimization problems; they compile their problem as a shared library (`.so` or `.dll`) and load it at runtime.
 
 ![RKO_pipeline](https://github.com/user-attachments/assets/bb26650b-b5f0-4fc7-9cb1-55f5ca8b6132)
 
@@ -12,17 +12,28 @@ This framework has been refactored around a **Dynamic Plugin Architecture** that
 
 The framework is split into two major components:
 
-1. **The Core Engine (`rkosolver`)**: Manages OpenMP multi-threading, 11 registered metaheuristics, online Q-Learning parameter control with M/D/A adjacent topology and Q-Table persistence, multi-objective scalarization strategies, deterministic time-gated Nelder-Mead local search, and a thread-safe elite solution pool.
+1. **The Core Engine (`rkosolver`)**: Manages OpenMP multi-threading, **15 registered metaheuristics** (14 active search/hybridization metaheuristics plus `MultiStart`), online Q-Learning parameter control with M/D/A adjacent topology and Q-Table persistence, multi-objective scalarization strategies with anti-drift re-scalarization, deterministic time-gated Nelder-Mead local search, and a thread-safe elite solution pool.
 2. **The Problem Plugins (`.so` / `.dll`)**: Independent shared libraries that implement the `IProblem` interface (Decoder and IO).
 
+```mermaid
+flowchart LR
+    CLI["CLI11 + YAML\n(config.yaml, param-*.yaml)"] --> Solver["RkoSolver\n(Central Orchestrator)"]
+    Solver --> Threads["OpenMP Search Threads\n15 Registered MHs + RVND / NM\nOnline Q-Learning"]
+    Solver --> Context["SolverContext (Singleton)\nElite Pool (SOLVER_POOL)\nCache-Aligned PaddedRng"]
+    Threads <-->|"pool_lock"| Context
+    Threads --> Eval["decodeSolution() + IScalarizer\n(Tchebycheff | WeightedSum | Gini | Lexicographic_MinMax)"]
+    Context -->|"rescalarizePool()"| Eval
+    Eval <-->|"dlopen / dlsym"| Plugin["Dynamic Problem Plugin (.so / .dll)\nIProblem::load() & IProblem::decode()"]
+```
+
 ### Key Features
-- **11 Integrated Metaheuristics**: `SA`, `ILS`, `VNS`, `BRKGA`, `BRKGA-CS`, `PSO`, `GA`, `LNS`, `GRASP`, `IPR`, and `MultiStart`.
-- **Online Q-Learning Parameter Control (`control_mode: 1`)**: Reinforcement learning engine using $O(|\mathcal{S}| \cdot m)$ adjacent M/D/A action topology, capped relative improvement (`ComputeDelta`, $\delta_{\max} = 0.1$), exploration floor ($\varepsilon_{\min} = 0.1$), conditional `UpdateMaxQ`, and thread-safe Q-Table persistence (`results/QTable_<method>.txt`).
-- **Deterministic Time-Gated Nelder-Mead & Decoupled `RVND`**: `RVND` focuses strictly on `SwapLS`, `InvertLS`, and `FareyLS`, while `NelderMeadSearch` is triggered across all 9 search metaheuristics via configurable `tau_min_nm` and `tau_max_nm` time fractions.
+- **15 Registered Metaheuristics**: `SA`, `ILS`, `EILS`, `VNS`, `GRASP`, `LNS`, `TS`, `BRKGA`, `BRKGA-CS`, `PSO`, `GA`, `DE`, `ACO`, `IPR`, and `MultiStart` (see [Metaheuristics Catalog](metaheuristics.md)).
+- **Online Q-Learning Parameter Control (`control_mode: 1`)**: Reinforcement learning engine using $O(|\mathcal{S}| \cdot m)$ adjacent M/D/A action topology, capped relative improvement (`ComputeDelta`, $\delta_{\max} = 0.1$), configurable exploration floor ($\varepsilon_{\min} = 0.1$, or `0.05` in `ACO`), conditional `UpdateMaxQ`, and thread-safe Q-Table persistence (`results/QTable_<method>.txt`).
+- **Deterministic Time-Gated Nelder-Mead & Decoupled `RVND`**: `RVND` focuses strictly on `SwapLS`, `InvertLS`, and `FareyLS`, while `NelderMeadSearch` is triggered across all **13 search metaheuristics** via configurable `tau_min_nm` and `tau_max_nm` time fractions with per-iteration `improv = 0` resets.
 - **Implicit Path-Relinking (`IPR`) with 6 Strategies**: Contiguous block coverage supporting `One-way`, `Back-and-Forth`, `Mixed`, `GRAPR`, `Truncated`, and `External` trajectories, tuned online by an 18-state Q-Learning controller.
-- **Multi-Objective Optimization**: Native support for single- and multi-objective problems with `Tchebycheff`, `WeightedSum`, Ideal/Nadir-normalized `Gini_Coefficient`, and `Lexicographic_MinMax` scalarizers.
-- **Reference Point Customization**: Dynamic or fixed ideal (`ideal_point`, `fixed_ideal_point`) and nadir (`nadir_point`, `fixed_nadir_point`) reference points.
-- **Thread-Safe Elite Solution Pool & IO**: Synchronized via `#pragma omp critical(pool_lock)` with cache-line-aligned `PaddedRng` generators and full pool export to `results/Pool_Solutions_RKO.txt`.
+- **Multi-Objective Optimization & Anti-Drift Sync**: Native support for single- and multi-objective problems with `Tchebycheff`, `WeightedSum`, Ideal/Nadir-normalized `Gini_Coefficient`, and `Lexicographic_MinMax` scalarizers, plus automatic pool re-scalarization whenever reference points shift.
+- **Three Elite Pool Diversity Policies (`poolUpdateMethod`)**: Supports Cosine Similarity tactical replacement (`0`), NSGA-II non-dominated sorting & crowding distance (`1`), and Spatial Frontier Niche Geometry (`2`).
+- **Thread-Safe Elite Solution Pool & IO**: Synchronized via `#pragma omp critical(pool_lock)` with 64-byte cache-line-aligned `PaddedRng` generators and comprehensive output logs in `results/`.
 
 ---
 
@@ -43,8 +54,8 @@ This creates the `build/` directory, resolves dependencies (`yaml-cpp`, `CLI11`)
 To compile a problem plugin (e.g., Tourist, Knapsack Problem, or TSP) without recompiling the core:
 ```bash
 make plugin PROB=tourist
-# Or for the Traveling Salesman Problem:
-make plugin PROB=tspproblem
+# Or for the Knapsack Problem:
+make plugin PROB=kpproblem
 ```
 Compiled plugins are saved to `build/plugins/`.
 
@@ -71,9 +82,11 @@ Default configuration (`config/yaml/param-*.yaml`) and output paths (`results/`)
 
 | File | Description |
 | :--- | :--- |
-| `results/Results_RKO.csv` | Aggregated run statistics (OFV, average/best runtime, objectives). |
-| `results/Solutions_RKO.txt` | Best solution per run, random-key vector, and discovery time. |
+| `results/Results_RKO.csv` | Aggregated single-objective run statistics (best/mean OFV, runtime, discovery time). |
+| `results/Results_MO_RKO.csv` | Aggregated multi-objective run statistics (scalarized OFV, raw objective vectors, runtime). |
+| `results/Solutions_RKO.txt` | Detailed record of the global best solution, originating MH, raw `objs`, and random-key vector `rk`. |
 | `results/Pool_Solutions_RKO.txt` | Full elite pool dump (`OFV`, originating `MH`, relative `Best time`, `Objs`, `RK`). |
+| `results/Convergence_Log.csv` | Timestamped incumbent improvement trajectory across runs. |
 | `results/QTable_<method>.txt` | Persisted Q-Table per metaheuristic when `control_mode: 1` (auto-reloaded on compatible subsequent runs). |
 
 ---
@@ -93,6 +106,10 @@ metaheuristics:
   - LNS
   - GRASP
   - IPR
+  - DE
+  - TS
+  - ACO
+  - EILS
 
 # General Execution Settings
 execution_settings:
@@ -103,14 +120,14 @@ execution_settings:
 # Search Parameters
 search_parameters:
   local_search_strategy: 1  # 1: First Improvement, 2: Best Improvement
-  restart_threshold: 1      # % of max time to trigger restart
+  restart_threshold: 1      # Fraction of max time to trigger restart
   elite_pool_size: 10       # Base size of the elite solution pool (2x for multi-objective)
   tau_min_nm: 0.005         # Minimum fraction of MAXTIME between Nelder-Mead calls
   tau_max_nm: 0.20          # Maximum fraction of MAXTIME without a Nelder-Mead call
 
 # Multi-Objective Scalarization:
 # "Tchebycheff", "WeightedSum", "Gini_Coefficient", or "Lexicographic_MinMax"
-scalarization: "Tchebycheff"
+scalarization: "Gini_Coefficient"
 
 # Decay factor for Lexicographic_MinMax (default: 0.05)
 # lexicographic_decay: 0.05
@@ -126,7 +143,8 @@ default_weights: [0.50, 0.50]
 fixed_ideal_point: false
 fixed_nadir_point: false
 
-# Pool Update Strategy: 0 = Standard (Cosine Similarity Diversity), 1 = NSGA-II
+# Pool Update Strategy:
+# 0 = Standard (Cosine Similarity Diversity), 1 = NSGA-II, 2 = Spatial Frontier Niche Geometry
 poolUpdateMethod: 0
 ```
 
@@ -174,13 +192,14 @@ make plugin PROB=myproblem
 
 ## Parallel Execution & Synchronization
 
-- **OpenMP Thread Allocation**: Each selected metaheuristic executes independently in its own OpenMP thread.
-- **False-Sharing Protection (`PaddedRng`)**: Per-thread `std::mt19937` engines are 64-byte cache-line aligned (`alignas(64)`) in `SolverContext` to prevent cache contention.
-- **Dedicated Critical Sections**:
-  - `#pragma omp critical(pool_lock)` protects all reads/writes to `SOLVER_POOL` (including `NelderMeadSearch` and `IPR`).
+- **OpenMP Thread Allocation**: Each selected metaheuristic executes independently in its own OpenMP thread alongside a dedicated reference-point and time-monitoring thread.
+- **False-Sharing Protection (`PaddedRng`)**: Per-thread `std::mt19937` engines are 64-byte cache-line aligned (`alignas(64)`) in `SolverContext` to prevent L1/L2 cache contention.
+- **Dedicated Acyclic Critical Sections**:
+  - `#pragma omp critical(pool_lock)` protects all reads/writes to `SOLVER_POOL` (`CreatePoolSolutions`, `UpdatePoolSolutions`, `NelderMeadSearch`, `IPR`, and `rescalarizePool`).
+  - `#pragma omp critical(scalarization_lock)` protects dynamic updates to `idealPoint_`, `nadirPoint_`, and scalarizer invocations inside `decodeSolution`.
   - `#pragma omp critical(qtable_io_lock)` serializes `SaveQTable` and `LoadQTable` file access.
 
-For deep dives into Q-Learning, Nelder-Mead/`RVND`, `IPR`, and scalarization mathematics, see [Algorithms & Control](algorithms.md).
+For deep dives into Q-Learning, Nelder-Mead/`RVND`, `IPR`, scalarization mathematics, and all 15 metaheuristics, see [Algorithms & Control](algorithms.md), [Metaheuristics Catalog](metaheuristics.md), and the full [LaTeX Technical Manual](rko_solver_manual.tex).
 
 ---
 

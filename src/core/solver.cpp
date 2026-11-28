@@ -12,6 +12,7 @@
 #include "rkolib/mh/brkga.hpp"
 #include "rkolib/mh/brkga_cs.hpp"
 #include "rkolib/mh/de.hpp"
+#include "rkolib/mh/eils.hpp"
 #include "rkolib/mh/ga.hpp"
 #include "rkolib/mh/grasp.hpp"
 #include "rkolib/mh/ils.hpp"
@@ -76,7 +77,8 @@ void RkoSolver::initializeRegistry() {
                         {"IPR", mh::IPR},
                         {"DE", mh::DE},
                         {"TS", mh::TS},
-                        {"ACO", mh::ACO}};
+                        {"ACO", mh::ACO},
+                        {"EILS", mh::EILS}};
 }
 
 // -------------------------------------------------------------------------

@@ -124,6 +124,7 @@ static bool RunLnsCoolingCycle(TSol &s, TSol &sBest, double &T, double alphaLNS,
                                const double math_eps, RkoSolver &solver,
                                const TRunData &runData, const char *method) {
   while (T > 0.01 && currentTime < runData.MAXTIME * runData.restart) {
+    improv = 0;
     if (runData.control == 1 && !S.empty()) {
       SetQLParameter(epsilon, lf, df, (int)(runData.MAXTIME * runData.restart),
                      currentTime, static_cast<float>(delta), 0.1);

@@ -3,6 +3,7 @@
 #include "rkolib/core/method.hpp"
 #include "rkolib/core/qlearning.hpp"
 #include "rkolib/core/solver.hpp"
+#include <limits>
 
 namespace rkolib::mh {
 
@@ -41,7 +42,6 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   int IterMelhora = 0;  // iteration that found the best solution
   int kMax = 0;         // number of neighborhood strutures
   double betaMin = 0.0; // intensity of perturbation
-  int improv = 0;       // improvement flag
 
   TSol s,        // current solution
       sBest,     // best solution of VNS
@@ -119,11 +119,15 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
   // ---------------------------------------------------------------------
   // Initialization
   // ---------------------------------------------------------------------
-  sBest.ofv = INFINITY;
-
-  CreateInitialSolutions(s, solver.getProblemDimension());
-  solver.decodeSolution(s);
-  sBest = s;
+  sBest.ofv = std::numeric_limits<double>::infinity();
+  for (int i = 0; i < 10; i++) {
+    CreateInitialSolutions(s, solver.getProblemDimension());
+    solver.decodeSolution(s);
+    if (s.ofv < sBest.ofv) {
+      sBest = s;
+    }
+  }
+  s = sBest;
 
   double lastNM_time = 0.0;
   const double tauMinNM_sec = static_cast<double>(runData.tauMinNM) * runData.MAXTIME;
@@ -149,6 +153,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
 
     // VNS Loop: current neighborhood
     int k = 1;
+    int cycleImprov = 0;
     bool stopped = false;
     while (k <= kMax && currentTime < runData.MAXTIME * runData.restart) {
       if (SOLVER_SHOULD_STOP) {
@@ -157,6 +162,7 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       }
 
       Iter++;
+      int iterImprov = 0;
 
       // s' <- perturb the best solution in the neighborhood k
       beta = randomico(k * betaMin, (k + 1) * betaMin);
@@ -169,7 +175,33 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       RVND(sBestLine, solver, (int)runData.strategy, RKorder);
 
       // s <- acceptance criterion (s,s*', historico)
-      AcceptNeighborhoodSolution(s, sBest, sBestLine, k, Iter, IterMelhora, improv, delta, method, runData);
+      AcceptNeighborhoodSolution(s, sBest, sBestLine, k, Iter, IterMelhora, iterImprov, delta, method, runData);
+
+      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+      double deltaT_NM = currentTime - lastNM_time;
+      if ((iterImprov && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
+        NelderMeadSearch(s, solver);
+        currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
+        lastNM_time = currentTime;
+
+        if (s.ofv < sBest.ofv) {
+          delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
+          sBest = s;
+          IterMelhora = Iter;
+          iterImprov = 1;
+
+          if (runData.debug > 0) {
+            std::cout << "[DEBUG][MH] VNS (LS) encontrou nova melhor solucao na iteracao "
+                      << Iter << ": ofv=" << sBest.ofv << std::endl;
+          }
+
+          UpdatePoolSolutions(sBest, method, (int)runData.debug, runData.poolUpdateMethod);
+        }
+      }
+
+      if (iterImprov) {
+        cycleImprov = 1;
+      }
 
       end_timeMH = get_time_in_seconds();
       currentTime = (float)(end_timeMH - start_timeMH);
@@ -178,33 +210,10 @@ void VNS(const rkolib::core::TRunData &runData, rkolib::RkoSolver &solver) {
       break;
     }
 
-    currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
-    double deltaT_NM = currentTime - lastNM_time;
-    if ((improv && deltaT_NM >= tauMinNM_sec) || (deltaT_NM >= tauMaxNM_sec)) {
-      NelderMeadSearch(s, solver);
-      currentTime = static_cast<float>(get_time_in_seconds() - start_timeMH);
-      lastNM_time = currentTime;
-
-      if (s.ofv < sBest.ofv) {
-        delta = std::max(delta, ComputeDelta(sBest.ofv, s.ofv));
-        sBest = s;
-        IterMelhora = Iter;
-        improv = 1;
-
-        if (runData.debug > 0) {
-          std::cout << "[DEBUG][MH] VNS (LS) encontrou nova melhor solucao na iteracao "
-                    << Iter << ": ofv=" << sBest.ofv << std::endl;
-        }
-
-        UpdatePoolSolutions(sBest, method, (int)runData.debug, runData.poolUpdateMethod);
-      }
-    }
-
     // Q-Learning Reward Phase (Post-Action)
     if (runData.control == 1 && !S.empty()) {
-      if (improv) {
+      if (cycleImprov) {
         R = 1;
-        improv = 0;
       } else {
         R = (std::abs(s.ofv) > math_eps) ? ((sBest.ofv - s.ofv) / (std::abs(s.ofv) + math_eps)) : 0.0;
       }

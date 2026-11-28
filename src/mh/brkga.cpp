@@ -17,11 +17,17 @@ using namespace rkolib::core;
 // Method: PUX (Parametric Uniform Crossover)
 // -------------------------------------------------------------------------
 static TSol PUX(int eliteSize, int popSize, double rhoe,
-                const std::vector<TSol> &Pop, const int n) {
-  int eliteParent = irandomico(0, eliteSize - 1); 
-  int nonEliteParent = irandomico(eliteSize, popSize - 1);
+                std::vector<TSol> &Pop, const int n) {
+  int eliteParent = irandomico(0, eliteSize - 1);
+  int nonEliteParent = (randomico(0, 1) < 0.5)
+                           ? irandomico(eliteSize, popSize - 1)
+                           : irandomico(0, popSize - 1);
 
-  TSol s = Pop[eliteParent]; 
+  if (Pop[eliteParent].ofv > Pop[nonEliteParent].ofv) {
+    std::swap(Pop[eliteParent], Pop[nonEliteParent]);
+  }
+
+  TSol s = Pop[eliteParent];
 
   for (int j = 0; j < n; j++) {
     if (randomico(0, 1) >= rhoe) {
@@ -85,7 +91,7 @@ static void UpdatePopSize(int p, double pe, double pm, double rhoe,
 // Helper: GenerateOffspring
 // -------------------------------------------------------------------------
 static bool GenerateOffspring(int eliteCount, int crossoverLimit, int p, double rhoe,
-                              std::vector<TSol> &PopInter, const std::vector<TSol> &Pop,
+                              std::vector<TSol> &PopInter, std::vector<TSol> &Pop,
                               TSol &bestOff, RkoSolver &solver, const TRunData &runData) {
   for (int i = eliteCount; i < crossoverLimit; i++) {
     if (SOLVER_SHOULD_STOP) {
@@ -222,6 +228,7 @@ void BRKGA(const TRunData &runData, RkoSolver &solver) {
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
+    improv = 0;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)

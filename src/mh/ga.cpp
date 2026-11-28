@@ -232,6 +232,7 @@ void GA(const TRunData &runData, RkoSolver &solver) {
   // run the evolutionary process until stop criterion
   while (currentTime < runData.MAXTIME * runData.restart) {
     numGenerations++;
+    improv = 0;
 
     // -----------------------------------------------------------------
     // Q-Learning Update Phase (Pre-Action)
@@ -292,6 +293,10 @@ void GA(const TRunData &runData, RkoSolver &solver) {
       if (sNM.ofv < bestInd.ofv) {
         delta = std::max(delta, ComputeDelta(bestInd.ofv, sNM.ofv));
         bestInd = sNM;
+        if (!Pop.empty()) {
+          int pos1 = irandomico(0, static_cast<int>(Pop.size()) - 1);
+          Pop[pos1] = bestInd;
+        }
         bestGeneration = numGenerations;
         improv = 1;
         if (runData.debug > 0) {
