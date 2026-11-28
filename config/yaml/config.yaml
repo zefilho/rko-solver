@@ -11,6 +11,9 @@ metaheuristics:
   - LNS
   - GRASP
   - IPR
+  - DE
+  - TS
+  - ACO
 
 # Configurações Gerais de Execução
 execution_settings:

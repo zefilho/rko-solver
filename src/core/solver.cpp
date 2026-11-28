@@ -8,8 +8,10 @@
 #include "rkolib/utils/io.hpp"
 
 // Includes das Meta-heurísticas
+#include "rkolib/mh/aco.hpp"
 #include "rkolib/mh/brkga.hpp"
 #include "rkolib/mh/brkga_cs.hpp"
+#include "rkolib/mh/de.hpp"
 #include "rkolib/mh/ga.hpp"
 #include "rkolib/mh/grasp.hpp"
 #include "rkolib/mh/ils.hpp"
@@ -18,6 +20,7 @@
 #include "rkolib/mh/multistart.hpp"
 #include "rkolib/mh/pso.hpp"
 #include "rkolib/mh/sa.hpp"
+#include "rkolib/mh/ts.hpp"
 #include "rkolib/mh/vns.hpp"
 
 #include <CLI/CLI.hpp>
@@ -70,7 +73,10 @@ void RkoSolver::initializeRegistry() {
                         {"LNS", mh::LNS},
                         {"BRKGA-CS", mh::BRKGA_CS},
                         {"MultiStart", mh::MultiStart},
-                        {"IPR", mh::IPR}};
+                        {"IPR", mh::IPR},
+                        {"DE", mh::DE},
+                        {"TS", mh::TS},
+                        {"ACO", mh::ACO}};
 }
 
 // -------------------------------------------------------------------------

@@ -46,3 +46,21 @@ BRKGA-CS:
   - [0.15, 0.20, 0.25]   # pe
   - [0.01, 0.02, 0.03]  # pm
   - [0.60, 0.65, 0.70]   # Rhoe
+
+DE:
+  - [100, 200, 300]    # sizePop
+  - [0.40, 0.50, 0.60] # CR
+  - [0.50, 0.55, 0.60] # F
+
+TS:
+  - [500, 1000]        # maxNoImprovement
+  - [200, 300]         # tabuTenure
+  - [0.70, 0.80, 0.90] # neighborhoodSize
+  - [0.05]             # betaMin
+  - [0.25]             # betaMax
+
+ACO:
+  - [50, 75]          # archive_size
+  - [2, 3]            # num_ants
+  - [0.01, 0.1, 0.3]  # q_param
+  - [0.80, 0.85]      # xi_param
